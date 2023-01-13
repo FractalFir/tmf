@@ -2,55 +2,31 @@ use std::io::{Read,BufReader,Write,BufWriter,Result};
 pub struct UnalignedReader<R:Read>{
     reader:BufReader<R>,
     last_byte:u8,
-    consumed:u8,
+    readen:u8,
 }
 impl<R:Read> UnalignedReader<R>{
-    ///Reads *count* bits
-    fn get_bits(&mut self,mut count:u8)->std::io::Result<u8>{
-        debug_assert!(count<=8,"Function that can't read more than 8 bits used to read {count}");
-        if self.consumed >= 8{
-            let mut tmp = [0];
-            self.reader.read_exact(&mut tmp)?;
-            self.last_byte = tmp[0];
-            self.consumed = 0;
-        }
-        let to_consume = count.min(8-self.consumed);     
-        let mut res = if to_consume == 8{
-            let res = self.last_byte;
-            self.last_byte = 0;
-            res
-        }
-        else{
-            let res = self.last_byte>>(8-to_consume);
-            self.last_byte <<= to_consume;
-            res
-        };
-        self.consumed += to_consume;
-        count -= to_consume;
-        if count > 0{
-            if self.consumed >= 8{
-                let mut tmp = [0];
-                self.reader.read_exact(&mut tmp)?;
-                self.last_byte = tmp[0];
-                self.consumed = 0;
-            }
-            let to_consume = count.min(8-self.consumed);
-            res = (res<<to_consume) | (self.last_byte>>(8-to_consume));
-            self.last_byte <<= to_consume;
-            self.consumed += to_consume;
-        }
-        Ok(res)
-    }
     ///Reads *mode.0* bytes from self, keeping internal alighment
     pub fn read_unaligned(&mut self,mode:UnalignedRWMode)->Result<u64>{
-        let mut to_consume = mode.0;
         let mut res:u64 = 0;
-        while to_consume > 0{
-            let consuming = to_consume.min(8);
-            res <<= consuming;
-            let bits = self.get_bits(consuming)?;
-            res += bits as u64;
-            to_consume -= consuming;
+        let mut total_read = mode.0;
+        while total_read > 0{
+            if self.readen >= 8{
+                let mut tmp:[u8;1] = [0];
+                self.reader.read(&mut tmp)?;
+                self.last_byte = tmp[0];
+                self.readen = 0;
+            }
+            let read_ammount = total_read.min(8 - self.readen);
+            let read_offset = 8 - read_ammount;
+            println!("read_offset:{read_offset}");
+            res <<= read_ammount;
+            println!("res:{res}");
+            res |= (self.last_byte>>read_offset) as u64;
+            self.readen += read_ammount;
+            if read_ammount < 8{
+                 self.last_byte <<= read_ammount;
+            }
+            total_read -= read_ammount;
         }
         Ok(res)
     }
@@ -58,8 +34,8 @@ impl<R:Read> UnalignedReader<R>{
     pub fn new(r:R)->Self{
         let reader = BufReader::new(r);
         let last_byte = 0;//read this
-        let consumed = 8;
-        Self{last_byte,consumed,reader}
+        let readen = 8;
+        Self{last_byte,readen,reader}
     }
 }
 pub struct UnalignedWriter<W:Write>{
@@ -80,45 +56,26 @@ impl<W:Write> UnalignedWriter<W>{
         let written = 0;
         Self{last_byte,written,writer}
     }
-    fn write_bits(&mut self,mut count:u8,mut bits:u8)->Result<()>{ 
-        println!("writing {count} bits:{bits}");
-        while count > 0{
-            let write_count = count.min(8-self.written);
-            if write_count == 8{
-                println!("writting:0b{:08b} -> 0x{:x}",bits,bits);
-                self.writer.write_all(&[bits])?;
-                self.written = 0;  
-                self.last_byte = 0;
-                count -= write_count;
-                continue;
-            }
-            bits = bits<<write_count;
-            println!("bits:{bits:012x}");
-            let curr_write = (bits>>self.written) as u8;
-            println!("curr_write:{curr_write:08b} self.written{}",self.written);
-            //self.last_byte = self.last_byte>>write_count;
-            self.last_byte |= curr_write;
-            
-            self.written += write_count;
-            if self.written >= 8{
-                println!("writting:0b{:08b} -> 0x{:x}",self.last_byte,self.last_byte);
-                self.writer.write_all(&[self.last_byte])?;
-                self.written = 0;  
-                self.last_byte = 0;
-            }
-            count -= write_count;
-        }
-        Ok(())
-    }
     pub fn write_unaligned(&mut self,mode:UnalignedRWMode,mut data:u64)->Result<()>{
-        let mut to_write = mode.0;
-        println!("############\nwritting data:{data:x}, to_write:{to_write}");
-        while to_write > 0{
-            let writing = to_write.min(8);
-            data <<= writing;
-            println!("data:{data:b}");
-            self.write_bits(writing,(data%256) as u8)?;
-            to_write -= writing;
+        let mut total_write = mode.0;
+        while total_write > 0{
+            let write_ammount = total_write.min(8 - self.written);
+            let write_offset = 8 - write_ammount;
+            self.last_byte = if write_ammount == 8{
+                ((data%256) as u8)
+            }else{
+                 self.last_byte | (((data%256) as u8)>>write_ammount)
+            };
+            println!("write_ammount:{write_ammount}");
+            self.written += write_ammount;
+            data = data<<write_ammount;
+            if(self.written >= 8){
+                println!("writing:{}",self.last_byte);
+                self.writer.write(&[self.last_byte])?;
+                self.written = 0;
+                self.last_byte = 0;
+            }
+            total_write -= write_ammount;
         }
         Ok(())
     }
@@ -133,6 +90,7 @@ mod test_reader{
         let mut reader = UnalignedReader::new(&bytes as &[u8]);
         for byte in 0..0x10{
             let rbyte = reader.read_unaligned(UnalignedRWMode(4)).unwrap() as u8;
+            //println!("{rbyte} != {byte}");
             assert!(rbyte == byte,"{rbyte} != {byte}");
         }
     }
