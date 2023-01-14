@@ -18,7 +18,7 @@ impl<R:Read> UnalignedReader<R>{
             // If all bits in current_byte read, read new byte with new bits, and set amount of bits bits_read in current bit back to 0.
             if self.bits_read >= 8{
                 let mut tmp:[u8;1] = [0];
-                self.reader.read(&mut tmp)?;
+                self.reader.read_exact(&mut tmp)?;
                 self.current_byte = tmp[0];
                 self.bits_read = 0;
             }
@@ -75,7 +75,7 @@ impl<W:Write> UnalignedWriter<W>{
         debug_assert!(mode.0>0,"Writng 0-sized data using unaligned writer is an error, which will can lead to crashes and/or freezes");
         let mut total_write = mode.0;
         // Move all the bits to write to left, so the first bit to write is the leftmost bit.
-        data = data<<(64-total_write);
+        data <<= 64-total_write;
         while total_write > 0{
                 // Calculate how many bits to write in current iteration: either how many bits unwritten are left in next byte(bits in byte - nits written) or all the bits remaining in data, if they fit.
                 let curr_write = total_write.min(8 - self.written);
@@ -84,7 +84,7 @@ impl<W:Write> UnalignedWriter<W>{
                     //Get *curr_write* leftmostmost bits of data
                     let bits = (data>>(64-curr_write)) as u8;
                     //Move data to left by *curr_write* ensuring the next bits to read are the rightmost bits(this assumption is used to extract bits to write).
-                    data = data<<curr_write;
+                    data <<= curr_write;
                     bits
                 };
                 // Calculate the offset within vurrent byte at which to put all data(byte size - already occupied bits - amount of bits to write
@@ -99,7 +99,7 @@ impl<W:Write> UnalignedWriter<W>{
                 total_write -= curr_write;
                 // If full byte written, write(flush) it to output, and reset other parameters to prepare for next writes
                 if self.written >= 8{
-                    self.writer.write(&[self.next_byte])?;
+                    self.writer.write_all(&[self.next_byte])?;
                     self.written = 0;
                     self.next_byte = 0;
                 }
