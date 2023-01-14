@@ -2,10 +2,16 @@ use std::io::{Write,Read,Result};
 use crate::unaligned_rw::{UnalignedReader,UnalignedWriter,UnalignedRWMode};
 #[derive(Clone,Copy)]
 pub struct NormalPrecisionMode(u8);
-pub const NORM_PREC_LOW:NormalPrecisionMode = NormalPrecisionMode(8);
-pub const NORM_PREC_MID:NormalPrecisionMode = NormalPrecisionMode(11);
-pub const NORM_PREC_HIGH:NormalPrecisionMode = NormalPrecisionMode(11);
-const SIGN_PREC:UnalignedRWMode = UnalignedRWMode(1);
+impl NormalPrecisionMode{
+    fn from_deg_dev(deg:f32)->Self{
+        let prec = (90.0/deg).log2() as u8;
+        Self(prec)
+    }
+}
+pub const NORM_PREC_LOW:NormalPrecisionMode = NormalPrecisionMode(7);
+pub const NORM_PREC_MID:NormalPrecisionMode = NormalPrecisionMode(10);
+pub const NORM_PREC_HIGH:NormalPrecisionMode = NormalPrecisionMode(13);
+const SIGN_PREC:UnalignedRWMode = UnalignedRWMode::precision_bits(1);
 fn normalize(i:(f32,f32,f32))->(f32,f32,f32){
     let xx = i.0 * i.0;
     let yy = i.1 * i.1;
@@ -30,7 +36,7 @@ fn save_normal<W:Write>(normal:(f32,f32,f32),precision:NormalPrecisionMode,write
     let sx = (normal.0 < 0.0) as u8     as u64;
     let sy = (normal.1 < 0.0) as u8     as u64;
     let sz = (normal.2 < 0.0) as u8     as u64;
-    let main_prec = UnalignedRWMode(precision.0);
+    let main_prec = UnalignedRWMode::precision_bits(precision.0);
     
     writer.write_unaligned(SIGN_PREC,sx)?;
     writer.write_unaligned(SIGN_PREC,sy)?;
@@ -41,7 +47,7 @@ fn save_normal<W:Write>(normal:(f32,f32,f32),precision:NormalPrecisionMode,write
     Ok(())
 }
 fn read_normal<R:Read>(precision:NormalPrecisionMode,reader:&mut UnalignedReader<R>)->Result<(f32,f32,f32)>{
-    let main_prec = UnalignedRWMode(precision.0);
+    let main_prec = UnalignedRWMode::precision_bits(precision.0);
     let divisor = ((1<<precision.0)-1) as f32;
     // Get signs of x y z component 
     let sx = if reader.read_unaligned(SIGN_PREC)? != 0{-1.0}else{1.0};
@@ -97,10 +103,16 @@ pub (crate) fn read_normal_heap<R:Read>(reader:&mut R)->Result<Box<[(f32,f32,f32
 }
 pub (crate) fn save_normal_face_heap<W:Write>(faces:&[u32],normal_count:u32,writer:&mut W)->std::io::Result<()>{
     let face_count = (faces.len() as u32).to_le_bytes();
-    let normal_precision = (normal_count as f64).log2().ceil() as u8;
+    let face_precision = (normal_count as f64).log2().ceil() as u8;
     writer.write_all(&face_count)?;
-    writer.write_all(&[normal_precision])?;
-    todo!();
+    writer.write_all(&[face_precision])?;
+    let face_precision = UnalignedRWMode::precision_bits(face_precision);
+    let mut writer = UnalignedWriter::new(writer);
+    for index in faces{
+        writer.write_unaligned(face_precision,*index as u64);
+    }
+    writer.flush()?;
+    Ok(())
 }
 #[cfg(test)]
 mod test_normal{
@@ -171,5 +183,19 @@ mod test_normal{
             let n_dot = (1.0 - dot(r_normal,normal))*180.0;
             assert!(n_dot < 0.1,"expected:{normal:?} != read:{r_normal:?} angle:{n_dot}");
         }
+    }
+    #[test]
+    fn rw_normal_face_heap(){
+        use rand::{Rng,thread_rng};
+        let mut rng = thread_rng();
+        let mut normal_count = ((rng.gen::<u32>()%0x800)+0x800) as u32;
+        let mut face_count = ((rng.gen::<u32>()%0x800)+0x800) as usize;
+        let mut faces = Vec::with_capacity(face_count*3);
+        for _ in 0..face_count*3{
+            let index = rng.gen::<u32>()%normal_count;
+            faces.push(index);
+        }
+        let mut res = Vec::with_capacity(face_count);
+        save_normal_face_heap(&faces,normal_count as u32,&mut res);
     }
 }
