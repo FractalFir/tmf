@@ -111,7 +111,8 @@ impl<W:Write> UnalignedWriter<W>{
         self.writer.flush()
     }
 }
-pub struct UnalignedRWMode(u8);
+#[derive(Clone,Copy)]
+pub struct UnalignedRWMode(pub u8);
 #[cfg(test)]
 const CHANIGING_ALGHMENT_EXPECTED:[u8;252] = [
     0b11001101,0b00001010,0b00110000,0b01110000,0b10000000,0b01001000,0b00010100,0b00000010,0b11000000,0b00110000,0b00000001,0b10100000,0b00000111,0b00000000,0b00001111,
