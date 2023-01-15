@@ -3,8 +3,8 @@ use crate::unaligned_rw::{UnalignedReader,UnalignedWriter,UnalignedRWMode};
 #[derive(Clone,Copy)]
 pub struct NormalPrecisionMode(u8);
 impl NormalPrecisionMode{
-    fn from_deg_dev(deg:f32)->Self{
-        let prec = (90.0/deg).log2() as u8;
+    pub fn from_deg_dev(deg:f32)->Self{
+        let prec = (90.0/deg).log2().ceil() as u8;
         Self(prec)
     }
 }
@@ -115,7 +115,7 @@ pub (crate) fn save_normal_face_array<W:Write>(faces:&[u32],normal_count:u32,wri
     let face_precision = UnalignedRWMode::precision_bits(face_precision);
     let mut writer = UnalignedWriter::new(writer);
     for index in faces{
-        writer.write_unaligned(face_precision,*index as u64);
+        writer.write_unaligned(face_precision,*index as u64).unwrap();
     }
     writer.flush()?;
     Ok(())
@@ -123,12 +123,6 @@ pub (crate) fn save_normal_face_array<W:Write>(faces:&[u32],normal_count:u32,wri
 #[cfg(test)]
 mod test_normal{
     use super::*;
-    fn dst(a:(f32,f32,f32),b:(f32,f32,f32))->f32{
-        let dx = a.0 - b.0;
-        let dy = a.1 - b.1;
-        let dz = a.2 - b.2;
-        return dx*dx+dy*dy+dz*dz;
-    }
     fn dot(a:(f32,f32,f32),b:(f32,f32,f32))->f32{
         a.0*b.0 + a.1*b.1 + a.2*b.2
     }
@@ -173,7 +167,7 @@ mod test_normal{
     fn rw_normal_array(){
         use rand::{Rng,thread_rng};
         let mut rng = thread_rng();
-        let mut count = ((rng.gen::<u32>()%0x800)+0x800) as usize;
+        let count = ((rng.gen::<u32>()%0x800)+0x800) as usize;
         let mut res = Vec::with_capacity(count);
         let mut normals = Vec::with_capacity(count);
         for _ in 0..count{
@@ -194,14 +188,14 @@ mod test_normal{
     fn rw_normal_face_array(){
         use rand::{Rng,thread_rng};
         let mut rng = thread_rng();
-        let mut normal_count = ((rng.gen::<u32>()%0x800)+0x800) as u32;
-        let mut face_count = ((rng.gen::<u32>()%0x800)+0x800) as usize;
+        let normal_count = ((rng.gen::<u32>()%0x800)+0x800) as u32;
+        let face_count = ((rng.gen::<u32>()%0x800)+0x800) as usize;
         let mut faces = Vec::with_capacity(face_count*3);
         for _ in 0..face_count*3{
             let index = rng.gen::<u32>()%normal_count;
             faces.push(index);
         }
         let mut res = Vec::with_capacity(face_count);
-        save_normal_face_array(&faces,normal_count as u32,&mut res);
+        save_normal_face_array(&faces,normal_count as u32,&mut res).unwrap()
     }
 }

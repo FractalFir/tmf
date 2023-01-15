@@ -2,9 +2,20 @@
 pub mod unaligned_rw;
 pub mod normals;
 pub mod vertices;
+mod uv;
 const TMF_MAJOR:u16 = 0;
 const TMF_MINOR:u16 = 1;
 use std::io::{Write,Read,BufReader};
+#[repr(u16)]#[derive(Debug)]
+enum SectionHeader{
+    Invalid = 0,
+    VertexSegment = 1,
+    VertexFaceSegment = 2,
+    NormalSegment = 3,
+    NormalFaceSegment = 4,
+    UvSegment = 5,
+    UvFaceSegement = 6,
+}
 struct FileMetadata{
     author:String,
 }
@@ -252,14 +263,14 @@ impl TMFMesh{
                 }
                 for i in 0..vertex_faces.len(){
                     if i%3 == 0{write!(w,"f ")?};
-                    write!(w,"{}/{}/{} ",vertex_faces[i] + 1,uv_faces[i] + 1,normal_faces[i] + 1);
+                    write!(w,"{}/{}/{} ",vertex_faces[i] + 1,uv_faces[i] + 1,normal_faces[i] + 1)?;
                     if i%3 == 2{write!(w,"\n")?};
                 }
             }
         }
         Ok(())
     }
-    fn write_tmf<W:Write>(&self,w:&mut W)->Result<()>{
+    pub fn write_tmf<W:Write>(&self,w:&mut W)->Result<()>{
         let mut curr_segment_data = Vec::with_capacity(0x100);
         w.write_all(b"TMF")?;
         w.write_all(&TMF_MAJOR.to_le_bytes())?;
@@ -268,17 +279,125 @@ impl TMFMesh{
             Some(metadata)=>todo!("Saving metadata is not yet supported!"),
             None=>(),
         }
-        let shortest_edge = 0.1;//TODO: Calculate this based on vertex faces
+        //Calculate shortest edge, or if no edges present, 1.0
+        let shortest_edge = match &self.vertex_faces{
+            Some(vertex_faces)=>{
+                let vertices = match &self.vertices{
+                    Some(vertices)=>vertices,
+                    None=>return Err(std::io::Error::new(std::io::ErrorKind::Other,"Saving a mesh with face normal index array without normal array is an error.")),
+                };
+                fn dst(a:(f32,f32,f32),b:(f32,f32,f32))->f32{
+                    let dx = a.0 - b.0;
+                    let dy = a.1 - b.1;
+                    let dz = a.2 - b.2;
+                    return (dx*dx+dy*dy+dz*dz).sqrt();
+                };
+                let mut shortest_edge = f32::INFINITY; 
+                for i in 0..(vertex_faces.len()/3){
+                    let d1 = dst(vertices[vertex_faces[i*3] as usize],vertices[vertex_faces[i*3 + 1] as usize]);
+                    let d2 = dst(vertices[vertex_faces[i*3 + 1] as usize],vertices[vertex_faces[i*3 + 2] as usize]);
+                    let d3 = dst(vertices[vertex_faces[i*3 + 2] as usize],vertices[vertex_faces[i*3] as usize]);
+                    shortest_edge = shortest_edge.min(d1.min(d2.min(d3)));
+                }
+                shortest_edge
+            },
+            None=>1.0,
+        };
+        // Save vertices
         match &self.vertices{
             Some(vertices)=>{
                 use crate::vertices::{VertexPrecisionMode,save_tmf_vertices};
-                save_tmf_vertices(vertices,VertexPrecisionMode(0.001),&mut curr_segment_data,shortest_edge)?;
+                save_tmf_vertices(vertices,VertexPrecisionMode(0.01),&mut curr_segment_data,shortest_edge)?;
+                w.write_all(&(SectionHeader::VertexSegment as u16).to_le_bytes())?;
                 w.write_all(&(curr_segment_data.len() as u32).to_le_bytes())?;
                 w.write_all(&curr_segment_data)?;
                 curr_segment_data.clear();
             },
             None=>(),
         }
+        // Save vertex faces
+        match &self.vertex_faces{
+            Some(vertex_faces)=>{
+                use crate::vertices::save_faces;
+                //If saving vertex faces, vertices must be present, so unwrap can't fail
+                let v_count = self.vertices.as_ref().unwrap().len();
+                save_faces(vertex_faces,v_count,&mut curr_segment_data);
+                w.write_all(&(SectionHeader::VertexFaceSegment as u16).to_le_bytes())?;
+                w.write_all(&(curr_segment_data.len() as u32).to_le_bytes())?;
+                w.write_all(&curr_segment_data)?;
+                curr_segment_data.clear();
+            },
+            None=>(),
+        };
+        // Save Normals
+        match &self.normals{
+            Some(normals)=>{
+                use crate::normals::*;
+                save_normal_array(normals,&mut curr_segment_data,NormalPrecisionMode::from_deg_dev(0.1))?;
+                w.write_all(&(SectionHeader::NormalSegment as u16).to_le_bytes())?;
+                w.write_all(&(curr_segment_data.len() as u32).to_le_bytes())?;
+                w.write_all(&curr_segment_data)?;
+                curr_segment_data.clear();
+            },
+            None=>(),
+        };
+        // Save normal faces
+        match &self.normal_faces{
+            Some(normal_faces)=>{
+                use crate::vertices::save_faces;
+                //If saving normal faces, normals must be present, so unwrap can't fail
+                let n_count = self.normals.as_ref().unwrap().len();
+                save_faces(normal_faces,n_count,&mut curr_segment_data);
+                w.write_all(&(SectionHeader::NormalFaceSegment as u16).to_le_bytes())?;
+                w.write_all(&(curr_segment_data.len() as u32).to_le_bytes())?;
+                w.write_all(&curr_segment_data)?;
+                curr_segment_data.clear();
+            },
+            None=>(),
+        };
+        match &self.uvs{
+            Some(uvs)=>{
+                uv::save_uvs(uvs,&mut curr_segment_data,0.001)?;
+                w.write_all(&(SectionHeader::UvSegment as u16).to_le_bytes())?;
+                w.write_all(&(curr_segment_data.len() as u32).to_le_bytes())?;
+                w.write_all(&curr_segment_data)?;
+                curr_segment_data.clear();
+            },
+            None=>(),
+        }
+        // Save uv faces
+        match &self.uv_faces{
+            Some(uv_faces)=>{
+                use crate::vertices::save_faces;
+                //If saving uv faces, uvs must be present, so unwrap can't fail
+                let uv_count = self.uvs.as_ref().unwrap().len();
+                save_faces(uv_faces,uv_count,&mut curr_segment_data);
+                w.write_all(&(SectionHeader::UvFaceSegement as u16).to_le_bytes())?;
+                w.write_all(&(curr_segment_data.len() as u32).to_le_bytes())?;
+                w.write_all(&curr_segment_data)?;
+                curr_segment_data.clear();
+            },
+            None=>(),
+        };
+        Ok(())
+    }
+    pub fn read_tmf<R:Read>(reader:&mut R)->Result<Self>{
+        let mut magic = [0;3];
+        reader.read_exact(&mut magic)?;
+        if magic != *b"TMF"{
+            return Err(std::io::Error::new(std::io::ErrorKind::Other,"Not a TMF file")); 
+        }
+        let major = {
+            let mut tmp = [0;2];
+            reader.read(&mut tmp)?;
+            u16::from_le_bytes(tmp)
+        };
+        let minor = {
+            let mut tmp = [0;2];
+            reader.read(&mut tmp)?;
+            u16::from_le_bytes(tmp)
+        };
+        println!("major:{major},minor:{minor}");
         todo!();
     }
 }
@@ -306,6 +425,17 @@ mod testing{
         tmf_mesh.verify().unwrap();
         let mut out = std::fs::File::create("target/susan.tmf").unwrap();
         tmf_mesh.write_tmf(&mut out).unwrap();
+    }
+    #[test]
+    fn rw_susan_tmf(){
+        let mut file = std::fs::File::open("testing/susan.obj").unwrap();
+        let tmf_mesh = TMFMesh::read_from_obj(&mut file).unwrap();
+        tmf_mesh.verify().unwrap();
+        let mut out = Vec::new();
+        {
+            tmf_mesh.write_tmf(&mut out).unwrap();
+        }
+        let r_mesh = TMFMesh::read_tmf(&mut (&out as &[u8])).unwrap(); 
     }
     #[test]
     #[should_panic]
