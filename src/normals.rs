@@ -12,6 +12,12 @@ pub const NORM_PREC_LOW:NormalPrecisionMode = NormalPrecisionMode(7);
 pub const NORM_PREC_MID:NormalPrecisionMode = NormalPrecisionMode(10);
 pub const NORM_PREC_HIGH:NormalPrecisionMode = NormalPrecisionMode(13);
 const SIGN_PREC:UnalignedRWMode = UnalignedRWMode::precision_bits(1);
+pub(crate) fn magnitude(i:(f32,f32,f32))->f32{
+    let xx = i.0 * i.0;
+    let yy = i.1 * i.1;
+    let zz = i.2 * i.2;
+    (xx + yy + zz).sqrt()
+}
 fn normalize(i:(f32,f32,f32))->(f32,f32,f32){
     let xx = i.0 * i.0;
     let yy = i.1 * i.1;
@@ -71,7 +77,7 @@ fn read_normal<R:Read>(precision:NormalPrecisionMode,reader:&mut UnalignedReader
     let res = (x*sx,y*sy,z*sz);
     Ok(res)
 }
-pub (crate) fn save_normal_heap<W:Write>(normals:&[(f32,f32,f32)],writer:&mut W,precision:NormalPrecisionMode)->Result<()>{
+pub (crate) fn save_normal_array<W:Write>(normals:&[(f32,f32,f32)],writer:&mut W,precision:NormalPrecisionMode)->Result<()>{
     let count = (normals.len() as u32).to_le_bytes();
     writer.write_all(&count)?;
     writer.write_all(&[precision.0])?;
@@ -82,7 +88,7 @@ pub (crate) fn save_normal_heap<W:Write>(normals:&[(f32,f32,f32)],writer:&mut W,
     writer.flush()?;
     Ok(())
 }
-pub (crate) fn read_normal_heap<R:Read>(reader:&mut R)->Result<Box<[(f32,f32,f32)]>>{
+pub (crate) fn read_normal_array<R:Read>(reader:&mut R)->Result<Box<[(f32,f32,f32)]>>{
     let count = {
         let mut tmp:[u8;4] = [0;4];
         reader.read_exact(&mut tmp)?;
@@ -101,7 +107,7 @@ pub (crate) fn read_normal_heap<R:Read>(reader:&mut R)->Result<Box<[(f32,f32,f32
     }
     Ok(normals.into())
 }
-pub (crate) fn save_normal_face_heap<W:Write>(faces:&[u32],normal_count:u32,writer:&mut W)->std::io::Result<()>{
+pub (crate) fn save_normal_face_array<W:Write>(faces:&[u32],normal_count:u32,writer:&mut W)->std::io::Result<()>{
     let face_count = (faces.len() as u32).to_le_bytes();
     let face_precision = (normal_count as f64).log2().ceil() as u8;
     writer.write_all(&face_count)?;
@@ -164,7 +170,7 @@ mod test_normal{
         }
     }
     #[test]
-    fn rw_normal_heap(){
+    fn rw_normal_array(){
         use rand::{Rng,thread_rng};
         let mut rng = thread_rng();
         let mut count = ((rng.gen::<u32>()%0x800)+0x800) as usize;
@@ -175,8 +181,8 @@ mod test_normal{
             let norm = normalize(norm);
             normals.push(norm);
         }
-        save_normal_heap(&normals,&mut res,NORM_PREC_HIGH).unwrap();
-        let r_normals = read_normal_heap(&mut(&res as &[u8])).unwrap();
+        save_normal_array(&normals,&mut res,NORM_PREC_HIGH).unwrap();
+        let r_normals = read_normal_array(&mut(&res as &[u8])).unwrap();
         for i in 0..count{
             let r_normal = r_normals[i];
             let normal = normals[i];
@@ -185,7 +191,7 @@ mod test_normal{
         }
     }
     #[test]
-    fn rw_normal_face_heap(){
+    fn rw_normal_face_array(){
         use rand::{Rng,thread_rng};
         let mut rng = thread_rng();
         let mut normal_count = ((rng.gen::<u32>()%0x800)+0x800) as u32;
@@ -196,6 +202,6 @@ mod test_normal{
             faces.push(index);
         }
         let mut res = Vec::with_capacity(face_count);
-        save_normal_face_heap(&faces,normal_count as u32,&mut res);
+        save_normal_face_array(&faces,normal_count as u32,&mut res);
     }
 }
