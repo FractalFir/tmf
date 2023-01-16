@@ -6,6 +6,9 @@ mod uv;
 const TMF_MAJOR:u16 = 0;
 const TMF_MINOR:u16 = 1;
 use std::io::{Write,Read,BufReader};
+struct TMFPrecisionInfo{
+
+}
 #[repr(u16)]#[derive(Debug)]
 enum SectionHeader{
     Invalid = 0,
@@ -320,7 +323,7 @@ impl TMFMesh{
         match &self.vertices{
             Some(vertices)=>{
                 use crate::vertices::{VertexPrecisionMode,save_tmf_vertices};
-                save_tmf_vertices(vertices,VertexPrecisionMode(0.01),&mut curr_segment_data,shortest_edge)?;
+                save_tmf_vertices(vertices,VertexPrecisionMode(0.1),&mut curr_segment_data,shortest_edge)?;
                 w.write_all(&(SectionHeader::VertexSegment as u16).to_le_bytes())?;
                 w.write_all(&(curr_segment_data.len() as u32).to_le_bytes())?;
                 w.write_all(&curr_segment_data)?;
@@ -346,7 +349,7 @@ impl TMFMesh{
         match &self.normals{
             Some(normals)=>{
                 use crate::normals::*;
-                save_normal_array(normals,&mut curr_segment_data,NormalPrecisionMode::from_deg_dev(0.1))?;
+                save_normal_array(normals,&mut curr_segment_data,NormalPrecisionMode::from_deg_dev(0.01))?;
                 w.write_all(&(SectionHeader::NormalSegment as u16).to_le_bytes())?;
                 w.write_all(&(curr_segment_data.len() as u32).to_le_bytes())?;
                 w.write_all(&curr_segment_data)?;

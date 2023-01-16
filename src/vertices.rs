@@ -144,7 +144,7 @@ pub fn read_faces<R:Read>(reader:&mut R)->Result<Box<[u32]>>{
 		reader.read(&mut tmp)?;
 		u32::from_le_bytes(tmp)
    	};
-	println!("Reading {count:016b} faces!");
+	println!("Reading {count} faces!");
 	let precision = UnalignedRWMode::precision_bits(precision);
     let mut reader = UnalignedReader::new(reader);
 	let mut res = Vec::with_capacity(count as usize);
