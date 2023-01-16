@@ -124,12 +124,34 @@ pub fn read_tmf_vertices<R:Read>(reader:&mut R)->Result<Box<[(f32,f32,f32)]>>{
 }
 pub fn save_faces<W:Write>(faces:&[u32],count:usize,writer:&mut W)->Result<()>{
     let precision = (count as f32).log2().ceil() as u8;
+    writer.write(&precision.to_le_bytes())?;
+    writer.write(&(faces.len() as u32).to_le_bytes())?;
     let precision = UnalignedRWMode::precision_bits(precision);
     let mut writer = UnalignedWriter::new(writer);
     for index in faces{
         writer.write_unaligned(precision,*index as u64)?;
     }
     writer.flush()
+}
+pub fn read_faces<R:Read>(reader:&mut R)->Result<Box<[u32]>>{
+	let precision = {
+   		let mut tmp = [0];
+		reader.read(&mut tmp)?;
+		tmp[0]
+   	};
+	let count = {
+   		let mut tmp = [0;4];
+		reader.read(&mut tmp)?;
+		u32::from_le_bytes(tmp)
+   	};
+	println!("Reading {count:016b} faces!");
+	let precision = UnalignedRWMode::precision_bits(precision);
+    let mut reader = UnalignedReader::new(reader);
+	let mut res = Vec::with_capacity(count as usize);
+	for _ in 0..count{
+		res.push(reader.read_unaligned(precision)? as u32);
+	}
+	Ok(res.into())
 }
 #[cfg(test)]
 mod testing{
@@ -140,6 +162,26 @@ mod testing{
         return (dx*dx+dy*dy+dz*dz).sqrt();
     }
     use super::*;
+	#[test]
+	fn rw_faces(){
+		use rand::{Rng,thread_rng};
+        let mut rng = thread_rng();
+        let vertex_count = (rng.gen::<u32>()%0x800)+0x800;
+		let face_count = (rng.gen::<u32>()%0x800)+0x800;
+		let mut faces = Vec::with_capacity(face_count as usize);
+		for _ in 0..face_count{
+			faces.push(rng.gen::<u32>()%vertex_count);
+		}
+		let mut res = Vec::with_capacity(vertex_count as usize);
+        {
+            save_faces(&faces,faces.len(),&mut res).unwrap();
+        }
+		let r_faces = read_faces(&mut (&res as &[u8])).unwrap();
+		assert!(faces.len() == r_faces.len());
+		for i in 0..(face_count as usize){
+			assert!(r_faces[i] == faces[i]);
+		}
+	} 
     #[test]
     fn rw_vertices(){
         use rand::{Rng,thread_rng};

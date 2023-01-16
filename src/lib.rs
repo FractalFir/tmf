@@ -14,7 +14,20 @@ enum SectionHeader{
     NormalSegment = 3,
     NormalFaceSegment = 4,
     UvSegment = 5,
-    UvFaceSegement = 6,
+    UvFaceSegment = 6,
+}
+impl SectionHeader{
+	fn from_u16(input:u16)->Self{
+		match input{
+			1=>Self::VertexSegment,
+			2=>Self::VertexFaceSegment,
+			3=>Self::NormalSegment,
+			4=>Self::NormalFaceSegment,
+			5=>Self::UvSegment,
+			6=>Self::UvFaceSegment,
+			_=>Self::Invalid,
+		}
+	}
 }
 struct FileMetadata{
     author:String,
@@ -259,7 +272,7 @@ impl TMFMesh{
                     None=>return Err(std::io::Error::new(std::io::ErrorKind::Other,"UV face arrays must be present when saving to .obj file")),
                 };
                 if vertex_faces.len() != normal_faces.len() || vertex_faces.len() != uv_faces.len(){
-                    return Err(std::io::Error::new(std::io::ErrorKind::Other,"Face Array size mismatch"));
+                    return Err(std::io::Error::new(std::io::ErrorKind::Other,format!("Face Array size mismatch v:{} n:{} u:{}",vertex_faces.len(),normal_faces.len(),uv_faces.len())));
                 }
                 for i in 0..vertex_faces.len(){
                     if i%3 == 0{write!(w,"f ")?};
@@ -372,7 +385,7 @@ impl TMFMesh{
                 //If saving uv faces, uvs must be present, so unwrap can't fail
                 let uv_count = self.uvs.as_ref().unwrap().len();
                 save_faces(uv_faces,uv_count,&mut curr_segment_data);
-                w.write_all(&(SectionHeader::UvFaceSegement as u16).to_le_bytes())?;
+                w.write_all(&(SectionHeader::UvFaceSegment as u16).to_le_bytes())?;
                 w.write_all(&(curr_segment_data.len() as u32).to_le_bytes())?;
                 w.write_all(&curr_segment_data)?;
                 curr_segment_data.clear();
@@ -381,6 +394,9 @@ impl TMFMesh{
         };
         Ok(())
     }
+	pub fn empty()->Self{
+		Self{metadata:None, normal_faces:None, normals:None, uv_faces:None, uvs:None, vertex_faces:None, vertices:None}
+	}
     pub fn read_tmf<R:Read>(reader:&mut R)->Result<Self>{
         let mut magic = [0;3];
         reader.read_exact(&mut magic)?;
@@ -398,7 +414,65 @@ impl TMFMesh{
             u16::from_le_bytes(tmp)
         };
         println!("major:{major},minor:{minor}");
-        todo!();
+		fn read_u16<R:Read>(r:&mut R)->Result<u16>{
+			let mut tmp = [0;2]; r.read_exact(&mut tmp)?; Ok(u16::from_le_bytes(tmp))
+		}
+		let mut res = Self::empty();
+		while let Ok(header) = read_u16(reader){
+			println!("hdr:{header}");
+			let header = SectionHeader::from_u16(header);
+			let data_length = {let mut tmp = [0;4]; reader.read(&mut tmp)?; u32::from_le_bytes(tmp)};
+			let mut data = vec![0;data_length as usize];
+			reader.read_exact(&mut data);
+			match header{
+				SectionHeader::VertexSegment=>{
+					use crate::vertices::read_tmf_vertices;
+					match &res.vertices{
+						Some(_)=>return Err(std::io::Error::new(std::io::ErrorKind::Other,"Only one vertex array can be present in a model.")),
+							None=>res.vertices = Some(read_tmf_vertices(&mut(&data as &[u8]))?),
+					}
+				},
+				SectionHeader::NormalSegment=>{
+					use crate::normals::read_normal_array;
+					match &res.normals{
+						Some(_)=>return Err(std::io::Error::new(std::io::ErrorKind::Other,"Only one normal array can be present in a model.")),
+							None=>res.normals = Some(read_normal_array(&mut(&data as &[u8]))?),
+					}
+				},
+				SectionHeader::UvSegment=>{
+					use crate::uv::read_uvs;
+					match &res.uvs{
+						Some(_)=>return Err(std::io::Error::new(std::io::ErrorKind::Other,"Only one uv array can be present in a model.")),
+							None=>res.uvs = Some(read_uvs(&mut(&data as &[u8]))?),
+					}
+				},
+				SectionHeader::VertexFaceSegment=>{
+					use vertices::read_faces;
+					match &res.vertex_faces{
+						Some(vertex_faces)=>return Err(std::io::Error::new(std::io::ErrorKind::Other,"Only one vertex index array(face array) can be present in a model.")),			
+						None=>res.vertex_faces = Some(read_faces(&mut(&data as &[u8]))?),					
+					}
+				},
+				SectionHeader::NormalFaceSegment=>{
+					use vertices::read_faces;
+					match &res.normal_faces{
+						Some(normal_faces)=>return Err(std::io::Error::new(std::io::ErrorKind::Other,"Only one normal index array(face array) can be present in a model.")),			
+						None=>res.normal_faces = Some(read_faces(&mut(&data as &[u8]))?),					
+					}
+				},
+				SectionHeader::UvFaceSegment=>{
+					use vertices::read_faces;
+					match &res.uv_faces{
+						Some(uv_faces)=>return Err(std::io::Error::new(std::io::ErrorKind::Other,"Only one uv index array(face array) can be present in a model.")),			
+						None=>res.uv_faces = Some(read_faces(&mut(&data as &[u8]))?),					
+					}
+				},
+				_=>(),//Unknown header, ignoring
+			}
+			println!("header:{header:?} data_length:{data_length}");
+		}
+        //todo!();
+		Ok(res)
     }
 }
 #[cfg(test)]
@@ -435,7 +509,10 @@ mod testing{
         {
             tmf_mesh.write_tmf(&mut out).unwrap();
         }
-        let r_mesh = TMFMesh::read_tmf(&mut (&out as &[u8])).unwrap(); 
+        let r_mesh = TMFMesh::read_tmf(&mut (&out as &[u8])).unwrap();
+		r_mesh.verify().unwrap(); 
+		let mut out = std::fs::File::create("target/susan_ftmf.obj").unwrap();
+        r_mesh.write_obj(&mut out).unwrap();
     }
     #[test]
     #[should_panic]
