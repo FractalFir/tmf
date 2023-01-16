@@ -8,17 +8,15 @@ All data in the header is litle-enidinain if not statet otherwise!
 ### 2.1 Byte-Aligned types
 All byte aligned types used in this specification are little-enidian and described using base type *c* and bit number *n* in the following way: *cn*, eg. (u16 - **u**nsignedint of size **16**)
 #### 2.1.1 Base Type definition
-|f| litle-enidian float of size *n*
-|u| litle-enidian u of size *n*
+|type prefix *c*| type definition |
+|---------------|-----------------|
+| f | litle-enidian float of size *n* |
+| u | litle-enidian u of size *n* |
 ### 2.1 Unaligned Binary Type 
 Unaligned binary types can exist only in a Unaligned Binary Array
 ## 3. Unaligned Binary Arrays 
-While UBA itself is byte-aligned, data in ualigned arrays **may not be aligned to byte boundaries**! Data may begin and end in any place inisde a byte in UBA. Next entry in UBA begins in the bit after the bit last entry ends.
-**Unalgined Binary Array -  Diagram**
-----------
-| Byte | Byte | Byte | Byte |
-| Data    | Data  | Data    |
----------- 
+While UBA itself is byte-aligned, data in ualigned arrays **may not be aligned to byte boundaries**! Data may begin and end in any place inisde a byte in UBA. Next entry in UBA begins in the bit after the bit last entry ends. Empty space at the end of an UBA is padded by 0's to the nearest byte boundary.
+
 ## 4 Base file structure:
 The file consists of TMF header and any number of segments. All Segment begin with a segment header.
 Unknown segments, or segment which are not needed, can **always** be safely ignored, and file can have any combination of segments in any order, with few limitations:
