@@ -1,10 +1,16 @@
 /// Module used to handle reads of data which is not bit aligned(for example, 3 or 17 bits). This is the module that allows for heavy compression used in this format.
+#[doc(hidden)]
 pub mod unaligned_rw;
-pub mod normals;
-pub mod vertices;
+mod normals;
+mod obj;
+mod vertices;
 mod uv;
 const TMF_MAJOR:u16 = 0;
 const TMF_MINOR:u16 = 1;
+type float = f32;
+type VertexType = (float,float,float);
+type UvType = (float,float);
+type FaceType = u32;
 use std::io::{Write,Read,BufReader};
 struct TMFPrecisionInfo{
 
@@ -36,46 +42,81 @@ struct FileMetadata{
     author:String,
 }
 use std::io::Result;
-struct TMFMesh{
+/// Representation of a TMF mesh. Can be loaded from disk, imported from diffrent format, saved to disk, and exported to a diffrent format, or created using special functions. Since it can be user generated it may be invalid and **must** be verified before being saved, otherwise a "garbage" mesh may be saved, an error may occur or a panic may occur.
+pub struct TMFMesh{
     metadata:Option<FileMetadata>,
-    normals:Option<Box<[(f32,f32,f32)]>>,
+    normals:Option<Box<[VertexType]>>,
     normal_faces:Option<Box<[u32]>>,
-    vertices:Option<Box<[(f32,f32,f32)]>>,
+    vertices:Option<Box<[VertexType]>>,
     vertex_faces:Option<Box<[u32]>>,
     uvs:Option<Box<[(f32,f32)]>>,
     uv_faces:Option<Box<[u32]>>,
 }
+/// Enum representing the result of integrity check. 
+#[derive(Clone,Copy)]
 pub enum TMFIntegrityStatus{
+	/// Mesh has passed all verification steps
     Ok,
+	/// No vertex array - mesh contains no points.
     VertexArrayMissing,
+	/// Mesh contains info about vertices, but does not contain info about triangles they form.
     VertexFaceArrayMissing,
+	/// Array contians index *0* which is outside vertex array length *1*
     VertexIndexOutsideVertexArray(u32,u32),
+	/// Mesh contains no normal array
     NormalArrayMissing,
+	/// Mesh contains no normal face array to set which trinagles have which normals from the normal array.
     NormalFaceArrayMissing,
+	/// Index in traingle is outside the normal array.
     NormalIndexOutsideNormalArray,
+	// Mesh contains normals that are not normalized
     NormalNotNormalized,
+	/// Mesh does not contain UV array.
     UVArrayMissing,
+	/// Mesh contains uvs, but no uv face array to create triangles using those uvs.
     UVFaceArrayMissing,
 }
 impl TMFIntegrityStatus{
+	/// Returns true if status is Ok.
     pub fn is_ok(&self)->bool{
         match self{
             Self::Ok=>true,
             _=>false,
         }
     }
+	/// Returns true if mesh can't be safely saved to disk in current state(some action must be taken). Saving such a mesh would result in either a write error, garbage mesh saved, or a panic - depending on severity 
+	pub fn is_fatal(&self)->bool{
+		match self{
+			VertexFaceArrayMissing=>true,
+			NormalFaceArrayMiising=>true,
+			UVFaceArrayMissing=>true,
+			VertexIndexOutsideArray=>true,
+			NormalIndexOutsideArray=>true,
+			//TODO: uv face out of index
+			NormalNotNormalized=>true,
+			_=>false,
+		}
+	}
+	/// Returns status if fatal, otherwise Ok.
+	pub fn only_fatal(&self)->Self{
+		if self.is_fatal(){*self}
+		else {Self::Ok}
+	}
+	/// Checks if state is an error state (not Ok).
     pub fn is_err(&self)->bool{
         match self{
             Self::Ok=>false,
             _=>true,
         }
     }
+	/// Works like unwrap on [`Result`](panics if not Ok)	
     pub fn unwrap(&self){
         match self{
             Self::Ok=>(),
             _=>panic!("{self}"),
         }
     }
+	/// Works like except on [`Result`](panics with *msg* if not Ok)
     pub fn except(&self,msg:&str){
         match self{
             Self::Ok=>(),
@@ -99,7 +140,90 @@ impl std::fmt::Display for TMFIntegrityStatus{
         }
     }
 }
+fn slice_to_box<T:Sized + std::marker::Copy>(slice:&[T])->Box<[T]>{
+	let vec = vec![slice];
+	slice.into()
+}
 impl TMFMesh{
+	/// Sets mesh vertex array and returns old vertex array if present. New mesh data is **not** checked during this function call, so to ensure mesh is valid call `verify` before saving.
+	pub fn set_vertices(&mut self,vertices:&[VertexType])->Option<Box<[VertexType]>>{
+		let mut vertices = Some(slice_to_box(vertices));
+		std::mem::swap(&mut vertices,&mut self.vertices);
+		vertices
+	}
+	/// Sets mesh normal array and returns old normal array if present. New mesh data is **not** checked during this function call, so to ensure mesh is valid call `verify` before saving.
+	pub fn set_normals(&mut self,normals:&[VertexType])->Option<Box<[VertexType]>>{
+		let mut normals = Some(slice_to_box(normals));
+		std::mem::swap(&mut normals,&mut self.normals);
+		normals
+	}
+	/// Sets mesh uv array and returns old uv array if present. New mesh daata is **not** checked during this function call, so to ensure mesh is valid call [`verify`] before saving.
+	pub fn set_uvs(&mut self,uvs:&[UvType])->Option<Box<[UvType]>>{
+		let mut uvs = Some(slice_to_box(uvs));
+		std::mem::swap(&mut uvs,&mut self.uvs);
+		uvs
+	}
+	/// Sets vertex face array to *faces* and returns old faces if present.
+	pub fn set_vertex_faces(&mut self,faces:&[FaceType])->Option<Box<[FaceType]>>{
+		let mut faces = Some(slice_to_box(faces));
+		std::mem::swap(&mut faces,&mut self.vertex_faces);
+		faces
+	}
+	/// Sets normal face array to *faces* and returns old faces if present.
+	pub fn set_normal_faces(&mut self,faces:&[FaceType])->Option<Box<[FaceType]>>{
+		let mut faces = Some(slice_to_box(faces));
+		std::mem::swap(&mut faces,&mut self.normal_faces);
+		faces
+	}
+    /// Sets uv face array to *faces* and returns old faces if present. 
+	pub fn set_uv_faces(&mut self,faces:&[FaceType])->Option<Box<[FaceType]>>{
+		let mut faces = Some(slice_to_box(faces));
+		std::mem::swap(&mut faces,&mut self.uv_faces);
+		faces
+	}
+	/// Gets the vertices of this TMFMesh.
+	pub fn get_vertices<'a>(&'a self)->Option<&'a [VertexType]>{
+		match &self.vertices{
+			Some(vertices)=>Some(vertices.as_ref()),
+			None=>None,		
+		}
+	}
+	/// Gets the normals of this TMFMesh.
+	pub fn get_normals<'a>(&'a self)->Option<&'a [VertexType]>{
+		match &self.normals{
+			Some(normals)=>Some(normals.as_ref()),
+			None=>None,		
+		}
+	}
+	/// Gets the uv of this TMFMesh.
+	pub fn get_uvs<'a>(&'a self)->Option<&'a [UvType]>{
+		match &self.uvs{
+			Some(uvs)=>Some(uvs.as_ref()),
+			None=>None,		
+		}
+	}
+	/// Gets the vertex face index array of this TMFMesh.
+	pub fn get_vertex_faces<'a>(&'a self)->Option<&'a [FaceType]>{
+		match &self.vertex_faces{
+			Some(vertex_faces)=>Some(vertex_faces.as_ref()),
+			None=>None,		
+		}
+	}
+	/// Gets the normal face index array of this TMFMesh.
+	pub fn get_normal_faces<'a>(&'a self)->Option<&'a [FaceType]>{
+		match &self.normal_faces{
+			Some(normal_faces)=>Some(normal_faces.as_ref()),
+			None=>None,		
+		}
+	}
+	/// Gets the uv face index array of this TMFMesh.
+	pub fn get_uv_faces<'a>(&'a self)->Option<&'a [FaceType]>{
+		match &self.uv_faces{
+			Some(uv_faces)=>Some(uv_faces.as_ref()),
+			None=>None,		
+		}
+	}
+	/// Checks if mesh is valid and can be saved.
     pub fn verify(&self)->TMFIntegrityStatus{
         // Check that vertex and vertex face array are present
         match &self.vertices{
@@ -155,90 +279,12 @@ impl TMFMesh{
         }
         return TMFIntegrityStatus::Ok;
     }
-    fn match_split<'a>(split:Option<&'a str>)->Result<&'a str>{
-        match split{
-            Some(beg)=>Ok(beg),
-            None=>Err(std::io::Error::new(std::io::ErrorKind::Other,"Invalid .obj line")),
-        }
-    }
-    fn parse_f32(float:&str)->Result<f32>{
-        match float.parse::<f32>(){
-            Ok(float)=>Ok(float),
-            Err(err)=>Err(std::io::Error::new(std::io::ErrorKind::Other,err.to_string())),
-        }
-    }
-    fn parse_u32(uint:&str)->Result<u32>{
-        match uint.parse::<u32>(){
-            Ok(uint)=>Ok(uint),
-            Err(err)=>Err(std::io::Error::new(std::io::ErrorKind::Other,err.to_string())),
-        }
-    }
+	/// Reads tmf mesh from a .obj file in *reader*
     pub fn read_from_obj<R:Read>(reader:&mut R)->Result<Self>{
-        use std::io::BufRead;
-        let reader = BufReader::new(reader);
-        let mut vertices      = Vec::with_capacity(0x100);
-        let mut normals       = Vec::with_capacity(0x100);
-        let mut uvs           = Vec::with_capacity(0x100);
-        let mut vertex_faces  = Vec::with_capacity(0x100);
-        let mut normal_faces  = Vec::with_capacity(0x100);
-        let mut uv_faces      = Vec::with_capacity(0x100);
-        for line in reader.lines(){
-            let line = line?; 
-            let mut split = line.split(&[' ','/']);
-            let beg = Self::match_split(split.next())?;
-            match beg{
-                "v"=>{
-                    let (x,y,z) = (Self::match_split(split.next())?,Self::match_split(split.next())?,Self::match_split(split.next())?);
-                    let vertex = (Self::parse_f32(x)?,Self::parse_f32(y)?,Self::parse_f32(z)?);
-                    vertices.push(vertex);
-                },
-                "vn"=>{
-                    let (x,y,z) = (Self::match_split(split.next())?,Self::match_split(split.next())?,Self::match_split(split.next())?);
-                    let normal = (Self::parse_f32(x)?,Self::parse_f32(y)?,Self::parse_f32(z)?);
-                    normals.push(normal);
-                },
-                "vt"=>{
-                    let (x,y) = (Self::match_split(split.next())?,Self::match_split(split.next())?);
-                    let uv = (Self::parse_f32(x)?,Self::parse_f32(y)?);
-                    uvs.push(uv);
-                },
-                "f"=>{
-                     let (v0,vt0,vn0,v1,vt1,vn1,v2,vt2,vn2) = (
-                     Self::match_split(split.next())?,Self::match_split(split.next())?,Self::match_split(split.next())?,
-                     Self::match_split(split.next())?,Self::match_split(split.next())?,Self::match_split(split.next())?,
-                     Self::match_split(split.next())?,Self::match_split(split.next())?,Self::match_split(split.next())?
-                     );
-                     if split.next().is_some(){
-                        return Err(std::io::Error::new(std::io::ErrorKind::Other,"OBJ reader supports only triangulated meshes ATM."));
-                     }
-                     vertex_faces.push(Self::parse_u32(v0)?  - 1);
-                     vertex_faces.push(Self::parse_u32(v1)?  - 1);
-                     vertex_faces.push(Self::parse_u32(v2)?  - 1);
-                     normal_faces.push(Self::parse_u32(vn0)? - 1);
-                     normal_faces.push(Self::parse_u32(vn1)? - 1);
-                     normal_faces.push(Self::parse_u32(vn2)? - 1);
-                     uv_faces.push(Self::parse_u32(vt0)?     - 1);
-                     uv_faces.push(Self::parse_u32(vt1)?     - 1);
-                     uv_faces.push(Self::parse_u32(vt2)?     - 1);
-                }
-                "#"=>continue,
-                "mtllib"=>continue,//TODO:use material info
-                "o"=>continue,//TODO:use object info
-                "s"=>continue,//TODO:use smoothness  info
-                _=>todo!("{}",line),
-            }
-        }
-        Ok(Self{
-            metadata:None,
-            vertices:Some(vertices.into()),
-            vertex_faces:Some(vertex_faces.into()),
-            normals:Some(normals.into()),
-            normal_faces:Some(normal_faces.into()),
-            uvs:Some(uvs.into()),
-            uv_faces:Some(uv_faces.into()),
-        })
+        obj::read_from_obj(reader)
     }
-    fn write_obj<W:Write>(&self,w:&mut W)->Result<()>{
+	/// Writes this TMF  mesh to a .obj file.
+    pub fn write_obj<W:Write>(&self,w:&mut W)->Result<()>{
         match &self.vertices{
             None=>(),
             Some(vertices)=>{
@@ -286,6 +332,7 @@ impl TMFMesh{
         }
         Ok(())
     }
+	/// Writes this TMF Mesh to *w*.
     pub fn write_tmf<W:Write>(&self,w:&mut W)->Result<()>{
         let mut curr_segment_data = Vec::with_capacity(0x100);
         w.write_all(b"TMF")?;
@@ -397,9 +444,11 @@ impl TMFMesh{
         };
         Ok(())
     }
+	/// Creates an empty TMF Mesh.
 	pub fn empty()->Self{
 		Self{metadata:None, normal_faces:None, normals:None, uv_faces:None, uvs:None, vertex_faces:None, vertices:None}
 	}
+	/// Reads a mesh from a .tmf file.
     pub fn read_tmf<R:Read>(reader:&mut R)->Result<Self>{
         let mut magic = [0;3];
         reader.read_exact(&mut magic)?;
@@ -416,13 +465,11 @@ impl TMFMesh{
             reader.read(&mut tmp)?;
             u16::from_le_bytes(tmp)
         };
-        println!("major:{major},minor:{minor}");
 		fn read_u16<R:Read>(r:&mut R)->Result<u16>{
 			let mut tmp = [0;2]; r.read_exact(&mut tmp)?; Ok(u16::from_le_bytes(tmp))
 		}
 		let mut res = Self::empty();
 		while let Ok(header) = read_u16(reader){
-			println!("hdr:{header}");
 			let header = SectionHeader::from_u16(header);
 			let data_length = {let mut tmp = [0;4]; reader.read(&mut tmp)?; u32::from_le_bytes(tmp)};
 			let mut data = vec![0;data_length as usize];
@@ -472,7 +519,6 @@ impl TMFMesh{
 				},
 				_=>(),//Unknown header, ignoring
 			}
-			println!("header:{header:?} data_length:{data_length}");
 		}
         //todo!();
 		Ok(res)

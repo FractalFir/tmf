@@ -7,7 +7,7 @@ fn unaligned_read(bench: &mut Bencher) {
     bench.iter(|| {
         let mut reader = UnalignedReader::new(&CHANIGING_ALGHMENT_EXPECTED as &[u8]);
         for byte in 1..64{
-            assert!(reader.read_unaligned(UnalignedRWMode(byte)).unwrap() == byte as u64);
+            assert!(reader.read_unaligned(UnalignedRWMode::precision_bits(byte)).unwrap() == byte as u64);
         }
     })
 }
@@ -18,15 +18,26 @@ fn unaligned_write(bench: &mut Bencher) {
         {
             let mut writter = UnalignedWriter::new(&mut result);
             for byte in 1..64{
-                writter.write_unaligned(UnalignedRWMode(byte),byte as u64).unwrap();
+                writter.write_unaligned(UnalignedRWMode::precision_bits(byte),byte as u64).unwrap();
             }
         }
         assert!(result == CHANIGING_ALGHMENT_EXPECTED);
     });
  
 }
+fn read_tmf(bench: &mut Bencher) {
+	use std::io::Read; 
+	use tmf::TMFMesh;
+	let mut file = std::fs::File::open("testing/susan_bench.tmf").unwrap();
+	let mut out = Vec::new();
+	file.read_to_end(&mut out);
+    bench.iter(|| {
+        let r_mesh = TMFMesh::read_tmf(&mut (&out as &[u8])).unwrap();
+    });
+ 
+}
 
-benchmark_group!(benches,unaligned_read, unaligned_write);
+benchmark_group!(benches,unaligned_read, unaligned_write,read_tmf);
 benchmark_main!(benches);
 pub const CHANIGING_ALGHMENT_EXPECTED:[u8;252] = [
     0b11001101,0b00001010,0b00110000,0b01110000,0b10000000,0b01001000,0b00010100,0b00000010,0b11000000,0b00110000,0b00000001,0b10100000,0b00000111,0b00000000,0b00001111,

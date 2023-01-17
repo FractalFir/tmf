@@ -11,6 +11,7 @@ edition = "2021"
 bencher = "0.1.5"
 rand = "0.8.5"
 [features]
+fast_trig = []
 [[bench]]
 name = "unaligned_rw"
 harness = false

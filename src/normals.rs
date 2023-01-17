@@ -12,6 +12,22 @@ pub const NORM_PREC_LOW:NormalPrecisionMode = NormalPrecisionMode(7);
 pub const NORM_PREC_MID:NormalPrecisionMode = NormalPrecisionMode(10);
 pub const NORM_PREC_HIGH:NormalPrecisionMode = NormalPrecisionMode(13);
 const SIGN_PREC:UnalignedRWMode = UnalignedRWMode::precision_bits(1);
+// https://www.gamedev.net/forums/topic/621589-extremely-fast-sin-approximation/
+type fprec = f64;
+const fPI:fprec = std::f64::consts::PI;
+fn fsin(mut x:fprec)->fprec{
+	let mut z = (x*0.3183098861837907) + 6755399441055744.0;
+	let k:i32 = unsafe{*(&z as *const _ as *const _)};
+	z = (k as fprec) * fPI;
+	x -= z;
+	let y = x*x;
+	let z = (0.0073524681968701*y - 0.1652891139701474)*y +  0.9996919862959676;
+	x *= z;
+	let mut k = k & 1;
+	k += k;
+	let z = (k as fprec) * x;
+	return x - z;
+}
 pub(crate) fn magnitude(i:(f32,f32,f32))->f32{
     let xx = i.0 * i.0;
     let yy = i.1 * i.1;
@@ -56,25 +72,31 @@ fn read_normal<R:Read>(precision:NormalPrecisionMode,reader:&mut UnalignedReader
     let main_prec = UnalignedRWMode::precision_bits(precision.0);
     let divisor = ((1<<precision.0)-1) as f32;
     // Get signs of x y z component 
-    let sx = if reader.read_unaligned(SIGN_PREC)? != 0{-1.0}else{1.0};
-    let sy = if reader.read_unaligned(SIGN_PREC)? != 0{-1.0}else{1.0};
-    let sz = if reader.read_unaligned(SIGN_PREC)? != 0{-1.0}else{1.0};
+    let sx = reader.read_unaligned(SIGN_PREC)? != 0;
+    let sy = reader.read_unaligned(SIGN_PREC)? != 0;
+    let sz = reader.read_unaligned(SIGN_PREC)? != 0;
     // Read raw asine
     let asine = (reader.read_unaligned(main_prec)? as f32)/divisor;
     //Convert asine
     let asine = asine * (PI/2.0);
     //Read xyz component
     let z = (reader.read_unaligned(main_prec)? as f32)/divisor;
-    
-    let y = asine.cos();
-    let x = asine.sin();  
+	#[cfg(feature = "fast_trig")]
+    let x = fsin(asine as fprec) as f32; 
+	#[cfg(not(feature = "fast_trig"))]
+    let x = asine.sin();
+   	
+	let y = (1.0 - x*x).sqrt();
     // Calculate XY magnitude
     let xy_mag = (1.0 - z*z).sqrt();
     // Adjust x an y
     let y = y * xy_mag;
     let x = x * xy_mag;
-    
-    let res = (x*sx,y*sy,z*sz);
+    // Set signs
+	let x = if sx {-x}else{x};
+	let y = if sy {-y}else{y};
+	let z = if sz {-z}else{z};
+    let res = (x,y,z);
     Ok(res)
 }
 pub (crate) fn save_normal_array<W:Write>(normals:&[(f32,f32,f32)],writer:&mut W,precision:NormalPrecisionMode)->Result<()>{
@@ -184,6 +206,16 @@ mod test_normal{
             assert!(n_dot < 0.1,"expected:{normal:?} != read:{r_normal:?} angle:{n_dot}");
         }
     }
+	#[test] 
+	fn test_fast_sin(){
+		for i in 1..100000{
+			let x:fprec = (100000.0/(i as fprec))*std::f64::consts::PI;
+			let sin = x.sin();
+			let fsin = fsin(x);
+			let dt = sin - fsin ;
+			assert!(dt < 0.000333,"{x}:{sin} - {fsin} = {dt}");
+		}
+	}
     #[test]
     fn rw_normal_face_array(){
         use rand::{Rng,thread_rng};
