@@ -34,7 +34,8 @@ Segment Header contains information necesary to identify segment type, and then 
 2. SegmentDataLength - a u32 specifing, how many bytes this segments data section contains. This **is not** the size of the whole segment(size of SegmentHeader is **not** included here). Only the size of SegmentData is included.
 3. SegmentData - array of bytes *SegmentDataLength* in size. Contains all data encoded by this segment, and metadata required to decode it.
 ## 5.1 Segment Types and how to decode those segments
-### 5.1.1 Face Segment Types
+Any segment can contain any data after end of necesary data described in segment specification that **must** be ignored. 
+## 5.1.1 Face Segment Types
 All face segment types all have the exact same layout. Intiegers inside them index into the table associated with the type and specify data for each vertex of a triangle.
 | SegementType | Type index | Referenced Segment |
 |--------------------|------------|--------------------|
@@ -63,4 +64,7 @@ It consists of:
 1. Precision - u8 informing how much precision UV has.
 2. Count - u32 informing how many UV's are in this array.
 3. UBA containg count 2D vectors with *Count* components of size *Precision*.
+## 5.1.5 Metadata segment
+Metadata segment is 7.
+
 

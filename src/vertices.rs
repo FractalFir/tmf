@@ -1,11 +1,12 @@
 use std::io::{Write,Read,Result};
 use crate::unaligned_rw::{UnalignedWriter,UnalignedReader,UnalignedRWMode};
+#[derive(Clone,Copy)]
 pub struct VertexPrecisionMode(pub f32);
 pub fn save_tmf_vertices<W:Write>(vertices:&[(f32,f32,f32)],precision:VertexPrecisionMode,writer:&mut W,shortest_edge:f32)->Result<()>{
     let mut min_x = vertices[0].0;let mut max_x = vertices[0].0;
     let mut min_y = vertices[0].1;let mut max_y = vertices[0].1;
     let mut min_z = vertices[0].2;let mut max_z = vertices[0].2;
-    writer.write(&(vertices.len() as u32).to_le_bytes())?;
+    writer.write_all(&(vertices.len() as u32).to_le_bytes())?;
     //Get min and max x,y,z coords
     for vertex in vertices{
         min_x = min_x.min(vertex.0);
@@ -15,12 +16,12 @@ pub fn save_tmf_vertices<W:Write>(vertices:&[(f32,f32,f32)],precision:VertexPrec
         min_z = min_y.min(vertex.1);
         max_z = max_z.max(vertex.2);
     };
-    writer.write(&min_x.to_le_bytes())?;
-    writer.write(&max_x.to_le_bytes())?;
-    writer.write(&min_y.to_le_bytes())?;
-    writer.write(&max_y.to_le_bytes())?;
-    writer.write(&min_z.to_le_bytes())?;
-    writer.write(&max_z.to_le_bytes())?;
+    writer.write_all(&min_x.to_le_bytes())?;
+    writer.write_all(&max_x.to_le_bytes())?;
+    writer.write_all(&min_y.to_le_bytes())?;
+    writer.write_all(&max_y.to_le_bytes())?;
+    writer.write_all(&min_z.to_le_bytes())?;
+    writer.write_all(&max_z.to_le_bytes())?;
     //Calculate size of the model
     let sx = max_x - min_x;
     let sy = max_y - min_y;
@@ -34,9 +35,9 @@ pub fn save_tmf_vertices<W:Write>(vertices:&[(f32,f32,f32)],precision:VertexPrec
     let prec_y = (1.0/inc_y).log2().ceil() as u8;
     let prec_z = (1.0/inc_z).log2().ceil() as u8;
     // Write precision info
-    writer.write(&[prec_x])?;
-    writer.write(&[prec_y])?;
-    writer.write(&[prec_z])?;
+    writer.write_all(&[prec_x])?;
+    writer.write_all(&[prec_y])?;
+    writer.write_all(&[prec_z])?;
     // Calculate float save multiplier
     let mul_x = ((1<<prec_x) - 1) as f32;
     let mul_y = ((1<<prec_y) - 1) as f32;
@@ -124,8 +125,8 @@ pub fn read_tmf_vertices<R:Read>(reader:&mut R)->Result<Box<[(f32,f32,f32)]>>{
 }
 pub fn save_faces<W:Write>(faces:&[u32],count:usize,writer:&mut W)->Result<()>{
     let precision = (count as f32).log2().ceil() as u8;
-    writer.write(&precision.to_le_bytes())?;
-    writer.write(&(faces.len() as u32).to_le_bytes())?;
+    writer.write_all(&precision.to_le_bytes())?;
+    writer.write_all(&(faces.len() as u32).to_le_bytes())?;
     let precision = UnalignedRWMode::precision_bits(precision);
     let mut writer = UnalignedWriter::new(writer);
     for index in faces{
@@ -136,12 +137,12 @@ pub fn save_faces<W:Write>(faces:&[u32],count:usize,writer:&mut W)->Result<()>{
 pub fn read_faces<R:Read>(reader:&mut R)->Result<Box<[u32]>>{
 	let precision = {
    		let mut tmp = [0];
-		reader.read(&mut tmp)?;
+		reader.read_exact(&mut tmp)?;
 		tmp[0]
    	};
 	let count = {
    		let mut tmp = [0;4];
-		reader.read(&mut tmp)?;
+		reader.read_exact(&mut tmp)?;
 		u32::from_le_bytes(tmp)
    	};
 	let precision = UnalignedRWMode::precision_bits(precision);

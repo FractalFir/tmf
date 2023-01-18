@@ -8,17 +8,17 @@ impl NormalPrecisionMode{
         Self(prec)
     }
 }
-pub const NORM_PREC_LOW:NormalPrecisionMode = NormalPrecisionMode(7);
-pub const NORM_PREC_MID:NormalPrecisionMode = NormalPrecisionMode(10);
-pub const NORM_PREC_HIGH:NormalPrecisionMode = NormalPrecisionMode(13);
 const SIGN_PREC:UnalignedRWMode = UnalignedRWMode::precision_bits(1);
-// https://www.gamedev.net/forums/topic/621589-extremely-fast-sin-approximation/
+#[allow(non_camel_case_types)]#[cfg(feature = "fast_trig")]
 type fprec = f64;
-const fPI:fprec = std::f64::consts::PI;
+#[cfg(feature = "fast_trig")]#[cfg(feature = "fast_trig")]
+const F_PI:fprec = std::f64::consts::PI;
+// https://www.gamedev.net/forums/topic/621589-extremely-fast-sin-approximation/
+#[cfg(feature = "fast_trig")]#[inline(always)]
 fn fsin(mut x:fprec)->fprec{
 	let mut z = (x*0.3183098861837907) + 6755399441055744.0;
 	let k:i32 = unsafe{*(&z as *const _ as *const _)};
-	z = (k as fprec) * fPI;
+	z = (k as fprec) * F_PI;
 	x -= z;
 	let y = x*x;
 	let z = (0.0073524681968701*y - 0.1652891139701474)*y +  0.9996919862959676;
@@ -42,7 +42,13 @@ fn normalize(i:(f32,f32,f32))->(f32,f32,f32){
     
     (i.0/mag,i.1/mag,i.2/mag)
 }
+pub fn normalize_arr(normals:&mut [(f32,f32,f32)]){
+	for normal in normals{
+		*normal = normalize(*normal);
+	}
+}
 use std::f32::consts::PI as PI;
+#[inline(always)]
 fn save_normal<W:Write>(normal:(f32,f32,f32),precision:NormalPrecisionMode,writer:&mut UnalignedWriter<W>)->Result<()>{
     let multiplier = ((1<<precision.0)-1) as f32;
     //Calculate asine
@@ -68,6 +74,7 @@ fn save_normal<W:Write>(normal:(f32,f32,f32),precision:NormalPrecisionMode,write
     
     Ok(())
 }
+#[inline(always)]
 fn read_normal<R:Read>(precision:NormalPrecisionMode,reader:&mut UnalignedReader<R>)->Result<(f32,f32,f32)>{
     let main_prec = UnalignedRWMode::precision_bits(precision.0);
     let divisor = ((1<<precision.0)-1) as f32;
@@ -129,22 +136,12 @@ pub (crate) fn read_normal_array<R:Read>(reader:&mut R)->Result<Box<[(f32,f32,f3
     }
     Ok(normals.into())
 }
-pub (crate) fn save_normal_face_array<W:Write>(faces:&[u32],normal_count:u32,writer:&mut W)->std::io::Result<()>{
-    let face_count = (faces.len() as u32).to_le_bytes();
-    let face_precision = (normal_count as f64).log2().ceil() as u8;
-    writer.write_all(&face_count)?;
-    writer.write_all(&[face_precision])?;
-    let face_precision = UnalignedRWMode::precision_bits(face_precision);
-    let mut writer = UnalignedWriter::new(writer);
-    for index in faces{
-        writer.write_unaligned(face_precision,*index as u64).unwrap();
-    }
-    writer.flush()?;
-    Ok(())
-}
 #[cfg(test)]
 mod test_normal{
     use super::*;
+	pub const NORM_PREC_LOW:NormalPrecisionMode = NormalPrecisionMode(7);
+	pub const NORM_PREC_MID:NormalPrecisionMode = NormalPrecisionMode(10);
+	pub const NORM_PREC_HIGH:NormalPrecisionMode = NormalPrecisionMode(13);
     fn dot(a:(f32,f32,f32),b:(f32,f32,f32))->f32{
         a.0*b.0 + a.1*b.1 + a.2*b.2
     }
@@ -206,7 +203,7 @@ mod test_normal{
             assert!(n_dot < 0.1,"expected:{normal:?} != read:{r_normal:?} angle:{n_dot}");
         }
     }
-	#[test] 
+	#[test] #[cfg(feature = "fast_trig")]
 	fn test_fast_sin(){
 		for i in 1..100000{
 			let x:fprec = (100000.0/(i as fprec))*std::f64::consts::PI;
@@ -216,18 +213,4 @@ mod test_normal{
 			assert!(dt < 0.000333,"{x}:{sin} - {fsin} = {dt}");
 		}
 	}
-    #[test]
-    fn rw_normal_face_array(){
-        use rand::{Rng,thread_rng};
-        let mut rng = thread_rng();
-        let normal_count = ((rng.gen::<u32>()%0x800)+0x800) as u32;
-        let face_count = ((rng.gen::<u32>()%0x800)+0x800) as usize;
-        let mut faces = Vec::with_capacity(face_count*3);
-        for _ in 0..face_count*3{
-            let index = rng.gen::<u32>()%normal_count;
-            faces.push(index);
-        }
-        let mut res = Vec::with_capacity(face_count);
-        save_normal_face_array(&faces,normal_count as u32,&mut res).unwrap()
-    }
 }

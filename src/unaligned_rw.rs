@@ -9,6 +9,7 @@ pub struct UnalignedReader<R:Read>{
 }
 impl<R:Read> UnalignedReader<R>{
     /// Reads *mode.0* bits from self, keeping internal alignment
+	#[inline(always)]
     pub fn read_unaligned(&mut self,mode:UnalignedRWMode)->Result<u64>{
         // Prepare result integer, in which read result is stored.
         let mut res:u64 = 0;
@@ -71,6 +72,7 @@ impl<W:Write> UnalignedWriter<W>{
         let written = 0;
         Self{next_byte,written,writer}
     }
+	#[inline(always)]
     pub fn write_unaligned(&mut self,mode:UnalignedRWMode,mut data:u64)->Result<()>{
         debug_assert!(mode.0>0,"Writng 0-sized data using unaligned writer is an error, which will can lead to crashes and/or freezes");
         let mut total_write = mode.0;
