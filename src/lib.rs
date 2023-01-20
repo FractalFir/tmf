@@ -5,7 +5,8 @@ mod obj;
 pub mod unaligned_rw;
 mod uv;
 mod vertices;
-//Unfinished
+mod unaligned_lzz;
+// Unfinished
 #[allow(dead_code)]
 mod metadata;
 const TMF_MAJOR: u16 = 0;

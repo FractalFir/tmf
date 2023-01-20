@@ -1,16 +1,5 @@
 use std::io::{BufReader, BufWriter, Read, Result, Write};
-macro_rules! unrolled_while {
-    ($body:expr,$condition:expr,$times:expr) => {
-        for _ in 0..($times) {
-            if (!($condition)) {
-                break;
-            }
-            {
-                $body
-            }
-        }
-    };
-}
+
 pub struct UnalignedReader<R: Read> {
     /// Buff Reader used to speedup reads in some cases.
     reader: BufReader<R>,
@@ -27,7 +16,7 @@ impl<R: Read> UnalignedReader<R> {
         let mut res: u64 = 0;
         // Total bits remaining to read
         let mut total_read = mode.0;
-        while (total_read > 0) {
+        while total_read > 0 {
             // If all bits in current_byte read, read new byte with new bits, and set amount of bits bits_read in current bit back to 0.
             if self.bits_read >= 8 {
                 let mut tmp: [u8; 1] = [0];
