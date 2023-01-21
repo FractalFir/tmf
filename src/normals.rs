@@ -1,9 +1,10 @@
 use crate::unaligned_rw::{UnalignedRWMode, UnalignedReader, UnalignedWriter};
 use std::io::{Read, Result, Write};
+use crate::{IndexType,FloatType,Vector3};
 #[derive(Clone, Copy)]
 pub struct NormalPrecisionMode(u8);
 impl NormalPrecisionMode {
-    pub fn from_deg_dev(deg: f32) -> Self {
+    pub fn from_deg_dev(deg:FloatType) -> Self {
         let prec = (90.0 / deg).log2().ceil() as u8;
         Self(prec)
     }
@@ -31,13 +32,13 @@ fn fsin(mut x: fprec) -> fprec {
     let z = (k as fprec) * x;
     return x - z;
 }
-pub(crate) fn magnitude(i: (f32, f32, f32)) -> f32 {
+pub(crate) fn magnitude(i:Vector3) ->FloatType{
     let xx = i.0 * i.0;
     let yy = i.1 * i.1;
     let zz = i.2 * i.2;
     (xx + yy + zz).sqrt()
 }
-fn normalize(i: (f32, f32, f32)) -> (f32, f32, f32) {
+fn normalize(i:Vector3) -> Vector3{
     let xx = i.0 * i.0;
     let yy = i.1 * i.1;
     let zz = i.2 * i.2;
@@ -45,19 +46,19 @@ fn normalize(i: (f32, f32, f32)) -> (f32, f32, f32) {
 
     (i.0 / mag, i.1 / mag, i.2 / mag)
 }
-pub fn normalize_arr(normals: &mut [(f32, f32, f32)]) {
+pub fn normalize_arr(normals: &mut [Vector3]) {
     for normal in normals {
         *normal = normalize(*normal);
     }
 }
-use std::f32::consts::PI;
+const PI:FloatType = std::f64::consts::PI as FloatType;
 #[inline(always)]
 fn save_normal<W: Write>(
-    normal: (f32, f32, f32),
+    normal: Vector3,
     precision: NormalPrecisionMode,
     writer: &mut UnalignedWriter<W>,
 ) -> Result<()> {
-    let multiplier = ((1 << precision.0) - 1) as f32;
+    let multiplier = ((1 << precision.0) - 1) as FloatType;
     //Calculate asine
     let xy = (normal.0.abs(), normal.1.abs());
     let xy_mag = (xy.0 * xy.0 + xy.1 * xy.1).sqrt();
@@ -85,21 +86,21 @@ fn save_normal<W: Write>(
 fn read_normal<R: Read>(
     precision: NormalPrecisionMode,
     reader: &mut UnalignedReader<R>,
-) -> Result<(f32, f32, f32)> {
+) -> Result<Vector3> {
     let main_prec = UnalignedRWMode::precision_bits(precision.0);
-    let divisor = ((1 << precision.0) - 1) as f32;
+    let divisor = ((1 << precision.0) - 1) as FloatType;
     // Get signs of x y z component
     let sx = reader.read_unaligned(SIGN_PREC)? != 0;
     let sy = reader.read_unaligned(SIGN_PREC)? != 0;
     let sz = reader.read_unaligned(SIGN_PREC)? != 0;
     // Read raw asine
-    let asine = (reader.read_unaligned(main_prec)? as f32) / divisor;
+    let asine = (reader.read_unaligned(main_prec)? as FloatType) / divisor;
     //Convert asine
     let asine = asine * (PI / 2.0);
     //Read xyz component
-    let z = (reader.read_unaligned(main_prec)? as f32) / divisor;
+    let z = (reader.read_unaligned(main_prec)? as FloatType) / divisor;
     #[cfg(feature = "fast_trig")]
-    let x = fsin(asine as fprec) as f32;
+    let x = fsin(asine as fprec) as FloatType;
     #[cfg(not(feature = "fast_trig"))]
     let x = asine.sin();
 
@@ -117,11 +118,11 @@ fn read_normal<R: Read>(
     Ok(res)
 }
 pub(crate) fn save_normal_array<W: Write>(
-    normals: &[(f32, f32, f32)],
+    normals: &[Vector3],
     writer: &mut W,
     precision: NormalPrecisionMode,
 ) -> Result<()> {
-    let count = (normals.len() as u32).to_le_bytes();
+    let count = (normals.len() as u64).to_le_bytes();
     writer.write_all(&count)?;
     writer.write_all(&[precision.0])?;
     let mut writer = UnalignedWriter::new(writer);
@@ -131,11 +132,11 @@ pub(crate) fn save_normal_array<W: Write>(
     writer.flush()?;
     Ok(())
 }
-pub(crate) fn read_normal_array<R: Read>(reader: &mut R) -> Result<Box<[(f32, f32, f32)]>> {
+pub(crate) fn read_normal_array<R: Read>(reader: &mut R) -> Result<Box<[Vector3]>> {
     let count = {
-        let mut tmp: [u8; 4] = [0; 4];
+        let mut tmp = [0; std::mem::size_of::<u64>()];
         reader.read_exact(&mut tmp)?;
-        u32::from_le_bytes(tmp)
+        u64::from_le_bytes(tmp)
     } as usize;
     let precision = NormalPrecisionMode({
         let mut tmp: [u8; 1] = [0; 1];
@@ -156,10 +157,10 @@ mod test_normal {
     pub const NORM_PREC_LOW: NormalPrecisionMode = NormalPrecisionMode(7);
     pub const NORM_PREC_MID: NormalPrecisionMode = NormalPrecisionMode(10);
     pub const NORM_PREC_HIGH: NormalPrecisionMode = NormalPrecisionMode(13);
-    fn dot(a: (f32, f32, f32), b: (f32, f32, f32)) -> f32 {
+    fn dot(a: Vector3, b: Vector3) -> FloatType{
         a.0 * b.0 + a.1 * b.1 + a.2 * b.2
     }
-    fn test_save(normal: (f32, f32, f32)) {
+    fn test_save(normal: Vector3) {
         let mut res = Vec::with_capacity(64);
         let precision = NormalPrecisionMode(14);
         {
@@ -195,9 +196,9 @@ mod test_normal {
         let mut rng = thread_rng();
         for _ in 0..100000 {
             let norm = (
-                rng.gen::<f32>() * 2.0 - 1.0,
-                rng.gen::<f32>() * 2.0 - 1.0,
-                rng.gen::<f32>() * 2.0 - 1.0,
+                rng.gen::<FloatType>() * 2.0 - 1.0,
+                rng.gen::<FloatType>() * 2.0 - 1.0,
+                rng.gen::<FloatType>() * 2.0 - 1.0,
             );
             let norm = normalize(norm);
             test_save(norm);
@@ -207,14 +208,14 @@ mod test_normal {
     fn rw_normal_array() {
         use rand::{thread_rng, Rng};
         let mut rng = thread_rng();
-        let count = ((rng.gen::<u32>() % 0x800) + 0x800) as usize;
+        let count = ((rng.gen::<IndexType>() % 0x800) + 0x800) as usize;
         let mut res = Vec::with_capacity(count);
         let mut normals = Vec::with_capacity(count);
         for _ in 0..count {
             let norm = (
-                rng.gen::<f32>() * 2.0 - 1.0,
-                rng.gen::<f32>() * 2.0 - 1.0,
-                rng.gen::<f32>() * 2.0 - 1.0,
+                rng.gen::<FloatType>() * 2.0 - 1.0,
+                rng.gen::<FloatType>() * 2.0 - 1.0,
+                rng.gen::<FloatType>() * 2.0 - 1.0,
             );
             let norm = normalize(norm);
             normals.push(norm);

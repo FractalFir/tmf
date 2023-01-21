@@ -1,12 +1,13 @@
 use crate::unaligned_rw::{UnalignedRWMode, UnalignedReader, UnalignedWriter};
 use std::io::{Read, Result, Write};
+use crate::{IndexType,FloatType,Vector3};
 #[derive(Clone, Copy)]
-pub struct VertexPrecisionMode(pub f32);
+pub struct VertexPrecisionMode(pub FloatType);
 pub fn save_tmf_vertices<W: Write>(
-    vertices: &[(f32, f32, f32)],
+    vertices: &[Vector3],
     precision: VertexPrecisionMode,
     writer: &mut W,
-    shortest_edge: f32,
+    shortest_edge: FloatType,
 ) -> Result<()> {
     let mut min_x = vertices[0].0;
     let mut max_x = vertices[0].0;
@@ -14,7 +15,7 @@ pub fn save_tmf_vertices<W: Write>(
     let mut max_y = vertices[0].1;
     let mut min_z = vertices[0].2;
     let mut max_z = vertices[0].2;
-    writer.write_all(&(vertices.len() as u32).to_le_bytes())?;
+    writer.write_all(&(vertices.len() as u64).to_le_bytes())?;
     //Get min and max x,y,z coords
     for vertex in vertices {
         min_x = min_x.min(vertex.0);
@@ -24,12 +25,12 @@ pub fn save_tmf_vertices<W: Write>(
         min_z = min_y.min(vertex.1);
         max_z = max_z.max(vertex.2);
     }
-    writer.write_all(&min_x.to_le_bytes())?;
-    writer.write_all(&max_x.to_le_bytes())?;
-    writer.write_all(&min_y.to_le_bytes())?;
-    writer.write_all(&max_y.to_le_bytes())?;
-    writer.write_all(&min_z.to_le_bytes())?;
-    writer.write_all(&max_z.to_le_bytes())?;
+    writer.write_all(&(min_x as f64).to_le_bytes())?;
+    writer.write_all(&(max_x as f64).to_le_bytes())?;
+    writer.write_all(&(min_y as f64).to_le_bytes())?;
+    writer.write_all(&(max_y as f64).to_le_bytes())?;
+    writer.write_all(&(min_z as f64).to_le_bytes())?;
+    writer.write_all(&(max_z as f64).to_le_bytes())?;
     //Calculate size of the model
     let sx = max_x - min_x;
     let sy = max_y - min_y;
@@ -47,9 +48,9 @@ pub fn save_tmf_vertices<W: Write>(
     writer.write_all(&[prec_y])?;
     writer.write_all(&[prec_z])?;
     // Calculate float save multiplier
-    let mul_x = ((1 << prec_x) - 1) as f32;
-    let mul_y = ((1 << prec_y) - 1) as f32;
-    let mul_z = ((1 << prec_z) - 1) as f32;
+    let mul_x = ((1 << prec_x) - 1) as FloatType;
+    let mul_y = ((1 << prec_y) - 1) as FloatType;
+    let mul_z = ((1 << prec_z) - 1) as FloatType;
     // Create unaligned rw modes
     let prec_x = UnalignedRWMode::precision_bits(prec_x);
     let prec_y = UnalignedRWMode::precision_bits(prec_y);
@@ -68,24 +69,24 @@ pub fn save_tmf_vertices<W: Write>(
     writer.flush()?;
     Ok(())
 }
-fn read_f32<R: Read>(reader: &mut R) -> Result<f32> {
-    let mut tmp = [0; std::mem::size_of::<f32>()];
+fn read_f64<R: Read>(reader: &mut R) -> Result<f64> {
+    let mut tmp = [0; std::mem::size_of::<f64>()];
     reader.read_exact(&mut tmp)?;
-    Ok(f32::from_le_bytes(tmp))
+    Ok(f64::from_le_bytes(tmp))
 }
-pub fn read_tmf_vertices<R: Read>(reader: &mut R) -> Result<Box<[(f32, f32, f32)]>> {
+pub fn read_tmf_vertices<R: Read>(reader: &mut R) -> Result<Box<[Vector3]>> {
     let vertex_count = {
-        let mut tmp = [0; 4];
+        let mut tmp = [0; std::mem::size_of::<u64>()];
         reader.read_exact(&mut tmp)?;
-        u32::from_le_bytes(tmp)
+        u64::from_le_bytes(tmp)
     } as usize;
     // Read data bounding box
-    let min_x = read_f32(reader)?;
-    let max_x = read_f32(reader)?;
-    let min_y = read_f32(reader)?;
-    let max_y = read_f32(reader)?;
-    let min_z = read_f32(reader)?;
-    let max_z = read_f32(reader)?;
+    let min_x = read_f64(reader)? as FloatType;
+    let max_x = read_f64(reader)? as FloatType;
+    let min_y = read_f64(reader)? as FloatType;
+    let max_y = read_f64(reader)? as FloatType;
+    let min_z = read_f64(reader)? as FloatType;
+    let max_z = read_f64(reader)? as FloatType;
     // Read precision
     let prec_x = {
         let mut tmp = [0];
@@ -103,9 +104,9 @@ pub fn read_tmf_vertices<R: Read>(reader: &mut R) -> Result<Box<[(f32, f32, f32)
         tmp[0]
     };
     // Calculate float read divisor
-    let div_x = ((1 << prec_x) - 1) as f32;
-    let div_y = ((1 << prec_y) - 1) as f32;
-    let div_z = ((1 << prec_z) - 1) as f32;
+    let div_x = ((1 << prec_x) - 1) as FloatType;
+    let div_y = ((1 << prec_y) - 1) as FloatType;
+    let div_z = ((1 << prec_z) - 1) as FloatType;
     // Create unaligned rw modes
     let prec_x = UnalignedRWMode::precision_bits(prec_x);
     let prec_y = UnalignedRWMode::precision_bits(prec_y);
@@ -121,9 +122,9 @@ pub fn read_tmf_vertices<R: Read>(reader: &mut R) -> Result<Box<[(f32, f32, f32)
         let x = reader.read_unaligned(prec_x)?;
         let y = reader.read_unaligned(prec_y)?;
         let z = reader.read_unaligned(prec_z)?;
-        let x = (x as f32) / div_x;
-        let y = (y as f32) / div_y;
-        let z = (z as f32) / div_z;
+        let x = (x as FloatType) / div_x;
+        let y = (y as FloatType) / div_y;
+        let z = (z as FloatType) / div_z;
         let x = x * sx + min_x;
         let y = y * sy + min_y;
         let z = z * sz + min_z;
@@ -131,10 +132,10 @@ pub fn read_tmf_vertices<R: Read>(reader: &mut R) -> Result<Box<[(f32, f32, f32)
     }
     Ok(vertices.into())
 }
-pub fn save_faces<W: Write>(faces: &[u32], count: usize, writer: &mut W) -> Result<()> {
-    let precision = (count as f32).log2().ceil() as u8;
+pub fn save_faces<W: Write>(faces: &[IndexType], count: usize, writer: &mut W) -> Result<()> {
+    let precision = (count as FloatType).log2().ceil() as u8;
     writer.write_all(&precision.to_le_bytes())?;
-    writer.write_all(&(faces.len() as u32).to_le_bytes())?;
+    writer.write_all(&(faces.len() as u64).to_le_bytes())?;
     let precision = UnalignedRWMode::precision_bits(precision);
     let mut writer = UnalignedWriter::new(writer);
     for index in faces {
@@ -142,28 +143,28 @@ pub fn save_faces<W: Write>(faces: &[u32], count: usize, writer: &mut W) -> Resu
     }
     writer.flush()
 }
-pub fn read_faces<R: Read>(reader: &mut R) -> Result<Box<[u32]>> {
+pub fn read_faces<R: Read>(reader: &mut R) -> Result<Box<[IndexType]>> {
     let precision = {
         let mut tmp = [0];
         reader.read_exact(&mut tmp)?;
         tmp[0]
     };
     let count = {
-        let mut tmp = [0; 4];
+        let mut tmp = [0; std::mem::size_of::<u64>()];
         reader.read_exact(&mut tmp)?;
-        u32::from_le_bytes(tmp)
+        u64::from_le_bytes(tmp)
     };
     let precision = UnalignedRWMode::precision_bits(precision);
     let mut reader = UnalignedReader::new(reader);
     let mut res = Vec::with_capacity(count as usize);
     for _ in 0..count {
-        res.push(reader.read_unaligned(precision)? as u32);
+        res.push(reader.read_unaligned(precision)? as IndexType);
     }
     Ok(res.into())
 }
 #[cfg(test)]
 mod testing {
-    fn dst(a: (f32, f32, f32), b: (f32, f32, f32)) -> f32 {
+    fn dst(a: Vector3, b: Vector3) -> FloatType{
         let dx = a.0 - b.0;
         let dy = a.1 - b.1;
         let dz = a.2 - b.2;
@@ -174,11 +175,11 @@ mod testing {
     fn rw_faces() {
         use rand::{thread_rng, Rng};
         let mut rng = thread_rng();
-        let vertex_count = (rng.gen::<u32>() % 0x800) + 0x800;
-        let face_count = (rng.gen::<u32>() % 0x800) + 0x800;
+        let vertex_count = (rng.gen::<IndexType>() % 0x800) + 0x800;
+        let face_count = (rng.gen::<IndexType>() % 0x800) + 0x800;
         let mut faces = Vec::with_capacity(face_count as usize);
         for _ in 0..face_count {
-            faces.push(rng.gen::<u32>() % vertex_count);
+            faces.push(rng.gen::<IndexType>() % vertex_count);
         }
         let mut res = Vec::with_capacity(vertex_count as usize);
         {
@@ -194,12 +195,12 @@ mod testing {
     fn rw_vertices() {
         use rand::{thread_rng, Rng};
         let mut rng = thread_rng();
-        let vertex_count = (rng.gen::<u32>() % 0x800) + 0x800;
+        let vertex_count = (rng.gen::<IndexType>() % 0x800) + 0x800;
         let mut vertices = Vec::with_capacity(vertex_count as usize);
         for _ in 0..vertex_count {
-            let x = (rng.gen::<f32>() - 0.5) * 2.0;
-            let y = (rng.gen::<f32>() - 0.5) * 2.0;
-            let z = (rng.gen::<f32>() - 0.5) * 2.0;
+            let x = (rng.gen::<FloatType>() - 0.5) * 2.0;
+            let y = (rng.gen::<FloatType>() - 0.5) * 2.0;
+            let z = (rng.gen::<FloatType>() - 0.5) * 2.0;
             vertices.push((x, y, z));
         }
         let mut res = Vec::with_capacity(vertex_count as usize);

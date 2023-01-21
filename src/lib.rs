@@ -11,11 +11,24 @@ mod unaligned_lz;
 mod metadata;
 const TMF_MAJOR: u16 = 0;
 const TMF_MINOR: u16 = 1;
-#[allow(non_camel_case_types)]
-type float = f32;
-type VertexType = (float, float, float);
-type UvType = (float, float);
-type FaceType = u32;
+/// Index type used for representing triangle indices.
+#[cfg(not(any(feature = "long_indices",feature = "short_indices")))]
+pub type IndexType = u32;
+#[cfg(all(feature = "long_indices",feature = "short_indices"))]
+compile_error!("Size of indices can't be both long(u64) or short(u16)");
+#[cfg(feature = "long_indices")]
+pub type IndexType = u64;
+#[cfg(feature = "short_indices")]
+pub type IndexType = u16;
+/// Type used for representing floating-point numbers.
+#[cfg(not(feature = "double_precision"))]
+pub type FloatType = f32;
+#[cfg(feature = "double_precision")]
+pub type FloatType = f64;
+/// Type used for representing 3d floating-point vectors
+pub type Vector3 = (FloatType, FloatType, FloatType);
+/// Type used for representing 2d floating-point vectors
+pub type Vector2 = (FloatType, FloatType);
 use metadata::FileMetadata;
 use std::io::{Read, Write};
 
@@ -61,13 +74,13 @@ use std::io::Result;
 /// Representation of a TMF mesh. Can be loaded from disk, imported from diffrent format, saved to disk, and exported to a diffrent format, or created using special functions. Since it can be user generated it may be invalid and **must** be verified before being saved, otherwise a "garbage" mesh may be saved, an error may occur or a panic may occur.
 pub struct TMFMesh {
     metadata: Option<FileMetadata>,
-    normals: Option<Box<[VertexType]>>,
-    normal_faces: Option<Box<[u32]>>,
-    vertices: Option<Box<[VertexType]>>,
-    vertex_faces: Option<Box<[u32]>>,
-    uvs: Option<Box<[(f32, f32)]>>,
-    uv_faces: Option<Box<[u32]>>,
-    //groups: Option<Box<[String]>,Box<[u32]>>,
+    normals: Option<Box<[Vector3]>>,
+    normal_faces: Option<Box<[IndexType]>>,
+    vertices: Option<Box<[Vector3]>>,
+    vertex_faces: Option<Box<[IndexType]>>,
+    uvs: Option<Box<[Vector2]>>,
+    uv_faces: Option<Box<[IndexType]>>,
+    //groups: Option<Box<[String]>,Box<[IndexType]>>,
 }
 /// Enum representing the result of integrity check.
 #[derive(Clone, Copy)]
@@ -79,7 +92,7 @@ pub enum TMFIntegrityStatus {
     /// Mesh contains info about vertices, but does not contain info about triangles they form.
     VertexFaceArrayMissing,
     /// Array contians index *0* which is outside vertex array length *1*
-    VertexIndexOutsideVertexArray(u32, u32),
+    VertexIndexOutsideVertexArray(IndexType, IndexType),
     /// Mesh contains no normal array
     NormalArrayMissing,
     /// Mesh contains no normal face array to set which trinagles have which normals from the normal array.
@@ -161,78 +174,78 @@ fn slice_to_box<T: Sized + std::marker::Copy>(slice: &[T]) -> Box<[T]> {
 }
 impl TMFMesh {
     /// Sets mesh vertex array and returns old vertex array if present. New mesh data is **not** checked during this function call, so to ensure mesh is valid call `verify` before saving.
-    pub fn set_vertices(&mut self, vertices: &[VertexType]) -> Option<Box<[VertexType]>> {
+    pub fn set_vertices(&mut self, vertices: &[Vector3]) -> Option<Box<[Vector3]>> {
         let mut vertices = Some(slice_to_box(vertices));
         std::mem::swap(&mut vertices, &mut self.vertices);
         vertices
     }
     /// Sets mesh normal array and returns old normal array if present. New mesh data is **not** checked during this function call, so to ensure mesh is valid call `verify` before saving.
-    pub fn set_normals(&mut self, normals: &[VertexType]) -> Option<Box<[VertexType]>> {
+    pub fn set_normals(&mut self, normals: &[Vector3]) -> Option<Box<[Vector3]>> {
         let mut normals = Some(slice_to_box(normals));
         std::mem::swap(&mut normals, &mut self.normals);
         normals
     }
     /// Sets mesh uv array and returns old uv array if present. New mesh daata is **not** checked during this function call, so to ensure mesh is valid call [`verify`] before saving.
-    pub fn set_uvs(&mut self, uvs: &[UvType]) -> Option<Box<[UvType]>> {
+    pub fn set_uvs(&mut self, uvs: &[Vector2]) -> Option<Box<[Vector2]>> {
         let mut uvs = Some(slice_to_box(uvs));
         std::mem::swap(&mut uvs, &mut self.uvs);
         uvs
     }
     /// Sets vertex face array to *faces* and returns old faces if present.
-    pub fn set_vertex_faces(&mut self, faces: &[FaceType]) -> Option<Box<[FaceType]>> {
+    pub fn set_vertex_faces(&mut self, faces: &[IndexType]) -> Option<Box<[IndexType]>> {
         let mut faces = Some(slice_to_box(faces));
         std::mem::swap(&mut faces, &mut self.vertex_faces);
         faces
     }
     /// Sets normal face array to *faces* and returns old faces if present.
-    pub fn set_normal_faces(&mut self, faces: &[FaceType]) -> Option<Box<[FaceType]>> {
+    pub fn set_normal_faces(&mut self, faces: &[IndexType]) -> Option<Box<[IndexType]>> {
         let mut faces = Some(slice_to_box(faces));
         std::mem::swap(&mut faces, &mut self.normal_faces);
         faces
     }
     /// Sets uv face array to *faces* and returns old faces if present.
-    pub fn set_uv_faces(&mut self, faces: &[FaceType]) -> Option<Box<[FaceType]>> {
+    pub fn set_uv_faces(&mut self, faces: &[IndexType]) -> Option<Box<[IndexType]>> {
         let mut faces = Some(slice_to_box(faces));
         std::mem::swap(&mut faces, &mut self.uv_faces);
         faces
     }
     /// Gets the vertices of this TMFMesh.
-    pub fn get_vertices(&self) -> Option<&[VertexType]> {
+    pub fn get_vertices(&self) -> Option<&[Vector3]> {
         match &self.vertices {
             Some(vertices) => Some(vertices.as_ref()),
             None => None,
         }
     }
     /// Gets the normals of this TMFMesh.
-    pub fn get_normals(&self) -> Option<&[VertexType]> {
+    pub fn get_normals(&self) -> Option<&[Vector3]> {
         match &self.normals {
             Some(normals) => Some(normals.as_ref()),
             None => None,
         }
     }
     /// Gets the uv of this TMFMesh.
-    pub fn get_uvs(&self) -> Option<&[UvType]> {
+    pub fn get_uvs(&self) -> Option<&[Vector2]> {
         match &self.uvs {
             Some(uvs) => Some(uvs.as_ref()),
             None => None,
         }
     }
     /// Gets the vertex face index array of this TMFMesh.
-    pub fn get_vertex_faces(&self) -> Option<&[FaceType]> {
+    pub fn get_vertex_faces(&self) -> Option<&[IndexType]> {
         match &self.vertex_faces {
             Some(vertex_faces) => Some(vertex_faces.as_ref()),
             None => None,
         }
     }
     /// Gets the normal face index array of this TMFMesh.
-    pub fn get_normal_faces(&self) -> Option<&[FaceType]> {
+    pub fn get_normal_faces(&self) -> Option<&[IndexType]> {
         match &self.normal_faces {
             Some(normal_faces) => Some(normal_faces.as_ref()),
             None => None,
         }
     }
     /// Gets the uv face index array of this TMFMesh.
-    pub fn get_uv_faces(&self) -> Option<&[FaceType]> {
+    pub fn get_uv_faces(&self) -> Option<&[IndexType]> {
         match &self.uv_faces {
             Some(uv_faces) => Some(uv_faces.as_ref()),
             None => None,
@@ -256,11 +269,11 @@ impl TMFMesh {
             Some(vertices) => match &self.vertex_faces {
                 Some(vertex_faces) => {
                     for index in vertex_faces.iter() {
-                        if *index >= vertices.len() as u32 {
+                        if *index >= vertices.len() as IndexType{
                             //Vertex index outside vertex array!
                             return TMFIntegrityStatus::VertexIndexOutsideVertexArray(
                                 *index,
-                                vertices.len() as u32,
+                                vertices.len() as IndexType,
                             );
                         }
                     }
@@ -284,7 +297,7 @@ impl TMFMesh {
             let normals = self.normals.as_ref().unwrap();
             let normal_faces = self.normal_faces.as_ref().unwrap();
             for index in normal_faces.iter() {
-                if *index >= normals.len() as u32 {
+                if *index >= normals.len() as IndexType{
                     //Normal index outside normal array
                     return TMFIntegrityStatus::NormalIndexOutsideNormalArray;
                 }
@@ -333,13 +346,13 @@ impl TMFMesh {
                     Some(vertices)=>vertices,
                     None=>return Err(std::io::Error::new(std::io::ErrorKind::Other,"Saving a mesh with face normal index array without normal array is an error.")),
                 };
-                fn dst(a: (f32, f32, f32), b: (f32, f32, f32)) -> f32 {
+                fn dst(a: Vector3, b: Vector3) -> FloatType {
                     let dx = a.0 - b.0;
                     let dy = a.1 - b.1;
                     let dz = a.2 - b.2;
                     (dx * dx + dy * dy + dz * dz).sqrt()
                 }
-                let mut shortest_edge = f32::INFINITY;
+                let mut shortest_edge = FloatType::INFINITY;
                 for i in 0..(vertex_faces.len() / 3) {
                     let d1 = dst(
                         vertices[vertex_faces[i * 3] as usize],
@@ -370,7 +383,7 @@ impl TMFMesh {
                     shortest_edge,
                 )?;
                 w.write_all(&(SectionHeader::VertexSegment as u16).to_le_bytes())?;
-                w.write_all(&(curr_segment_data.len() as u32).to_le_bytes())?;
+                w.write_all(&(curr_segment_data.len() as u64).to_le_bytes())?;
                 w.write_all(&curr_segment_data)?;
                 curr_segment_data.clear();
             }
@@ -384,7 +397,7 @@ impl TMFMesh {
                 let v_count = self.vertices.as_ref().unwrap().len();
                 save_faces(vertex_faces, v_count, &mut curr_segment_data)?;
                 w.write_all(&(SectionHeader::VertexFaceSegment as u16).to_le_bytes())?;
-                w.write_all(&(curr_segment_data.len() as u32).to_le_bytes())?;
+                w.write_all(&(curr_segment_data.len() as u64).to_le_bytes())?;
                 w.write_all(&curr_segment_data)?;
                 curr_segment_data.clear();
             }
@@ -400,7 +413,7 @@ impl TMFMesh {
                     NormalPrecisionMode::from_deg_dev(0.01),
                 )?;
                 w.write_all(&(SectionHeader::NormalSegment as u16).to_le_bytes())?;
-                w.write_all(&(curr_segment_data.len() as u32).to_le_bytes())?;
+                w.write_all(&(curr_segment_data.len() as u64).to_le_bytes())?;
                 w.write_all(&curr_segment_data)?;
                 curr_segment_data.clear();
             }
@@ -414,7 +427,7 @@ impl TMFMesh {
                 let n_count = self.normals.as_ref().unwrap().len();
                 save_faces(normal_faces, n_count, &mut curr_segment_data)?;
                 w.write_all(&(SectionHeader::NormalFaceSegment as u16).to_le_bytes())?;
-                w.write_all(&(curr_segment_data.len() as u32).to_le_bytes())?;
+                w.write_all(&(curr_segment_data.len() as u64).to_le_bytes())?;
                 w.write_all(&curr_segment_data)?;
                 curr_segment_data.clear();
             }
@@ -424,7 +437,7 @@ impl TMFMesh {
             Some(uvs) => {
                 uv::save_uvs(uvs, &mut curr_segment_data, 0.001)?;
                 w.write_all(&(SectionHeader::UvSegment as u16).to_le_bytes())?;
-                w.write_all(&(curr_segment_data.len() as u32).to_le_bytes())?;
+                w.write_all(&(curr_segment_data.len() as u64).to_le_bytes())?;
                 w.write_all(&curr_segment_data)?;
                 curr_segment_data.clear();
             }
@@ -438,7 +451,7 @@ impl TMFMesh {
                 let uv_count = self.uvs.as_ref().unwrap().len();
                 save_faces(uv_faces, uv_count, &mut curr_segment_data)?;
                 w.write_all(&(SectionHeader::UvFaceSegment as u16).to_le_bytes())?;
-                w.write_all(&(curr_segment_data.len() as u32).to_le_bytes())?;
+                w.write_all(&(curr_segment_data.len() as u64).to_le_bytes())?;
                 w.write_all(&curr_segment_data)?;
                 curr_segment_data.clear();
             }
@@ -489,9 +502,9 @@ impl TMFMesh {
         while let Ok(header) = read_u16(reader) {
             let header = SectionHeader::from_u16(header);
             let data_length = {
-                let mut tmp = [0; 4];
+                let mut tmp = [0; std::mem::size_of::<u64>()];
                 reader.read_exact(&mut tmp)?;
-                u32::from_le_bytes(tmp)
+                u64::from_le_bytes(tmp)
             };
             let mut data = vec![0; data_length as usize];
             reader.read_exact(&mut data)?;

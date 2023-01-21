@@ -1,7 +1,7 @@
-use crate::TMFMesh;
+use crate::{TMFMesh,IndexType,FloatType};
 use std::io::{BufReader, BufWriter, Read, Result, Write};
-fn parse_f32(float: &str) -> Result<f32> {
-    match float.parse::<f32>() {
+fn parse_float_type(float: &str) -> Result<FloatType> {
+    match float.parse::<FloatType>() {
         Ok(float) => Ok(float),
         Err(err) => Err(std::io::Error::new(
             std::io::ErrorKind::Other,
@@ -9,8 +9,8 @@ fn parse_f32(float: &str) -> Result<f32> {
         )),
     }
 }
-fn parse_u32(uint: &str) -> Result<u32> {
-    match uint.parse::<u32>() {
+fn parse_index(uint: &str) -> Result<IndexType> {
+    match uint.parse::<IndexType>() {
         Ok(uint) => Ok(uint),
         Err(err) => Err(std::io::Error::new(
             std::io::ErrorKind::Other,
@@ -48,7 +48,7 @@ pub fn read_from_obj<R: Read>(reader: &mut R) -> Result<TMFMesh> {
                     match_split(split.next())?,
                     match_split(split.next())?,
                 );
-                let vertex = (parse_f32(x)?, parse_f32(y)?, parse_f32(z)?);
+                let vertex = (parse_float_type(x)?, parse_float_type(y)?, parse_float_type(z)?);
                 vertices.push(vertex);
             }
             "vn" => {
@@ -57,12 +57,12 @@ pub fn read_from_obj<R: Read>(reader: &mut R) -> Result<TMFMesh> {
                     match_split(split.next())?,
                     match_split(split.next())?,
                 );
-                let normal = (parse_f32(x)?, parse_f32(y)?, parse_f32(z)?);
+                let normal = (parse_float_type(x)?, parse_float_type(y)?, parse_float_type(z)?);
                 normals.push(normal);
             }
             "vt" => {
                 let (x, y) = (match_split(split.next())?, match_split(split.next())?);
-                let uv = (parse_f32(x)?, parse_f32(y)?);
+                let uv = (parse_float_type(x)?, parse_float_type(y)?);
                 uvs.push(uv);
             }
             "f" => {
@@ -83,15 +83,15 @@ pub fn read_from_obj<R: Read>(reader: &mut R) -> Result<TMFMesh> {
                         "OBJ reader supports only triangulated meshes ATM.",
                     ));
                 }
-                vertex_faces.push(parse_u32(v0)? - 1);
-                vertex_faces.push(parse_u32(v1)? - 1);
-                vertex_faces.push(parse_u32(v2)? - 1);
-                normal_faces.push(parse_u32(vn0)? - 1);
-                normal_faces.push(parse_u32(vn1)? - 1);
-                normal_faces.push(parse_u32(vn2)? - 1);
-                uv_faces.push(parse_u32(vt0)? - 1);
-                uv_faces.push(parse_u32(vt1)? - 1);
-                uv_faces.push(parse_u32(vt2)? - 1);
+                vertex_faces.push(parse_index(v0)? - 1);
+                vertex_faces.push(parse_index(v1)? - 1);
+                vertex_faces.push(parse_index(v2)? - 1);
+                normal_faces.push(parse_index(vn0)? - 1);
+                normal_faces.push(parse_index(vn1)? - 1);
+                normal_faces.push(parse_index(vn2)? - 1);
+                uv_faces.push(parse_index(vt0)? - 1);
+                uv_faces.push(parse_index(vt1)? - 1);
+                uv_faces.push(parse_index(vt2)? - 1);
             }
             "#" => continue,
             "mtllib" => continue, //TODO:use material info

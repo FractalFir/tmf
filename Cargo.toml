@@ -12,6 +12,14 @@ bencher = "0.1.5"
 rand = "0.8.5"
 [features]
 fast_trig = []
+double_precision = []
+long_indices = []
+short_indices = []
 [[bench]]
 name = "unaligned_rw"
 harness = false
+[[bench]]
+name = "read_tmf"
+harness = false
+[profile.bench]
+debug = true
