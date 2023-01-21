@@ -1,15 +1,18 @@
+mod material;
 mod normals;
 mod obj;
-mod unaligned_lz;
-mod verify;
+mod tmf;
 /// Module used to handle reads of data which is not bit aligned(for example, 3 or 17 bits). This is the module that allows for heavy compression used in this format.
 #[doc(hidden)]
 pub mod unaligned_rw;
 mod uv;
+mod verify;
 mod vertices;
 // Unfinished
 #[allow(dead_code)]
 mod metadata;
+#[allow(dead_code)]
+mod unaligned_lz;
 const TMF_MAJOR: u16 = 0;
 const TMF_MINOR: u16 = 1;
 /// Index type used for representing triangle indices.
@@ -31,10 +34,14 @@ pub type Vector3 = (FloatType, FloatType, FloatType);
 /// Type used for representing 2d floating-point vectors
 pub type Vector2 = (FloatType, FloatType);
 #[doc(inline)]
-pub use verify::TMFIntegrityStatus;
+pub use crate::material::MaterialInfo;
+#[doc(inline)]
+pub use crate::vertices::VertexPrecisionMode;
 use metadata::FileMetadata;
 use std::io::{Read, Write};
-pub use crate::vertices::VertexPrecisionMode;
+use tmf::SectionHeader;
+#[doc(inline)]
+pub use verify::TMFIntegrityStatus;
 pub struct TMFPrecisionInfo {
     vertex_precision: VertexPrecisionMode,
 }
@@ -42,33 +49,6 @@ impl Default for TMFPrecisionInfo {
     fn default() -> Self {
         TMFPrecisionInfo {
             vertex_precision: VertexPrecisionMode(0.1),
-        }
-    }
-}
-#[repr(u16)]
-#[derive(Debug)]
-enum SectionHeader {
-    Invalid = 0,
-    VertexSegment = 1,
-    VertexFaceSegment = 2,
-    NormalSegment = 3,
-    NormalFaceSegment = 4,
-    UvSegment = 5,
-    UvFaceSegment = 6,
-    MetadataSegment = 7,
-    GroupInfoSegment = 8,
-    FaceGroupInfo = 9,
-}
-impl SectionHeader {
-    fn from_u16(input: u16) -> Self {
-        match input {
-            1 => Self::VertexSegment,
-            2 => Self::VertexFaceSegment,
-            3 => Self::NormalSegment,
-            4 => Self::NormalFaceSegment,
-            5 => Self::UvSegment,
-            6 => Self::UvFaceSegment,
-            _ => Self::Invalid,
         }
     }
 }
@@ -82,7 +62,14 @@ pub struct TMFMesh {
     vertex_faces: Option<Box<[IndexType]>>,
     uvs: Option<Box<[Vector2]>>,
     uv_faces: Option<Box<[IndexType]>>,
+    materials: Option<MaterialInfo>,
+    material_faces: Option<Box<[IndexType]>>,
     //groups: Option<Box<[String]>,Box<[IndexType]>>,
+}
+impl Default for TMFMesh {
+    fn default() -> Self {
+        Self::empty()
+    }
 }
 fn slice_to_box<T: Sized + std::marker::Copy>(slice: &[T]) -> Box<[T]> {
     slice.into()
@@ -191,133 +178,7 @@ impl TMFMesh {
     }
     /// Writes this TMF Mesh to *w*.
     pub fn write_tmf<W: Write>(&self, w: &mut W, p_info: &TMFPrecisionInfo) -> Result<()> {
-        let mut curr_segment_data = Vec::with_capacity(0x100);
-        w.write_all(b"TMF")?;
-        w.write_all(&TMF_MAJOR.to_le_bytes())?;
-        w.write_all(&TMF_MINOR.to_le_bytes())?;
-        match &self.metadata {
-            Some(metadata) => todo!("Saving metadata is not yet supported!"),
-            None => (),
-        }
-        //Calculate shortest edge, or if no edges present, 1.0
-        let shortest_edge = match &self.vertex_faces {
-            Some(vertex_faces) => {
-                let vertices = match &self.vertices{
-                    Some(vertices)=>vertices,
-                    None=>return Err(std::io::Error::new(std::io::ErrorKind::Other,"Saving a mesh with face normal index array without normal array is an error.")),
-                };
-                fn dst(a: Vector3, b: Vector3) -> FloatType {
-                    let dx = a.0 - b.0;
-                    let dy = a.1 - b.1;
-                    let dz = a.2 - b.2;
-                    (dx * dx + dy * dy + dz * dz).sqrt()
-                }
-                let mut shortest_edge = FloatType::INFINITY;
-                for i in 0..(vertex_faces.len() / 3) {
-                    let d1 = dst(
-                        vertices[vertex_faces[i * 3] as usize],
-                        vertices[vertex_faces[i * 3 + 1] as usize],
-                    );
-                    let d2 = dst(
-                        vertices[vertex_faces[i * 3 + 1] as usize],
-                        vertices[vertex_faces[i * 3 + 2] as usize],
-                    );
-                    let d3 = dst(
-                        vertices[vertex_faces[i * 3 + 2] as usize],
-                        vertices[vertex_faces[i * 3] as usize],
-                    );
-                    shortest_edge = shortest_edge.min(d1.min(d2.min(d3)));
-                }
-                shortest_edge
-            }
-            None => 1.0,
-        };
-        // Save vertices
-        match &self.vertices {
-            Some(vertices) => {
-                use crate::vertices::save_tmf_vertices;
-                save_tmf_vertices(
-                    vertices,
-                    p_info.vertex_precision,
-                    &mut curr_segment_data,
-                    shortest_edge,
-                )?;
-                w.write_all(&(SectionHeader::VertexSegment as u16).to_le_bytes())?;
-                w.write_all(&(curr_segment_data.len() as u64).to_le_bytes())?;
-                w.write_all(&curr_segment_data)?;
-                curr_segment_data.clear();
-            }
-            None => (),
-        }
-        // Save vertex faces
-        match &self.vertex_faces {
-            Some(vertex_faces) => {
-                use crate::vertices::save_faces;
-                //If saving vertex faces, vertices must be present, so unwrap can't fail
-                let v_count = self.vertices.as_ref().unwrap().len();
-                save_faces(vertex_faces, v_count, &mut curr_segment_data)?;
-                w.write_all(&(SectionHeader::VertexFaceSegment as u16).to_le_bytes())?;
-                w.write_all(&(curr_segment_data.len() as u64).to_le_bytes())?;
-                w.write_all(&curr_segment_data)?;
-                curr_segment_data.clear();
-            }
-            None => (),
-        };
-        // Save Normals
-        match &self.normals {
-            Some(normals) => {
-                use crate::normals::*;
-                save_normal_array(
-                    normals,
-                    &mut curr_segment_data,
-                    NormalPrecisionMode::from_deg_dev(0.01),
-                )?;
-                w.write_all(&(SectionHeader::NormalSegment as u16).to_le_bytes())?;
-                w.write_all(&(curr_segment_data.len() as u64).to_le_bytes())?;
-                w.write_all(&curr_segment_data)?;
-                curr_segment_data.clear();
-            }
-            None => (),
-        };
-        // Save normal faces
-        match &self.normal_faces {
-            Some(normal_faces) => {
-                use crate::vertices::save_faces;
-                //If saving normal faces, normals must be present, so unwrap can't fail
-                let n_count = self.normals.as_ref().unwrap().len();
-                save_faces(normal_faces, n_count, &mut curr_segment_data)?;
-                w.write_all(&(SectionHeader::NormalFaceSegment as u16).to_le_bytes())?;
-                w.write_all(&(curr_segment_data.len() as u64).to_le_bytes())?;
-                w.write_all(&curr_segment_data)?;
-                curr_segment_data.clear();
-            }
-            None => (),
-        };
-        match &self.uvs {
-            Some(uvs) => {
-                uv::save_uvs(uvs, &mut curr_segment_data, 0.001)?;
-                w.write_all(&(SectionHeader::UvSegment as u16).to_le_bytes())?;
-                w.write_all(&(curr_segment_data.len() as u64).to_le_bytes())?;
-                w.write_all(&curr_segment_data)?;
-                curr_segment_data.clear();
-            }
-            None => (),
-        }
-        // Save uv faces
-        match &self.uv_faces {
-            Some(uv_faces) => {
-                use crate::vertices::save_faces;
-                //If saving uv faces, uvs must be present, so unwrap can't fail
-                let uv_count = self.uvs.as_ref().unwrap().len();
-                save_faces(uv_faces, uv_count, &mut curr_segment_data)?;
-                w.write_all(&(SectionHeader::UvFaceSegment as u16).to_le_bytes())?;
-                w.write_all(&(curr_segment_data.len() as u64).to_le_bytes())?;
-                w.write_all(&curr_segment_data)?;
-                curr_segment_data.clear();
-            }
-            None => (),
-        };
-        Ok(())
+        tmf::write(self, w, p_info)
     }
     /// Creates an empty TMF Mesh.
     pub fn empty() -> Self {
@@ -329,119 +190,13 @@ impl TMFMesh {
             uvs: None,
             vertex_faces: None,
             vertices: None,
+            materials: None,
+            material_faces: None,
         }
     }
     /// Reads a mesh from a .tmf file.
     pub fn read_tmf<R: Read>(reader: &mut R) -> Result<Self> {
-        let mut magic = [0; 3];
-        reader.read_exact(&mut magic)?;
-        if magic != *b"TMF" {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "Not a TMF file",
-            ));
-        }
-        // Not used ATM, but can be used for compatiblity in the future.
-        let _major = {
-            let mut tmp = [0; 2];
-            reader.read_exact(&mut tmp)?;
-            u16::from_le_bytes(tmp)
-        };
-        // Not used ATM, but can be used for compatiblity in the future.
-        let _minor = {
-            let mut tmp = [0; 2];
-            reader.read_exact(&mut tmp)?;
-            u16::from_le_bytes(tmp)
-        };
-        fn read_u16<R: Read>(r: &mut R) -> Result<u16> {
-            let mut tmp = [0; 2];
-            r.read_exact(&mut tmp)?;
-            Ok(u16::from_le_bytes(tmp))
-        }
-        let mut res = Self::empty();
-        while let Ok(header) = read_u16(reader) {
-            let header = SectionHeader::from_u16(header);
-            let data_length = {
-                let mut tmp = [0; std::mem::size_of::<u64>()];
-                reader.read_exact(&mut tmp)?;
-                u64::from_le_bytes(tmp)
-            };
-            let mut data = vec![0; data_length as usize];
-            reader.read_exact(&mut data)?;
-            match header {
-                SectionHeader::VertexSegment => {
-                    use crate::vertices::read_tmf_vertices;
-                    match &res.vertices {
-                        Some(_) => {
-                            return Err(std::io::Error::new(
-                                std::io::ErrorKind::Other,
-                                "Only one vertex array can be present in a model.",
-                            ))
-                        }
-                        None => res.vertices = Some(read_tmf_vertices(&mut (&data as &[u8]))?),
-                    }
-                }
-                SectionHeader::NormalSegment => {
-                    use crate::normals::read_normal_array;
-                    match &res.normals {
-                        Some(_) => {
-                            return Err(std::io::Error::new(
-                                std::io::ErrorKind::Other,
-                                "Only one normal array can be present in a model.",
-                            ))
-                        }
-                        None => res.normals = Some(read_normal_array(&mut (&data as &[u8]))?),
-                    }
-                }
-                SectionHeader::UvSegment => {
-                    use crate::uv::read_uvs;
-                    match &res.uvs {
-                        Some(_) => {
-                            return Err(std::io::Error::new(
-                                std::io::ErrorKind::Other,
-                                "Only one uv array can be present in a model.",
-                            ))
-                        }
-                        None => res.uvs = Some(read_uvs(&mut (&data as &[u8]))?),
-                    }
-                }
-                SectionHeader::VertexFaceSegment => {
-                    use vertices::read_faces;
-                    match &res.vertex_faces {
-                        Some(_) => return Err(std::io::Error::new(
-                            std::io::ErrorKind::Other,
-                            "Only one vertex index array(face array) can be present in a model.",
-                        )),
-                        None => res.vertex_faces = Some(read_faces(&mut (&data as &[u8]))?),
-                    }
-                }
-                SectionHeader::NormalFaceSegment => {
-                    use vertices::read_faces;
-                    match &res.normal_faces {
-                        Some(_) => return Err(std::io::Error::new(
-                            std::io::ErrorKind::Other,
-                            "Only one normal index array(face array) can be present in a model.",
-                        )),
-                        None => res.normal_faces = Some(read_faces(&mut (&data as &[u8]))?),
-                    }
-                }
-                SectionHeader::UvFaceSegment => {
-                    use vertices::read_faces;
-                    match &res.uv_faces {
-                        Some(_) => {
-                            return Err(std::io::Error::new(
-                                std::io::ErrorKind::Other,
-                                "Only one uv index array(face array) can be present in a model.",
-                            ))
-                        }
-                        None => res.uv_faces = Some(read_faces(&mut (&data as &[u8]))?),
-                    }
-                }
-                _ => (), //Unknown header, ignoring
-            }
-        }
-        //todo!();
-        Ok(res)
+        tmf::read(reader)
     }
 }
 #[cfg(test)]
