@@ -1,7 +1,7 @@
 use crate::unaligned_rw::{UnalignedRWMode, UnalignedReader, UnalignedWriter};
+use crate::{FloatType, IndexType, Vector2};
 use std::io::{Read, Result, Write};
-use crate::{IndexType,FloatType,Vector2};
-pub fn save_uvs<W: Write>(uvs: &[Vector2], writer: &mut W, precision:FloatType) -> Result<()> {
+pub fn save_uvs<W: Write>(uvs: &[Vector2], writer: &mut W, precision: FloatType) -> Result<()> {
     let precision = (1.0 / precision).log2().ceil() as u8;
     let multpiler = ((1 << precision) - 1) as FloatType;
     writer.write_all(&[precision])?;
@@ -42,7 +42,7 @@ pub fn read_uvs<R: Read>(reader: &mut R) -> Result<Box<[Vector2]>> {
 #[cfg(test)]
 mod test {
     use super::*;
-    fn dst(a: Vector2, b: Vector2) -> FloatType{
+    fn dst(a: Vector2, b: Vector2) -> FloatType {
         let dx = a.0 - b.0;
         let dy = a.1 - b.1;
         return (dx * dx + dy * dy).sqrt();

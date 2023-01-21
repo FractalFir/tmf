@@ -1,20 +1,21 @@
 mod normals;
 mod obj;
+mod unaligned_lz;
+mod verify;
 /// Module used to handle reads of data which is not bit aligned(for example, 3 or 17 bits). This is the module that allows for heavy compression used in this format.
 #[doc(hidden)]
 pub mod unaligned_rw;
 mod uv;
 mod vertices;
-mod unaligned_lz;
 // Unfinished
 #[allow(dead_code)]
 mod metadata;
 const TMF_MAJOR: u16 = 0;
 const TMF_MINOR: u16 = 1;
 /// Index type used for representing triangle indices.
-#[cfg(not(any(feature = "long_indices",feature = "short_indices")))]
+#[cfg(not(any(feature = "long_indices", feature = "short_indices")))]
 pub type IndexType = u32;
-#[cfg(all(feature = "long_indices",feature = "short_indices"))]
+#[cfg(all(feature = "long_indices", feature = "short_indices"))]
 compile_error!("Size of indices can't be both long(u64) or short(u16)");
 #[cfg(feature = "long_indices")]
 pub type IndexType = u64;
@@ -29,9 +30,10 @@ pub type FloatType = f64;
 pub type Vector3 = (FloatType, FloatType, FloatType);
 /// Type used for representing 2d floating-point vectors
 pub type Vector2 = (FloatType, FloatType);
+#[doc(inline)]
+pub use verify::TMFIntegrityStatus;
 use metadata::FileMetadata;
 use std::io::{Read, Write};
-
 pub use crate::vertices::VertexPrecisionMode;
 pub struct TMFPrecisionInfo {
     vertex_precision: VertexPrecisionMode,
@@ -81,93 +83,6 @@ pub struct TMFMesh {
     uvs: Option<Box<[Vector2]>>,
     uv_faces: Option<Box<[IndexType]>>,
     //groups: Option<Box<[String]>,Box<[IndexType]>>,
-}
-/// Enum representing the result of integrity check.
-#[derive(Clone, Copy)]
-pub enum TMFIntegrityStatus {
-    /// Mesh has passed all verification steps
-    Ok,
-    /// No vertex array - mesh contains no points.
-    VertexArrayMissing,
-    /// Mesh contains info about vertices, but does not contain info about triangles they form.
-    VertexFaceArrayMissing,
-    /// Array contians index *0* which is outside vertex array length *1*
-    VertexIndexOutsideVertexArray(IndexType, IndexType),
-    /// Mesh contains no normal array
-    NormalArrayMissing,
-    /// Mesh contains no normal face array to set which trinagles have which normals from the normal array.
-    NormalFaceArrayMissing,
-    /// Index in traingle is outside the normal array.
-    NormalIndexOutsideNormalArray,
-    /// Mesh contains normals that are not normalized
-    NormalNotNormalized,
-    /// Mesh does not contain UV array.
-    UVArrayMissing,
-    /// Mesh contains uvs, but no uv face array to create triangles using those uvs.
-    UVFaceArrayMissing,
-}
-impl TMFIntegrityStatus {
-    /// Returns true if status is Ok.
-    pub fn is_ok(&self) -> bool {
-        matches!(self, Self::Ok)
-    }
-    /// Returns true if mesh can't be safely saved to disk in current state(some action must be taken). Saving such a mesh would result in either a write error, garbage mesh saved, or a panic - depending on severity
-    pub fn is_fatal(&self) -> bool {
-        matches!(
-            self,
-            Self::VertexFaceArrayMissing
-                | Self::NormalFaceArrayMissing
-                | Self::UVFaceArrayMissing
-                | Self::VertexIndexOutsideVertexArray(_, _)
-                | Self::NormalIndexOutsideNormalArray
-                | Self::NormalNotNormalized
-        )
-    }
-    /// Returns status if fatal, otherwise Ok.
-    pub fn only_fatal(&self) -> Self {
-        if self.is_fatal() {
-            *self
-        } else {
-            Self::Ok
-        }
-    }
-    /// Checks if state is an error state (not Ok).
-    pub fn is_err(&self) -> bool {
-        !matches!(self, Self::Ok)
-    }
-    /// Works like unwrap on [`Result`](panics if not Ok)
-    pub fn unwrap(&self) {
-        match self {
-            Self::Ok => (),
-            _ => panic!("{self}"),
-        }
-    }
-    /// Works like except on [`Result`](panics with *msg* if not Ok)
-    pub fn except(&self, msg: &str) {
-        match self {
-            Self::Ok => (),
-            _ => panic!("{msg}:{self}"),
-        }
-    }
-}
-impl std::fmt::Display for TMFIntegrityStatus {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Ok => write!(f, "Ok"),
-            Self::VertexArrayMissing => write!(f, "VertexArrayMissing"),
-            Self::VertexFaceArrayMissing => write!(f, "VertexFaceArrayMissing"),
-            Self::VertexIndexOutsideVertexArray(index, size) => write!(
-                f,
-                "VertexIndexOutsideVertexArray{{index:{index},size:{size}}}"
-            ),
-            Self::NormalArrayMissing => write!(f, "NormalArrayMissing"),
-            Self::NormalFaceArrayMissing => write!(f, "NormalFaceArrayMissing"),
-            Self::NormalIndexOutsideNormalArray => write!(f, "NormalIndexOutsideNormalArray"),
-            Self::NormalNotNormalized => write!(f, "NormalNotNormalized"),
-            Self::UVArrayMissing => write!(f, "UVArrayMissing"),
-            Self::UVFaceArrayMissing => write!(f, "UVFaceArrayMissing"),
-        }
-    }
 }
 fn slice_to_box<T: Sized + std::marker::Copy>(slice: &[T]) -> Box<[T]> {
     slice.into()
@@ -264,62 +179,7 @@ impl TMFMesh {
     */
     /// Checks if mesh is valid and can be saved.
     pub fn verify(&self) -> TMFIntegrityStatus {
-        // Check that vertex and vertex face array are present
-        match &self.vertices {
-            Some(vertices) => match &self.vertex_faces {
-                Some(vertex_faces) => {
-                    for index in vertex_faces.iter() {
-                        if *index >= vertices.len() as IndexType{
-                            //Vertex index outside vertex array!
-                            return TMFIntegrityStatus::VertexIndexOutsideVertexArray(
-                                *index,
-                                vertices.len() as IndexType,
-                            );
-                        }
-                    }
-                }
-                None => return TMFIntegrityStatus::VertexFaceArrayMissing,
-            },
-            None => return TMFIntegrityStatus::VertexArrayMissing,
-        }
-        // Check if only normals xor normal faces present, if so invalid.
-        if !(self.normals.is_some() ^ self.normal_faces.is_some()) {
-            // Normals without faces or faces without normals
-            if self.normals.is_none() {
-                return TMFIntegrityStatus::NormalArrayMissing;
-            }
-            if self.normal_faces.is_none() {
-                return TMFIntegrityStatus::NormalFaceArrayMissing;
-            }
-        }
-        // If normals and normal faces present, verify them.
-        else if self.normals.is_some() && self.normal_faces.is_some() {
-            let normals = self.normals.as_ref().unwrap();
-            let normal_faces = self.normal_faces.as_ref().unwrap();
-            for index in normal_faces.iter() {
-                if *index >= normals.len() as IndexType{
-                    //Normal index outside normal array
-                    return TMFIntegrityStatus::NormalIndexOutsideNormalArray;
-                }
-            }
-            for normal in normals.iter() {
-                let mag = normals::magnitude(*normal);
-                if (1.0 - mag) > 0.001 {
-                    //Not normalised normals
-                    return TMFIntegrityStatus::NormalNotNormalized;
-                }
-            }
-        }
-        // UV and UV Faces most be either both missing or both present, else invalid
-        if self.uvs.is_some() ^ self.uv_faces.is_some() {
-            if self.uvs.is_none() {
-                return TMFIntegrityStatus::UVArrayMissing;
-            }
-            if self.uv_faces.is_none() {
-                return TMFIntegrityStatus::UVFaceArrayMissing;
-            }
-        }
-        return TMFIntegrityStatus::Ok;
+        verify::verify_tmf_mesh(self)
     }
     /// Reads tmf mesh from a .obj file in *reader*
     pub fn read_from_obj<R: Read>(reader: &mut R) -> Result<Self> {

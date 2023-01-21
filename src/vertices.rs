@@ -1,6 +1,6 @@
 use crate::unaligned_rw::{UnalignedRWMode, UnalignedReader, UnalignedWriter};
+use crate::{FloatType, IndexType, Vector3};
 use std::io::{Read, Result, Write};
-use crate::{IndexType,FloatType,Vector3};
 #[derive(Clone, Copy)]
 pub struct VertexPrecisionMode(pub FloatType);
 pub fn save_tmf_vertices<W: Write>(
@@ -164,7 +164,7 @@ pub fn read_faces<R: Read>(reader: &mut R) -> Result<Box<[IndexType]>> {
 }
 #[cfg(test)]
 mod testing {
-    fn dst(a: Vector3, b: Vector3) -> FloatType{
+    fn dst(a: Vector3, b: Vector3) -> FloatType {
         let dx = a.0 - b.0;
         let dy = a.1 - b.1;
         let dz = a.2 - b.2;

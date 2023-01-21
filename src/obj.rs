@@ -1,4 +1,4 @@
-use crate::{TMFMesh,IndexType,FloatType};
+use crate::{FloatType, IndexType, TMFMesh};
 use std::io::{BufReader, BufWriter, Read, Result, Write};
 fn parse_float_type(float: &str) -> Result<FloatType> {
     match float.parse::<FloatType>() {
@@ -48,7 +48,11 @@ pub fn read_from_obj<R: Read>(reader: &mut R) -> Result<TMFMesh> {
                     match_split(split.next())?,
                     match_split(split.next())?,
                 );
-                let vertex = (parse_float_type(x)?, parse_float_type(y)?, parse_float_type(z)?);
+                let vertex = (
+                    parse_float_type(x)?,
+                    parse_float_type(y)?,
+                    parse_float_type(z)?,
+                );
                 vertices.push(vertex);
             }
             "vn" => {
@@ -57,7 +61,11 @@ pub fn read_from_obj<R: Read>(reader: &mut R) -> Result<TMFMesh> {
                     match_split(split.next())?,
                     match_split(split.next())?,
                 );
-                let normal = (parse_float_type(x)?, parse_float_type(y)?, parse_float_type(z)?);
+                let normal = (
+                    parse_float_type(x)?,
+                    parse_float_type(y)?,
+                    parse_float_type(z)?,
+                );
                 normals.push(normal);
             }
             "vt" => {
@@ -174,7 +182,7 @@ pub fn write_obj<W: Write>(tmf_mesh: &TMFMesh, w: &mut W) -> Result<()> {
             }
             for i in 0..vertex_faces.len() {
                 if i % 3 == 0 {
-                    write!(w,"\nf ")?
+                    write!(w, "\nf ")?
                 };
                 write!(
                     w,

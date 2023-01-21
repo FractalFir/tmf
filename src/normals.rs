@@ -1,10 +1,10 @@
 use crate::unaligned_rw::{UnalignedRWMode, UnalignedReader, UnalignedWriter};
+use crate::{FloatType, IndexType, Vector3};
 use std::io::{Read, Result, Write};
-use crate::{IndexType,FloatType,Vector3};
 #[derive(Clone, Copy)]
 pub struct NormalPrecisionMode(u8);
 impl NormalPrecisionMode {
-    pub fn from_deg_dev(deg:FloatType) -> Self {
+    pub fn from_deg_dev(deg: FloatType) -> Self {
         let prec = (90.0 / deg).log2().ceil() as u8;
         Self(prec)
     }
@@ -32,13 +32,13 @@ fn fsin(mut x: fprec) -> fprec {
     let z = (k as fprec) * x;
     return x - z;
 }
-pub(crate) fn magnitude(i:Vector3) ->FloatType{
+pub(crate) fn magnitude(i: Vector3) -> FloatType {
     let xx = i.0 * i.0;
     let yy = i.1 * i.1;
     let zz = i.2 * i.2;
     (xx + yy + zz).sqrt()
 }
-fn normalize(i:Vector3) -> Vector3{
+fn normalize(i: Vector3) -> Vector3 {
     let xx = i.0 * i.0;
     let yy = i.1 * i.1;
     let zz = i.2 * i.2;
@@ -51,7 +51,7 @@ pub fn normalize_arr(normals: &mut [Vector3]) {
         *normal = normalize(*normal);
     }
 }
-const PI:FloatType = std::f64::consts::PI as FloatType;
+const PI: FloatType = std::f64::consts::PI as FloatType;
 #[inline(always)]
 fn save_normal<W: Write>(
     normal: Vector3,
@@ -157,7 +157,7 @@ mod test_normal {
     pub const NORM_PREC_LOW: NormalPrecisionMode = NormalPrecisionMode(7);
     pub const NORM_PREC_MID: NormalPrecisionMode = NormalPrecisionMode(10);
     pub const NORM_PREC_HIGH: NormalPrecisionMode = NormalPrecisionMode(13);
-    fn dot(a: Vector3, b: Vector3) -> FloatType{
+    fn dot(a: Vector3, b: Vector3) -> FloatType {
         a.0 * b.0 + a.1 * b.1 + a.2 * b.2
     }
     fn test_save(normal: Vector3) {
