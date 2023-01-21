@@ -174,7 +174,7 @@ pub fn write_obj<W: Write>(tmf_mesh: &TMFMesh, w: &mut W) -> Result<()> {
             }
             for i in 0..vertex_faces.len() {
                 if i % 3 == 0 {
-                    writeln!(w)?
+                    write!(w,"\nf ")?
                 };
                 write!(
                     w,
@@ -183,9 +183,6 @@ pub fn write_obj<W: Write>(tmf_mesh: &TMFMesh, w: &mut W) -> Result<()> {
                     uv_faces[i] + 1,
                     normal_faces[i] + 1
                 )?;
-                if i % 3 == 2 {
-                    writeln!(w)?
-                };
             }
         }
     }

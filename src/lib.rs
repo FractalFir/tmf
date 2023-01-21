@@ -5,7 +5,7 @@ mod obj;
 pub mod unaligned_rw;
 mod uv;
 mod vertices;
-mod unaligned_lzz;
+mod unaligned_lz;
 // Unfinished
 #[allow(dead_code)]
 mod metadata;
@@ -41,6 +41,8 @@ enum SectionHeader {
     UvSegment = 5,
     UvFaceSegment = 6,
     MetadataSegment = 7,
+    GroupInfoSegment = 8,
+    FaceGroupInfo = 9,
 }
 impl SectionHeader {
     fn from_u16(input: u16) -> Self {
@@ -65,6 +67,7 @@ pub struct TMFMesh {
     vertex_faces: Option<Box<[u32]>>,
     uvs: Option<Box<[(f32, f32)]>>,
     uv_faces: Option<Box<[u32]>>,
+    //groups: Option<Box<[String]>,Box<[u32]>>,
 }
 /// Enum representing the result of integrity check.
 #[derive(Clone, Copy)]
