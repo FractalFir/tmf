@@ -1,12 +1,16 @@
 use std::io::{BufReader, BufWriter, Read, Result, Write};
-
+#[cfg(not(feature = "byte_rw"))]
+type UnalignedStorage = usize;
+#[cfg(feature = "byte_rw")]
+type UnalignedStorage = usize;
+const UnalignedStorageBits:u8 = (std::mem::size_of::<UnalignedStorage>()*8) as u8;
 pub struct UnalignedReader<R: Read> {
     /// Buff Reader used to speedup reads in some cases.
     reader: BufReader<R>,
     /// current byte read from file.
-    current_byte: u8,
+    current_byte: UnalignedStorage,
     /// Amount of bits that have been already read.
-    bits_read: u8,
+    bits_read:  u8,
 }
 impl<R: Read> UnalignedReader<R> {
     /// Reads *mode.0* bits from self, keeping internal alignment
@@ -18,24 +22,32 @@ impl<R: Read> UnalignedReader<R> {
         let mut total_read = mode.0;
         while total_read > 0 {
             // If all bits in current_byte read, read new byte with new bits, and set amount of bits bits_read in current bit back to 0.
-            if self.bits_read >= 8 {
-                let mut tmp: [u8; 1] = [0];
-                self.reader.read_exact(&mut tmp)?;
-                self.current_byte = tmp[0];
-                self.bits_read = 0;
+            if self.bits_read >= UnalignedStorageBits {
+                // For u8, use simpler, old version. For others, this branch can never be taken an will be optimised out.
+                if std::mem::size_of::<UnalignedStorage>() == 1{
+                    let mut tmp: [u8; std::mem::size_of::<UnalignedStorage>()] = [0;std::mem::size_of::<UnalignedStorage>()];
+                    self.bits_read = 0;
+                    self.reader.read_exact(&mut tmp)?;
+                    self.current_byte = tmp[0] as UnalignedStorage;
+                }
+                else{
+                    let mut tmp: [u8; std::mem::size_of::<UnalignedStorage>()] = [0;std::mem::size_of::<UnalignedStorage>()];
+                    self.bits_read = (8*std::mem::size_of::<UnalignedStorage>() - self.reader.read(&mut tmp)?*8) as u8;
+                    self.current_byte = UnalignedStorage::from_be_bytes(tmp);
+                }
             }
             // Get amount of bits to read in current iteration: either all bits left in current_byte, or all bits remaining to read, whichever lower
-            let read_ammount = total_read.min(8 - self.bits_read);
+            let read_ammount = total_read.min(UnalignedStorageBits - self.bits_read);
             // Move res by amount of bits bits_read in current iteration to prepare res for reading into in next iteration.
             res <<= read_ammount;
             // Calculate offset of bits_read bits in current byte.
-            let read_offset = 8 - read_ammount;
+            let read_offset = UnalignedStorageBits - read_ammount;
             // Read bits in current_byte at read_offset into res.
             res |= (self.current_byte >> read_offset) as u64;
             // Increment amount of bits already bits_read.
             self.bits_read += read_ammount;
             // If read less than whole current byte, move current byte in such a way that next bits to read are the leftmost bits.
-            if read_ammount < 8 {
+            if read_ammount < UnalignedStorageBits {
                 self.current_byte <<= read_ammount;
             }
             // Decrement total amount of bits left to read
@@ -47,7 +59,7 @@ impl<R: Read> UnalignedReader<R> {
     pub fn new(r: R) -> Self {
         let reader = BufReader::new(r);
         let current_byte = 0; //read this
-        let bits_read = 8;
+        let bits_read = UnalignedStorageBits;
         Self {
             current_byte,
             bits_read,
@@ -183,7 +195,7 @@ mod test_reader {
         let mut reader = UnalignedReader::new(&bytes as &[u8]);
         for byte in 0..0x10 {
             let rbyte = reader.read_unaligned(UnalignedRWMode(4)).unwrap() as u8;
-            //println!("{rbyte} != {byte}");
+            println!("{rbyte}, {byte}");
             assert!(rbyte == byte, "{rbyte} != {byte}");
         }
     }

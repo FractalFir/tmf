@@ -102,8 +102,8 @@ fn read_normal<R: Read>(
     #[cfg(feature = "fast_trig")]
     let x = fsin(asine as fprec) as FloatType;
     #[cfg(not(feature = "fast_trig"))]
-    let x = asine.sin();
-
+    let (x,y) = asine.sin_cos();
+    #[cfg(feature = "fast_trig")]
     let y = (1.0 - x * x).sqrt();
     // Calculate XY magnitude
     let xy_mag = (1.0 - z * z).sqrt();

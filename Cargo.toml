@@ -1,20 +1,27 @@
 [package]
+
 name = "tmf"
 version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
+##! Test
 [dependencies]
-
+document-features = "0.2.7"
 [dev-dependencies]
 bencher = "0.1.5"
 rand = "0.8.5"
 [features]
+## Changes the sin and cos function used in reading the tmf files for a potentially faster, but less accurate functions.
 fast_trig = []
+## Changes the precision of read data from single to double point precision.
 double_precision = []
+## Changes the index format to long(u64) in order to support reading models with over 2^32 - 1 points, at cost of increased memory footprint.
 long_indices = []
+## Chnages the index format to short(u16), decreasng memory footprint, but limiting max model vertex count to 2^16 - 1(65535).
 short_indices = []
+## Changes the internal setting of the unaligned reader to use different data size. Can be beneficial for small models on some systems.
+byte_rw = []
 [[bench]]
 name = "unaligned_rw"
 harness = false

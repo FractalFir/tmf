@@ -1,3 +1,5 @@
+//! ## Feature flags
+#![doc = document_features::document_features!()]
 mod material;
 mod normals;
 mod obj;
@@ -87,7 +89,7 @@ impl TMFMesh {
         std::mem::swap(&mut normals, &mut self.normals);
         normals
     }
-    /// Sets mesh uv array and returns old uv array if present. New mesh daata is **not** checked during this function call, so to ensure mesh is valid call [`verify`] before saving.
+    /// Sets mesh uv array and returns old uv array if present. New mesh daata is **not** checked during this function call, so to ensure mesh is valid call [`Self::verify`] before saving.
     pub fn set_uvs(&mut self, uvs: &[Vector2]) -> Option<Box<[Vector2]>> {
         let mut uvs = Some(slice_to_box(uvs));
         std::mem::swap(&mut uvs, &mut self.uvs);
