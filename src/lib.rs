@@ -1,3 +1,7 @@
+//! **tmf** is a crate used to save and read 3D models saved in *.tmf* format. This format is focused on 2 things:
+//! 1. Reducing size of the saved file as much as possible, without reducing visual quality
+//! 2. Loading models as fast as possible(without sacrificing model size reduction)
+//! This means that while saving a model may take a slightly longer time (4-6x loading), models can be loaded at considerable speed(Current estimation are around 25 milion vertices per second)
 //! ## Feature flags
 #![doc = document_features::document_features!()]
 mod material;
@@ -44,13 +48,23 @@ use std::io::{Read, Write};
 use tmf::SectionHeader;
 #[doc(inline)]
 pub use verify::TMFIntegrityStatus;
+use crate::normals::NormalPrecisionMode;
+/// Settings for saving of a TMF mesh. 
 pub struct TMFPrecisionInfo {
-    vertex_precision: VertexPrecisionMode,
+    /// How much can the position of any vertex deviate, as a portion of the shortest edge in the model.
+    pub vertex_precision: VertexPrecisionMode,
+    /// How much can normal angle deviate, as an angle in degrees. 
+    pub normal_precision: NormalPrecisionMode,
+    /// Should normals with identical data be merged during saving?(Causes no degradation in mesh quality, but computationally expensive and size reduction can vary wildly depending on saved models).
+    pub prune_normals:bool,
 }
 impl Default for TMFPrecisionInfo {
+    /// Returns the default, middle-ground settings for saving meshes. Should be indistinguishable by human eye, but the LOD may be not enough for some rare cases (eg. procedural generation).
     fn default() -> Self {
         TMFPrecisionInfo {
             vertex_precision: VertexPrecisionMode(0.1),
+            normal_precision: NormalPrecisionMode::from_deg_dev(1.0),
+            prune_normals:true,
         }
     }
 }
@@ -252,5 +266,35 @@ mod testing {
         tmf_mesh.verify().unwrap();
         let mut out = std::fs::File::create("target/cube.obj").unwrap();
         tmf_mesh.write_obj(&mut out).unwrap();
+    }
+    #[ignore]
+    #[test]
+    fn rw_2mlm_sph() {
+        let mut file = std::fs::File::open("testing/ico_2mln_points.obj").unwrap();
+        let tmf_mesh = TMFMesh::read_from_obj(&mut file).unwrap();
+        tmf_mesh.verify().unwrap();
+        let mut out = Vec::new();
+        {
+            tmf_mesh
+                .write_tmf(&mut out, &TMFPrecisionInfo::default())
+                .unwrap();
+        }
+        let r_mesh = TMFMesh::read_tmf(&mut (&out as &[u8])).unwrap();
+        r_mesh.verify().unwrap();
+        let mut out = std::fs::File::create("target/ico_2mln_points_ftmf.obj").unwrap();
+        r_mesh.write_obj(&mut out).unwrap();
+    }
+    #[ignore]
+    #[test]
+    fn save_2mlm_sph_tmf() {
+        let mut file = std::fs::File::open("testing/ico_2mln_points.obj").unwrap();
+        let tmf_mesh = TMFMesh::read_from_obj(&mut file).unwrap();
+        tmf_mesh.verify().unwrap();
+        let mut out = std::fs::File::create("target/ico_2mln_points.tmf").unwrap();
+        let mut prec = TMFPrecisionInfo::default();
+        prec.prune_normals = false;
+        tmf_mesh
+            .write_tmf(&mut out, &prec)
+            .unwrap();
     }
 }
