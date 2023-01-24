@@ -193,8 +193,13 @@ impl TMFMesh {
         obj::write_obj(self, w)
     }
     /// Writes this TMF Mesh to *w*.
-    pub fn write_tmf<W: Write>(&self, w: &mut W, p_info: &TMFPrecisionInfo) -> Result<()> {
-        tmf::write(self, w, p_info)
+    pub fn write_tmf_one<W: Write>(&self, w:&mut W, p_info:&TMFPrecisionInfo) -> Result<()> {
+        tmf::write_tmf_header(w,1)?;
+        tmf::write_mesh(self,w,p_info)
+    }
+    /// Writes this TMF Mesh to *w*.
+    pub fn write_tmf<W: Write>(meshes:&[Self], w: &mut W, p_info: &TMFPrecisionInfo) -> Result<()> {
+        tmf::write(meshes, w, p_info)
     }
     /// Creates an empty TMF Mesh.
     pub fn empty() -> Self {
@@ -210,9 +215,23 @@ impl TMFMesh {
             material_faces: None,
         }
     }
-    /// Reads a mesh from a .tmf file.
-    pub fn read_tmf<R: Read>(reader: &mut R) -> Result<Self> {
+    /// Reads all meshes from a .tmf file.
+    pub fn read_tmf<R: Read>(reader: &mut R) -> Result<Vec<Self>> {
         tmf::read(reader)
+    }
+    /// Reads a single mesh from a .tmf file. Returns [`Err`] if no meshes present or more than one mesh present.
+    pub fn read_tmf_one<R: Read>(reader: &mut R) -> Result<Self> {
+        let meshes = Self::read_tmf(reader)?;
+        if meshes.len() < 1{
+            Err(std::io::Error::new(std::io::ErrorKind::Other,"No meshes present in .tmf file"))
+        }
+        else if meshes.len() > 1{
+            Err(std::io::Error::new(std::io::ErrorKind::Other,"More than one mesh present in .tmf file while only one expected."))
+        }
+        else{
+            /// MUST be always Some because of previous checks. Candidate for `unwrap_unsafe`
+            Ok(meshes.into_iter().nth(0).unwrap())
+        }
     }
 }
 #[cfg(test)]
@@ -239,7 +258,7 @@ mod testing {
         tmf_mesh.verify().unwrap();
         let mut out = std::fs::File::create("target/susan.tmf").unwrap();
         tmf_mesh
-            .write_tmf(&mut out, &TMFPrecisionInfo::default())
+            .write_tmf_one(&mut out, &TMFPrecisionInfo::default())
             .unwrap();
     }
     #[test]
@@ -250,10 +269,10 @@ mod testing {
         let mut out = Vec::new();
         {
             tmf_mesh
-                .write_tmf(&mut out, &TMFPrecisionInfo::default())
+                .write_tmf_one(&mut out, &TMFPrecisionInfo::default())
                 .unwrap();
         }
-        let r_mesh = TMFMesh::read_tmf(&mut (&out as &[u8])).unwrap();
+        let r_mesh = TMFMesh::read_tmf_one(&mut (&out as &[u8])).unwrap();
         r_mesh.verify().unwrap();
         let mut out = std::fs::File::create("target/susan_ftmf.obj").unwrap();
         r_mesh.write_obj(&mut out).unwrap();
@@ -276,10 +295,10 @@ mod testing {
         let mut out = Vec::new();
         {
             tmf_mesh
-                .write_tmf(&mut out, &TMFPrecisionInfo::default())
+                .write_tmf_one(&mut out, &TMFPrecisionInfo::default())
                 .unwrap();
         }
-        let r_mesh = TMFMesh::read_tmf(&mut (&out as &[u8])).unwrap();
+        let r_mesh = TMFMesh::read_tmf_one(&mut (&out as &[u8])).unwrap();
         r_mesh.verify().unwrap();
         let mut out = std::fs::File::create("target/ico_2mln_points_ftmf.obj").unwrap();
         r_mesh.write_obj(&mut out).unwrap();
@@ -294,7 +313,7 @@ mod testing {
         let mut prec = TMFPrecisionInfo::default();
         prec.prune_normals = false;
         tmf_mesh
-            .write_tmf(&mut out, &prec)
+            .write_tmf_one(&mut out, &prec)
             .unwrap();
     }
 }

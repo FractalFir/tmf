@@ -27,7 +27,7 @@ impl SectionHeader {
 }
 use crate::{FloatType, TMFMesh, TMFPrecisionInfo, Vector3, TMF_MAJOR, TMF_MINOR};
 use std::io::{Read, Result, Write};
-pub fn write<W: Write>(mesh: &TMFMesh, w: &mut W, p_info: &TMFPrecisionInfo) -> Result<()> {
+pub(crate) fn write_mesh<W: Write>(mesh: &TMFMesh, w: &mut W, p_info: &TMFPrecisionInfo) -> Result<()>{
     /// If needed, prune redundant normal data.
     let (normals,normal_faces) = if mesh.get_normals().is_some() && mesh.get_normal_faces().is_some() && p_info.prune_normals{
         use crate::normals::merge_identical_normals;
@@ -39,9 +39,7 @@ pub fn write<W: Write>(mesh: &TMFMesh, w: &mut W, p_info: &TMFPrecisionInfo) -> 
         (normals,normal_faces)
     };
     let mut curr_segment_data = Vec::with_capacity(0x100);
-    w.write_all(b"TMF")?;
-    w.write_all(&TMF_MAJOR.to_le_bytes())?;
-    w.write_all(&TMF_MINOR.to_le_bytes())?;
+   
     match &mesh.metadata {
         Some(metadata) => todo!("Saving metadata is not yet supported!"),
         None => (),
@@ -169,33 +167,26 @@ pub fn write<W: Write>(mesh: &TMFMesh, w: &mut W, p_info: &TMFPrecisionInfo) -> 
     };
     Ok(())
 }
-pub fn read<R: Read>(reader: &mut R) -> Result<TMFMesh> {
-    let mut magic = [0; 3];
-    reader.read_exact(&mut magic)?;
-    if magic != *b"TMF" {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            "Not a TMF file",
-        ));
+pub(crate) fn write_tmf_header<W: Write>(w: &mut W,mesh_count:u32)->Result<()>{
+w   .write_all(b"TMF")?;
+    w.write_all(&TMF_MAJOR.to_le_bytes())?;
+    w.write_all(&TMF_MINOR.to_le_bytes())?;
+    w.write_all(&mesh_count.to_le_bytes())
+}
+pub(crate) fn write<W: Write>(meshes: &[TMFMesh], w: &mut W, p_info: &TMFPrecisionInfo) -> Result<()> {
+    write_tmf_header(w,meshes.len() as u32)?;
+    for mesh in meshes{
+        write_mesh(mesh,w,p_info)?;
     }
-    // Not used ATM, but can be used for compatiblity in the future.
-    let _major = {
-        let mut tmp = [0; 2];
-        reader.read_exact(&mut tmp)?;
-        u16::from_le_bytes(tmp)
-    };
-    // Not used ATM, but can be used for compatiblity in the future.
-    let _minor = {
-        let mut tmp = [0; 2];
-        reader.read_exact(&mut tmp)?;
-        u16::from_le_bytes(tmp)
-    };
+    Ok(())
+}
+pub fn read_mesh<R: Read>(reader: &mut R) -> Result<TMFMesh>{
+    let mut res = TMFMesh::empty();
     fn read_u16<R: Read>(r: &mut R) -> Result<u16> {
-        let mut tmp = [0; 2];
+        let mut tmp = [0; std::mem::size_of::<u16>()];
         r.read_exact(&mut tmp)?;
         Ok(u16::from_le_bytes(tmp))
     }
-    let mut res = TMFMesh::empty();
     while let Ok(header) = read_u16(reader) {
         let header = SectionHeader::from_u16(header);
         let data_length = {
@@ -280,4 +271,36 @@ pub fn read<R: Read>(reader: &mut R) -> Result<TMFMesh> {
     }
     //todo!();
     Ok(res)
+}
+pub fn read<R: Read>(reader: &mut R) -> Result<Vec<TMFMesh>> {
+    let mut magic = [0; 3];
+    reader.read_exact(&mut magic)?;
+    if magic != *b"TMF" {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "Not a TMF file",
+        ));
+    }
+    // Not used ATM, but can be used for compatiblity in the future.
+    let _major = {
+        let mut tmp = [0; 2];
+        reader.read_exact(&mut tmp)?;
+        u16::from_le_bytes(tmp)
+    };
+    // Not used ATM, but can be used for compatiblity in the future.
+    let _minor = {
+        let mut tmp = [0; std::mem::size_of::<u16>()];
+        reader.read_exact(&mut tmp)?;
+        u16::from_le_bytes(tmp)
+    };
+    let mesh_count = {
+        let mut tmp = [0; std::mem::size_of::<u32>()];
+        reader.read_exact(&mut tmp)?;
+        u32::from_le_bytes(tmp)
+    };
+    let mut meshes = Vec::with_capacity(mesh_count as usize);
+    for _ in 0..mesh_count{
+        meshes.push(read_mesh(reader)?);
+    }
+    Ok(meshes)
 }
