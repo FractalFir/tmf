@@ -27,12 +27,47 @@ fn match_split(split: Option<&str>) -> Result<&str> {
         )),
     }
 }
+use crate::Vector3;
+use std::str::Split;
+use smallvec::SmallVec;
+fn load_indices(split: &mut Split<&[char; 2]>)->Result<(IndexType,IndexType,IndexType)>{
+    Ok((parse_index(match_split(split.next())?)? - 1,
+    parse_index(match_split(split.next())?)? - 1,
+    parse_index(match_split(split.next())?)? - 1))
+}
+pub fn load_face(split: &mut Split<&[char; 2]>,vertex_faces:&mut Vec<IndexType>,normal_faces:&mut Vec<IndexType>,uv_faces:&mut Vec<IndexType>) -> Result<()>{
+    let mut faces:SmallVec<[(IndexType,IndexType,IndexType);6]> = SmallVec::new();
+    while let Ok(indices) = load_indices(split){
+        faces.push(indices);
+    }
+    assert!(faces.len() == 3,"Object loader currently supports only loading triangulated faces, but encountered a {} sided polygon!",faces.len());
+    //TODO: do triangulation
+    for face in faces{
+        vertex_faces.push(face.0);
+        normal_faces.push(face.2);
+        uv_faces.push(face.1);
+    }
+    Ok(())
+}
+pub fn load_vec3(split: &mut Split<&[char; 2]>) -> Result<Vector3> {
+    let (x, y, z) = (
+        match_split(split.next())?,
+        match_split(split.next())?,
+        match_split(split.next())?,
+    );
+    Ok((
+        parse_float_type(x)?,
+        parse_float_type(y)?,
+        parse_float_type(z)?,
+    ))
+}
 pub fn read_from_obj<R: Read>(reader: &mut R) -> Result<TMFMesh> {
     use std::io::BufRead;
     let reader = BufReader::new(reader);
     let mut vertices = Vec::with_capacity(0x100);
     let mut normals = Vec::with_capacity(0x100);
     let mut uvs = Vec::with_capacity(0x100);
+
     let mut vertex_faces = Vec::with_capacity(0x100);
     let mut normal_faces = Vec::with_capacity(0x100);
     let mut uv_faces = Vec::with_capacity(0x100);
@@ -43,30 +78,10 @@ pub fn read_from_obj<R: Read>(reader: &mut R) -> Result<TMFMesh> {
         let beg = match_split(split.next())?;
         match beg {
             "v" => {
-                let (x, y, z) = (
-                    match_split(split.next())?,
-                    match_split(split.next())?,
-                    match_split(split.next())?,
-                );
-                let vertex = (
-                    parse_float_type(x)?,
-                    parse_float_type(y)?,
-                    parse_float_type(z)?,
-                );
-                vertices.push(vertex);
+                vertices.push(load_vec3(&mut split)?);
             }
             "vn" => {
-                let (x, y, z) = (
-                    match_split(split.next())?,
-                    match_split(split.next())?,
-                    match_split(split.next())?,
-                );
-                let normal = (
-                    parse_float_type(x)?,
-                    parse_float_type(y)?,
-                    parse_float_type(z)?,
-                );
-                normals.push(normal);
+                normals.push(load_vec3(&mut split)?);
             }
             "vt" => {
                 let (x, y) = (match_split(split.next())?, match_split(split.next())?);
@@ -74,32 +89,7 @@ pub fn read_from_obj<R: Read>(reader: &mut R) -> Result<TMFMesh> {
                 uvs.push(uv);
             }
             "f" => {
-                let (v0, vt0, vn0, v1, vt1, vn1, v2, vt2, vn2) = (
-                    match_split(split.next())?,
-                    match_split(split.next())?,
-                    match_split(split.next())?,
-                    match_split(split.next())?,
-                    match_split(split.next())?,
-                    match_split(split.next())?,
-                    match_split(split.next())?,
-                    match_split(split.next())?,
-                    match_split(split.next())?,
-                );
-                if split.next().is_some() {
-                    return Err(std::io::Error::new(
-                        std::io::ErrorKind::Other,
-                        "OBJ reader supports only triangulated meshes ATM.",
-                    ));
-                }
-                vertex_faces.push(parse_index(v0)? - 1);
-                vertex_faces.push(parse_index(v1)? - 1);
-                vertex_faces.push(parse_index(v2)? - 1);
-                normal_faces.push(parse_index(vn0)? - 1);
-                normal_faces.push(parse_index(vn1)? - 1);
-                normal_faces.push(parse_index(vn2)? - 1);
-                uv_faces.push(parse_index(vt0)? - 1);
-                uv_faces.push(parse_index(vt1)? - 1);
-                uv_faces.push(parse_index(vt2)? - 1);
+                 load_face(&mut split,&mut vertex_faces,&mut normal_faces,&mut uv_faces);
             }
             "#" => continue,
             "mtllib" => continue, //TODO:use material info
