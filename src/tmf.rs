@@ -27,7 +27,9 @@ impl SectionHeader {
 }
 use crate::{FloatType, TMFMesh, TMFPrecisionInfo, Vector3, TMF_MAJOR, TMF_MINOR};
 use std::io::{Read, Result, Write};
-pub(crate) fn write_mesh<W: Write>(mesh: &TMFMesh, w: &mut W, p_info: &TMFPrecisionInfo) -> Result<()>{
+pub(crate) fn write_mesh<W: Write>(mesh: &TMFMesh, w: &mut W, p_info: &TMFPrecisionInfo,name:&str) -> Result<()>{
+    write_string(w,name);
+    w.write_all(&(mesh.get_segment_count() as u16).to_le_bytes())?;
     /// If needed, prune redundant normal data.
     let (normals,normal_faces) = if mesh.get_normals().is_some() && mesh.get_normal_faces().is_some() && p_info.prune_normals{
         use crate::normals::merge_identical_normals;
@@ -39,11 +41,6 @@ pub(crate) fn write_mesh<W: Write>(mesh: &TMFMesh, w: &mut W, p_info: &TMFPrecis
         (normals,normal_faces)
     };
     let mut curr_segment_data = Vec::with_capacity(0x100);
-   
-    match &mesh.metadata {
-        Some(metadata) => todo!("Saving metadata is not yet supported!"),
-        None => (),
-    }
     //Calculate shortest edge, or if no edges present, 1.0
     let shortest_edge = match &mesh.vertex_faces {
         Some(vertex_faces) => {
@@ -167,27 +164,44 @@ pub(crate) fn write_mesh<W: Write>(mesh: &TMFMesh, w: &mut W, p_info: &TMFPrecis
     };
     Ok(())
 }
+pub(crate) fn write_string<W:Write>(w: &mut W,s:&str)->Result<()>{
+    let bytes = s.as_bytes();
+    w.write_all(&(bytes.len() as u16).to_le_bytes())?;
+    w.write_all(bytes)
+}
+pub(crate) fn read_u16<R: Read>(r: &mut R) -> Result<u16> {
+    let mut tmp = [0; std::mem::size_of::<u16>()];
+    r.read_exact(&mut tmp)?;
+    Ok(u16::from_le_bytes(tmp))
+}
+pub(crate) fn read_string<R:Read>(r: &mut R)->Result<String>{
+    let byte_len = read_u16(r)?;
+    let mut bytes = vec![0;byte_len as usize];
+    r.read(&mut bytes)?;
+    match std::str::from_utf8(&bytes){
+        Ok(string)=>Ok(string.to_owned()),
+        Err(_)=>todo!(),
+    }
+}
 pub(crate) fn write_tmf_header<W: Write>(w: &mut W,mesh_count:u32)->Result<()>{
-w   .write_all(b"TMF")?;
+    w.write_all(b"TMF")?;
     w.write_all(&TMF_MAJOR.to_le_bytes())?;
     w.write_all(&TMF_MINOR.to_le_bytes())?;
     w.write_all(&mesh_count.to_le_bytes())
 }
-pub(crate) fn write<W: Write>(meshes: &[TMFMesh], w: &mut W, p_info: &TMFPrecisionInfo) -> Result<()> {
-    write_tmf_header(w,meshes.len() as u32)?;
-    for mesh in meshes{
-        write_mesh(mesh,w,p_info)?;
+pub(crate) fn write<W: Write>(meshes_names: &[(TMFMesh,&str)], w: &mut W, p_info: &TMFPrecisionInfo) -> Result<()> {
+    write_tmf_header(w,meshes_names.len() as u32)?;
+    for (mesh,name) in meshes_names{
+        write_mesh(mesh,w,p_info,name)?;
     }
     Ok(())
 }
-pub fn read_mesh<R: Read>(reader: &mut R) -> Result<TMFMesh>{
+pub fn read_mesh<R: Read>(reader: &mut R) -> Result<(TMFMesh,String)>{
     let mut res = TMFMesh::empty();
-    fn read_u16<R: Read>(r: &mut R) -> Result<u16> {
-        let mut tmp = [0; std::mem::size_of::<u16>()];
-        r.read_exact(&mut tmp)?;
-        Ok(u16::from_le_bytes(tmp))
-    }
-    while let Ok(header) = read_u16(reader) {
+    let name = read_string(reader)?;
+    let seg_count = read_u16(reader)?;
+    for _ in 0..seg_count{
+        let header = read_u16(reader)?;
         let header = SectionHeader::from_u16(header);
         let data_length = {
             let mut tmp = [0; std::mem::size_of::<u64>()];
@@ -270,9 +284,9 @@ pub fn read_mesh<R: Read>(reader: &mut R) -> Result<TMFMesh>{
         }
     }
     //todo!();
-    Ok(res)
+    Ok((res,name))
 }
-pub fn read<R: Read>(reader: &mut R) -> Result<Vec<TMFMesh>> {
+pub fn read<R: Read>(reader: &mut R) -> Result<Vec<(TMFMesh,String)>> {
     let mut magic = [0; 3];
     reader.read_exact(&mut magic)?;
     if magic != *b"TMF" {
@@ -282,17 +296,9 @@ pub fn read<R: Read>(reader: &mut R) -> Result<Vec<TMFMesh>> {
         ));
     }
     // Not used ATM, but can be used for compatiblity in the future.
-    let _major = {
-        let mut tmp = [0; 2];
-        reader.read_exact(&mut tmp)?;
-        u16::from_le_bytes(tmp)
-    };
+    let _major = read_u16(reader)?;
     // Not used ATM, but can be used for compatiblity in the future.
-    let _minor = {
-        let mut tmp = [0; std::mem::size_of::<u16>()];
-        reader.read_exact(&mut tmp)?;
-        u16::from_le_bytes(tmp)
-    };
+    let _minor = read_u16(reader)?;
     let mesh_count = {
         let mut tmp = [0; std::mem::size_of::<u32>()];
         reader.read_exact(&mut tmp)?;
@@ -302,5 +308,5 @@ pub fn read<R: Read>(reader: &mut R) -> Result<Vec<TMFMesh>> {
     for _ in 0..mesh_count{
         meshes.push(read_mesh(reader)?);
     }
-    Ok(meshes)
+    Ok(meshes.into())
 }

@@ -70,8 +70,8 @@ impl Default for TMFPrecisionInfo {
 }
 use std::io::Result;
 /// Representation of a TMF mesh. Can be loaded from disk, imported from diffrent format, saved to disk, and exported to a diffrent format, or created using special functions. Since it can be user generated it may be invalid and **must** be verified before being saved, otherwise a "garbage" mesh may be saved, an error may occur or a panic may occur.
+#[derive(Clone)]
 pub struct TMFMesh {
-    metadata: Option<FileMetadata>,
     normals: Option<Box<[Vector3]>>,
     normal_faces: Option<Box<[IndexType]>>,
     vertices: Option<Box<[Vector3]>>,
@@ -79,7 +79,7 @@ pub struct TMFMesh {
     uvs: Option<Box<[Vector2]>>,
     uv_faces: Option<Box<[IndexType]>>,
     materials: Option<MaterialInfo>,
-    material_faces: Option<Box<[IndexType]>>,
+    material_groups: Option<Box<[(IndexType,IndexType)]>>,
     //groups: Option<Box<[String]>,Box<[IndexType]>>,
 }
 impl Default for TMFMesh {
@@ -91,6 +91,19 @@ fn slice_to_box<T: Sized + std::marker::Copy>(slice: &[T]) -> Box<[T]> {
     slice.into()
 }
 impl TMFMesh {
+    pub (crate) fn get_segment_count(&self)->usize{
+        let mut count = 0;
+        //TODO: when adding new fields change this.
+        if self.normals.is_some(){count += 1};
+        if self.normal_faces.is_some(){count += 1};
+        if self.vertices.is_some(){count += 1};
+        if self.vertex_faces.is_some(){count += 1};
+        if self.uvs.is_some(){count += 1};
+        if self.uv_faces.is_some(){count += 1};
+        if self.materials.is_some(){count += 1};
+        if self.material_groups.is_some(){count += 1};
+        count
+    }
     /// Sets mesh vertex array and returns old vertex array if present. New mesh data is **not** checked during this function call, so to ensure mesh is valid call `verify` before saving.
     pub fn set_vertices(&mut self, vertices: &[Vector3]) -> Option<Box<[Vector3]>> {
         let mut vertices = Some(slice_to_box(vertices));
@@ -193,18 +206,17 @@ impl TMFMesh {
         obj::write_obj(self, w)
     }
     /// Writes this TMF Mesh to *w*.
-    pub fn write_tmf_one<W: Write>(&self, w:&mut W, p_info:&TMFPrecisionInfo) -> Result<()> {
+    pub fn write_tmf_one<W: Write>(&self, w:&mut W, p_info:&TMFPrecisionInfo,name:&str) -> Result<()> {
         tmf::write_tmf_header(w,1)?;
-        tmf::write_mesh(self,w,p_info)
+        tmf::write_mesh(self,w,p_info,name)
     }
     /// Writes this TMF Mesh to *w*.
-    pub fn write_tmf<W: Write>(meshes:&[Self], w: &mut W, p_info: &TMFPrecisionInfo) -> Result<()> {
-        tmf::write(meshes, w, p_info)
+    pub fn write_tmf<W: Write>(meshes_names:&[(Self,&str)], w: &mut W, p_info: &TMFPrecisionInfo) -> Result<()> {
+        tmf::write(meshes_names, w, p_info)
     }
     /// Creates an empty TMF Mesh.
     pub fn empty() -> Self {
         Self {
-            metadata: None,
             normal_faces: None,
             normals: None,
             uv_faces: None,
@@ -212,15 +224,15 @@ impl TMFMesh {
             vertex_faces: None,
             vertices: None,
             materials: None,
-            material_faces: None,
+            material_groups: None,
         }
     }
     /// Reads all meshes from a .tmf file.
-    pub fn read_tmf<R: Read>(reader: &mut R) -> Result<Vec<Self>> {
-        tmf::read(reader)
+    pub fn read_tmf<R: Read>(reader: &mut R) -> Result<Box<[(Self,String)]>> {
+        Ok(tmf::read(reader)?.into())
     }
     /// Reads a single mesh from a .tmf file. Returns [`Err`] if no meshes present or more than one mesh present.
-    pub fn read_tmf_one<R: Read>(reader: &mut R) -> Result<Self> {
+    pub fn read_tmf_one<R: Read>(reader: &mut R) -> Result<(Self,String)> {
         let meshes = Self::read_tmf(reader)?;
         if meshes.len() < 1{
             Err(std::io::Error::new(std::io::ErrorKind::Other,"No meshes present in .tmf file"))
@@ -229,8 +241,13 @@ impl TMFMesh {
             Err(std::io::Error::new(std::io::ErrorKind::Other,"More than one mesh present in .tmf file while only one expected."))
         }
         else{
-            /// MUST be always Some because of previous checks. Candidate for `unwrap_unsafe`
-            Ok(meshes.into_iter().nth(0).unwrap())
+            // TODO: find a way to remove this redundant clone call
+            // This is a very stupid little "bug". Because 'meshes' must contain exactly 1 element(previous checks), the first element should just be returned. 
+            // This is in fact how it used to work, but after adding mesh names and changing the return type from TMFMesh to (TMFMesh,String) the function .nth(0) used 
+            // to get the first element started returning a reference for no apparent reason? So this less efficient way must suffice for now.This could be maybe fixed 
+            // with std::mem::swap, uninitialised dummy value and some fancy manual dropping but it would require using `unsafe` and could lead to a memory leak if done 
+            // incorrectly, so the clone call stays for now.
+            Ok(meshes[0].clone())
         }
     }
 }
@@ -258,7 +275,7 @@ mod testing {
         tmf_mesh.verify().unwrap();
         let mut out = std::fs::File::create("target/susan.tmf").unwrap();
         tmf_mesh
-            .write_tmf_one(&mut out, &TMFPrecisionInfo::default())
+            .write_tmf_one(&mut out, &TMFPrecisionInfo::default(),"")
             .unwrap();
     }
     #[test]
@@ -269,10 +286,10 @@ mod testing {
         let mut out = Vec::new();
         {
             tmf_mesh
-                .write_tmf_one(&mut out, &TMFPrecisionInfo::default())
+                .write_tmf_one(&mut out, &TMFPrecisionInfo::default(),"")
                 .unwrap();
         }
-        let r_mesh = TMFMesh::read_tmf_one(&mut (&out as &[u8])).unwrap();
+        let r_mesh = TMFMesh::read_tmf_one(&mut (&out as &[u8])).unwrap().0;
         r_mesh.verify().unwrap();
         let mut out = std::fs::File::create("target/susan_ftmf.obj").unwrap();
         r_mesh.write_obj(&mut out).unwrap();
@@ -295,10 +312,10 @@ mod testing {
         let mut out = Vec::new();
         {
             tmf_mesh
-                .write_tmf_one(&mut out, &TMFPrecisionInfo::default())
+                .write_tmf_one(&mut out, &TMFPrecisionInfo::default(),"")
                 .unwrap();
         }
-        let r_mesh = TMFMesh::read_tmf_one(&mut (&out as &[u8])).unwrap();
+        let r_mesh = TMFMesh::read_tmf_one(&mut (&out as &[u8])).unwrap().0;
         r_mesh.verify().unwrap();
         let mut out = std::fs::File::create("target/ico_2mln_points_ftmf.obj").unwrap();
         r_mesh.write_obj(&mut out).unwrap();
@@ -313,7 +330,7 @@ mod testing {
         let mut prec = TMFPrecisionInfo::default();
         prec.prune_normals = false;
         tmf_mesh
-            .write_tmf_one(&mut out, &prec)
+            .write_tmf_one(&mut out, &prec,"")
             .unwrap();
     }
 }
