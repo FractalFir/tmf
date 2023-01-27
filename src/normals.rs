@@ -51,7 +51,10 @@ pub fn normalize_arr(normals: &mut [Vector3]) {
         *normal = normalize(*normal);
     }
 }
-fn normal_to_encoding(normal: Vector3,precision: NormalPrecisionMode)->(u64,u64,bool,bool,bool){
+fn normal_to_encoding(
+    normal: Vector3,
+    precision: NormalPrecisionMode,
+) -> (u64, u64, bool, bool, bool) {
     let multiplier = ((1 << precision.0) - 1) as FloatType;
     //Calculate asine
     let xy = (normal.0.abs(), normal.1.abs());
@@ -66,9 +69,16 @@ fn normal_to_encoding(normal: Vector3,precision: NormalPrecisionMode)->(u64,u64,
     let sx = normal.0 < 0.0;
     let sy = normal.1 < 0.0;
     let sz = normal.2 < 0.0;
-    (asine,z,sx,sy,sz)
+    (asine, z, sx, sy, sz)
 }
-fn normal_from_encoding(asine:u64,z:u64,sx:bool,sy:bool,sz:bool,precision: NormalPrecisionMode)->Vector3{
+fn normal_from_encoding(
+    asine: u64,
+    z: u64,
+    sx: bool,
+    sy: bool,
+    sz: bool,
+    precision: NormalPrecisionMode,
+) -> Vector3 {
     let divisor = ((1 << precision.0) - 1) as FloatType;
     //Read raw asine
     let asine = (asine as FloatType) / divisor;
@@ -79,7 +89,7 @@ fn normal_from_encoding(asine:u64,z:u64,sx:bool,sy:bool,sz:bool,precision: Norma
     #[cfg(feature = "fast_trig")]
     let x = fsin(asine as fprec) as FloatType;
     #[cfg(not(feature = "fast_trig"))]
-    let (x,y) = asine.sin_cos();
+    let (x, y) = asine.sin_cos();
     #[cfg(feature = "fast_trig")]
     let y = (1.0 - x * x).sqrt();
     // Calculate XY magnitude
@@ -100,9 +110,9 @@ fn save_normal<W: Write>(
     precision: NormalPrecisionMode,
     writer: &mut UnalignedWriter<W>,
 ) -> Result<()> {
-    let (asine,z,sx,sy,sz) = normal_to_encoding(normal,precision);
+    let (asine, z, sx, sy, sz) = normal_to_encoding(normal, precision);
     let main_prec = UnalignedRWMode::precision_bits(precision.0);
-    
+
     writer.write_unaligned(SIGN_PREC, sx as u64)?;
     writer.write_unaligned(SIGN_PREC, sy as u64)?;
     writer.write_unaligned(SIGN_PREC, sz as u64)?;
@@ -123,8 +133,8 @@ fn read_normal<R: Read>(
     let sz = reader.read_unaligned(SIGN_PREC)? != 0;
     let asine = reader.read_unaligned(main_prec)?;
     let z = reader.read_unaligned(main_prec)?;
-    
-    Ok(normal_from_encoding(asine,z,sx,sy,sz,precision))
+
+    Ok(normal_from_encoding(asine, z, sx, sy, sz, precision))
 }
 pub(crate) fn save_normal_array<W: Write>(
     normals: &[Vector3],
@@ -161,30 +171,37 @@ pub(crate) fn read_normal_array<R: Read>(reader: &mut R) -> Result<Box<[Vector3]
     Ok(normals.into())
 }
 /// Merges normals that would be identical in saved file during saving process.
-pub (crate) fn merge_identical_normals(normals:&[Vector3],faces:&[IndexType],prec:NormalPrecisionMode)->(Vec<Vector3>,Vec<IndexType>){
-    let mut faces:Vec<IndexType> = faces.into();
-    let encoded:Vec<_> = normals.iter().map(|normal|{normal_to_encoding(*normal,prec)}).collect();
-    let mut mappings:Vec<IndexType> = vec![0;encoded.len()];
+pub(crate) fn merge_identical_normals(
+    normals: &[Vector3],
+    faces: &[IndexType],
+    prec: NormalPrecisionMode,
+) -> (Vec<Vector3>, Vec<IndexType>) {
+    let mut faces: Vec<IndexType> = faces.into();
+    let encoded: Vec<_> = normals
+        .iter()
+        .map(|normal| normal_to_encoding(*normal, prec))
+        .collect();
+    let mut mappings: Vec<IndexType> = vec![0; encoded.len()];
     let mut new_normals = Vec::with_capacity(normals.len());
-    for i in 0..encoded.len(){
+    for i in 0..encoded.len() {
         let mut is_unique = true;
-        for j in 0..i{
-            if encoded[i] == encoded[j]{
+        for j in 0..i {
+            if encoded[i] == encoded[j] {
                 mappings[i] = mappings[j];
                 is_unique = false;
                 break;
             }
         }
-        if is_unique{
+        if is_unique {
             let index = new_normals.len();
             mappings[i] = index as IndexType;
             new_normals.push(normals[i]);
         }
     }
-    for i in 0..faces.len(){
+    for i in 0..faces.len() {
         faces[i] = mappings[faces[i] as usize];
     }
-    (new_normals,faces)
+    (new_normals, faces)
 }
 #[cfg(test)]
 mod test_normal {

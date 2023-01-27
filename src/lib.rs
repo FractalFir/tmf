@@ -85,7 +85,7 @@ impl Default for TMFMesh {
         Self::empty()
     }
 }
-fn vec_first<T:Sized + Clone>(vec:Vec<T>)->T{
+fn vec_first<T: Sized + Clone>(vec: Vec<T>) -> T {
     vec[0].clone()
 }
 fn slice_to_box<T: Sized + std::marker::Copy>(slice: &[T]) -> Box<[T]> {
@@ -222,12 +222,11 @@ impl TMFMesh {
     pub fn read_from_obj_one<R: Read>(reader: &mut R) -> Result<Self> {
         let meshes = obj::read_from_obj(reader)?;
         if meshes.len() < 1 {
-             Err(std::io::Error::new(
+            Err(std::io::Error::new(
                 std::io::ErrorKind::Other,
                 "No meshes present in .obj file",
             ))
-        }
-        else if meshes.len() > 1 {
+        } else if meshes.len() > 1 {
             Err(std::io::Error::new(
                 std::io::ErrorKind::Other,
                 "More than one mesh present in .tmf file while only one expected.",
