@@ -63,9 +63,9 @@ fn normal_to_encoding(normal: Vector3,precision: NormalPrecisionMode)->(u64,u64,
     //
     let asine = (asine * multiplier) as u64;
     let z = (normal.2.abs() * multiplier) as u64;
-    let sx = (normal.0 < 0.0);
-    let sy = (normal.1 < 0.0);
-    let sz = (normal.2 < 0.0);
+    let sx = normal.0 < 0.0;
+    let sy = normal.1 < 0.0;
+    let sz = normal.2 < 0.0;
     (asine,z,sx,sy,sz)
 }
 fn normal_from_encoding(asine:u64,z:u64,sx:bool,sy:bool,sz:bool,precision: NormalPrecisionMode)->Vector3{

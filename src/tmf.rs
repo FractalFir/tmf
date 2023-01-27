@@ -33,9 +33,9 @@ pub(crate) fn write_mesh<W: Write>(
     p_info: &TMFPrecisionInfo,
     name: &str,
 ) -> Result<()> {
-    write_string(w, name);
+    write_string(w, name)?;
     w.write_all(&(mesh.get_segment_count() as u16).to_le_bytes())?;
-    /// If needed, prune redundant normal data.
+    // If needed, prune redundant normal data.
     let (normals, normal_faces) = if mesh.get_normals().is_some()
         && mesh.get_normal_faces().is_some()
         && p_info.prune_normals

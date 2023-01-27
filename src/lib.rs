@@ -16,8 +16,7 @@ mod uv;
 mod verify;
 mod vertices;
 // Unfinished
-#[allow(dead_code)]
-mod metadata;
+
 #[allow(dead_code)]
 mod unaligned_lz;
 const TMF_MAJOR: u16 = 0;
@@ -45,9 +44,7 @@ pub use crate::material::MaterialInfo;
 use crate::normals::NormalPrecisionMode;
 #[doc(inline)]
 pub use crate::vertices::VertexPrecisionMode;
-use metadata::FileMetadata;
 use std::io::{Read, Write};
-use tmf::SectionHeader;
 #[doc(inline)]
 pub use verify::TMFIntegrityStatus;
 /// Settings for saving of a TMF mesh.
@@ -87,6 +84,9 @@ impl Default for TMFMesh {
     fn default() -> Self {
         Self::empty()
     }
+}
+fn vec_first<T:Sized + Clone>(vec:Vec<T>)->T{
+    vec[0].clone()
 }
 fn slice_to_box<T: Sized + std::marker::Copy>(slice: &[T]) -> Box<[T]> {
     slice.into()
@@ -215,8 +215,26 @@ impl TMFMesh {
         verify::verify_tmf_mesh(self)
     }
     /// Reads tmf mesh from a .obj file in *reader*
-    pub fn read_from_obj<R: Read>(reader: &mut R) -> Result<Self> {
+    pub fn read_from_obj<R: Read>(reader: &mut R) -> Result<Vec<Self>> {
         obj::read_from_obj(reader)
+    }
+    /// Reads tmf mesh from a .obj file in *reader*
+    pub fn read_from_obj_one<R: Read>(reader: &mut R) -> Result<Self> {
+        let meshes = obj::read_from_obj(reader)?;
+        if meshes.len() < 1 {
+             Err(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "No meshes present in .obj file",
+            ))
+        }
+        else if meshes.len() > 1 {
+            Err(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "More than one mesh present in .tmf file while only one expected.",
+            ))
+        } else {
+            Ok(vec_first(meshes))
+        }
     }
     /// Writes this TMF  mesh to a .obj file.
     pub fn write_obj<W: Write>(&self, w: &mut W) -> Result<()> {
@@ -254,8 +272,8 @@ impl TMFMesh {
         }
     }
     /// Reads all meshes from a .tmf file.
-    pub fn read_tmf<R: Read>(reader: &mut R) -> Result<Box<[(Self, String)]>> {
-        Ok(tmf::read(reader)?.into())
+    pub fn read_tmf<R: Read>(reader: &mut R) -> Result<Vec<(Self, String)>> {
+        Ok(tmf::read(reader)?)
     }
     /// Reads a single mesh from a .tmf file. Returns [`Err`] if no meshes present or more than one mesh present.
     pub fn read_tmf_one<R: Read>(reader: &mut R) -> Result<(Self, String)> {
@@ -277,7 +295,7 @@ impl TMFMesh {
             // to get the first element started returning a reference for no apparent reason? So this less efficient way must suffice for now.This could be maybe fixed
             // with std::mem::swap, uninitialised dummy value and some fancy manual dropping but it would require using `unsafe` and could lead to a memory leak if done
             // incorrectly, so the clone call stays for now.
-            Ok(meshes[0].clone())
+            Ok(vec_first(meshes))
         }
     }
 }
@@ -287,13 +305,13 @@ mod testing {
     #[test]
     fn read_susan_obj() {
         let mut file = std::fs::File::open("testing/susan.obj").unwrap();
-        let tmf_mesh = TMFMesh::read_from_obj(&mut file).unwrap();
+        let tmf_mesh = TMFMesh::read_from_obj_one(&mut file).unwrap();
         tmf_mesh.verify().unwrap();
     }
     #[test]
     fn rw_susan_obj() {
         let mut file = std::fs::File::open("testing/susan.obj").unwrap();
-        let tmf_mesh = TMFMesh::read_from_obj(&mut file).unwrap();
+        let tmf_mesh = TMFMesh::read_from_obj_one(&mut file).unwrap();
         tmf_mesh.verify().unwrap();
         let mut out = std::fs::File::create("target/susan.obj").unwrap();
         tmf_mesh.write_obj(&mut out).unwrap();
@@ -301,7 +319,7 @@ mod testing {
     #[test]
     fn save_susan_tmf() {
         let mut file = std::fs::File::open("testing/susan.obj").unwrap();
-        let tmf_mesh = TMFMesh::read_from_obj(&mut file).unwrap();
+        let tmf_mesh = TMFMesh::read_from_obj_one(&mut file).unwrap();
         tmf_mesh.verify().unwrap();
         let mut out = std::fs::File::create("target/susan.tmf").unwrap();
         tmf_mesh
@@ -311,7 +329,7 @@ mod testing {
     #[test]
     fn rw_susan_tmf() {
         let mut file = std::fs::File::open("testing/susan.obj").unwrap();
-        let tmf_mesh = TMFMesh::read_from_obj(&mut file).unwrap();
+        let tmf_mesh = TMFMesh::read_from_obj_one(&mut file).unwrap();
         tmf_mesh.verify().unwrap();
         let mut out = Vec::new();
         {
@@ -328,7 +346,7 @@ mod testing {
     #[should_panic]
     fn rw_cube_obj_not_triangulated() {
         let mut file = std::fs::File::open("testing/cube.obj").unwrap();
-        let tmf_mesh = TMFMesh::read_from_obj(&mut file).unwrap();
+        let tmf_mesh = TMFMesh::read_from_obj_one(&mut file).unwrap();
         tmf_mesh.verify().unwrap();
         let mut out = std::fs::File::create("target/cube.obj").unwrap();
         tmf_mesh.write_obj(&mut out).unwrap();
@@ -337,7 +355,7 @@ mod testing {
     #[test]
     fn rw_2mlm_sph() {
         let mut file = std::fs::File::open("testing/ico_2mln_points.obj").unwrap();
-        let tmf_mesh = TMFMesh::read_from_obj(&mut file).unwrap();
+        let tmf_mesh = TMFMesh::read_from_obj_one(&mut file).unwrap();
         tmf_mesh.verify().unwrap();
         let mut out = Vec::new();
         {
@@ -354,7 +372,7 @@ mod testing {
     #[test]
     fn save_2mlm_sph_tmf() {
         let mut file = std::fs::File::open("testing/ico_2mln_points.obj").unwrap();
-        let tmf_mesh = TMFMesh::read_from_obj(&mut file).unwrap();
+        let tmf_mesh = TMFMesh::read_from_obj_one(&mut file).unwrap();
         tmf_mesh.verify().unwrap();
         let mut out = std::fs::File::create("target/ico_2mln_points.tmf").unwrap();
         let mut prec = TMFPrecisionInfo::default();

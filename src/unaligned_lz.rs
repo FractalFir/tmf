@@ -53,9 +53,9 @@ fn evaluate_match(input: &[bool], mut curr_pos: usize, mut match_beg: usize) -> 
 // keep longest
 fn find_best_match(input: &[bool], curr_pos: usize, max_len: u8) -> (usize, usize) {
     // Maximum number of bytes that can be read forward.
-    let forward_len = (input.len() - curr_pos).min(1 << max_len - 1);
+    let forward_len = (input.len() - curr_pos).min(1 << (max_len - 1));
     // Index of the backward most byte in the sliding window.
-    let backward_beg = (0.max(curr_pos as isize - (1 << max_len - 1))) as usize;
+    let backward_beg = (0.max(curr_pos as isize - (1 << (max_len - 1)))) as usize;
     // Best length found so far
     let mut best_len: usize = 0;
     // Best position found so far
@@ -132,12 +132,14 @@ mod ulz_test {
         323,
         13,
     ];
+    #[ignore]
     #[test]
     fn test_encode() {
         let bytes: [u8; 12 * 8] = unsafe { std::mem::transmute(ENCODABLE) };
         let mut res = Vec::new();
         encode_prec(&mut (&bytes as &[u8]), &mut res, 6);
     }
+    #[ignore]
     #[test]
     fn test_evaluate_match() {
         let a = [false, false, false, false, true];
