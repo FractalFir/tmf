@@ -215,11 +215,11 @@ impl TMFMesh {
         verify::verify_tmf_mesh(self)
     }
     /// Reads tmf mesh from a .obj file in *reader*
-    pub fn read_from_obj<R: Read>(reader: &mut R) -> Result<Vec<Self>> {
+    pub fn read_from_obj<R: Read>(reader: &mut R) -> Result<Vec<(Self, String)>> {
         obj::read_from_obj(reader)
     }
     /// Reads tmf mesh from a .obj file in *reader*
-    pub fn read_from_obj_one<R: Read>(reader: &mut R) -> Result<Self> {
+    pub fn read_from_obj_one<R: Read>(reader: &mut R) -> Result<(Self, String)> {
         let meshes = obj::read_from_obj(reader)?;
         if meshes.len() < 1 {
             Err(std::io::Error::new(
@@ -236,8 +236,12 @@ impl TMFMesh {
         }
     }
     /// Writes this TMF  mesh to a .obj file.
-    pub fn write_obj<W: Write>(&self, w: &mut W) -> Result<()> {
-        obj::write_obj(self, w)
+    pub fn write_obj_one<W: Write>(&self,w: &mut W,name:&str) -> Result<()> {
+        obj::write_obj(&[(self.clone(),name)], w)
+    }
+    /// Writes this TMF  mesh to a .obj file.
+    pub fn write_obj<W: Write,S: std::borrow::Borrow<str>>(meshes:&[(TMFMesh,S)],w: &mut W) -> Result<()> {
+        obj::write_obj(meshes, w)
     }
     /// Writes this TMF Mesh to *w*.
     pub fn write_tmf_one<W: Write>(
@@ -301,60 +305,96 @@ impl TMFMesh {
 #[cfg(test)]
 mod testing {
     use super::*;
+    fn init_test_env(){
+        std::fs::create_dir_all("target/test_res").unwrap();
+    }
     #[test]
     fn read_susan_obj() {
+        init_test_env();
         let mut file = std::fs::File::open("testing/susan.obj").unwrap();
-        let tmf_mesh = TMFMesh::read_from_obj_one(&mut file).unwrap();
+        let tmf_mesh = TMFMesh::read_from_obj_one(&mut file).unwrap().0;
         tmf_mesh.verify().unwrap();
     }
     #[test]
     fn rw_susan_obj() {
+        init_test_env();
         let mut file = std::fs::File::open("testing/susan.obj").unwrap();
-        let tmf_mesh = TMFMesh::read_from_obj_one(&mut file).unwrap();
+        let (tmf_mesh,name) = TMFMesh::read_from_obj_one(&mut file).unwrap();
         tmf_mesh.verify().unwrap();
         let mut out = std::fs::File::create("target/susan.obj").unwrap();
-        tmf_mesh.write_obj(&mut out).unwrap();
+        tmf_mesh.write_obj_one(&mut out,&name).unwrap();
     }
     #[test]
     fn save_susan_tmf() {
+        init_test_env();
         let mut file = std::fs::File::open("testing/susan.obj").unwrap();
-        let tmf_mesh = TMFMesh::read_from_obj_one(&mut file).unwrap();
+        let (tmf_mesh,name) = TMFMesh::read_from_obj_one(&mut file).unwrap();
         tmf_mesh.verify().unwrap();
-        let mut out = std::fs::File::create("target/susan.tmf").unwrap();
+        let mut out = std::fs::File::create("target/test_res/susan.tmf").unwrap();
+        assert!(name == "Suzanne");
         tmf_mesh
-            .write_tmf_one(&mut out, &TMFPrecisionInfo::default(), "")
+            .write_tmf_one(&mut out, &TMFPrecisionInfo::default(), &name)
             .unwrap();
     }
     #[test]
     fn rw_susan_tmf() {
+        init_test_env();
         let mut file = std::fs::File::open("testing/susan.obj").unwrap();
-        let tmf_mesh = TMFMesh::read_from_obj_one(&mut file).unwrap();
+        let (tmf_mesh,name) = TMFMesh::read_from_obj_one(&mut file).unwrap();
         tmf_mesh.verify().unwrap();
+        assert!(name == "Suzanne");
         let mut out = Vec::new();
         {
             tmf_mesh
                 .write_tmf_one(&mut out, &TMFPrecisionInfo::default(), "")
                 .unwrap();
         }
-        let r_mesh = TMFMesh::read_tmf_one(&mut (&out as &[u8])).unwrap().0;
+        let (r_mesh,name) = TMFMesh::read_tmf_one(&mut (&out as &[u8])).unwrap();
         r_mesh.verify().unwrap();
-        let mut out = std::fs::File::create("target/susan_ftmf.obj").unwrap();
-        r_mesh.write_obj(&mut out).unwrap();
+        let mut out = std::fs::File::create("target/test_res/susan_ftmf.obj").unwrap();
+        r_mesh.write_obj_one(&mut out,&name).unwrap();
     }
     #[test]
     #[should_panic]
     fn rw_cube_obj_not_triangulated() {
+        init_test_env();
         let mut file = std::fs::File::open("testing/cube.obj").unwrap();
-        let tmf_mesh = TMFMesh::read_from_obj_one(&mut file).unwrap();
+        let (tmf_mesh,name) = TMFMesh::read_from_obj_one(&mut file).unwrap();
         tmf_mesh.verify().unwrap();
-        let mut out = std::fs::File::create("target/cube.obj").unwrap();
-        tmf_mesh.write_obj(&mut out).unwrap();
+        let mut out = std::fs::File::create("target/test_res/cube.obj").unwrap();
+        tmf_mesh.write_obj_one(&mut out,&name).unwrap();
+    }
+    #[test]
+    fn load_multpile_meshes_obj(){
+        init_test_env();
+        let mut file = std::fs::File::open("testing/multiple.obj").unwrap();
+        let meshes = TMFMesh::read_from_obj(&mut file).unwrap();
+        for mesh_name in meshes{
+            let (mesh,name) = mesh_name;
+            mesh.verify();
+            let mut out = std::fs::File::create(&format!("target/test_res/{}.obj",name)).unwrap();
+            mesh.write_obj_one(&mut out,&name).unwrap();
+        }
+    }
+    #[test]
+    fn rw_multpile_meshes_obj(){
+        init_test_env();
+        let mut file = std::fs::File::open("testing/multiple.obj").unwrap();
+        let meshes = TMFMesh::read_from_obj(&mut file).unwrap();
+        for mesh_name in &meshes{
+            mesh_name.0.verify().unwrap();
+            println!("name:{} vlen:{}",mesh_name.1,mesh_name.0.get_vertices().unwrap().len());
+        }
+        let mut out = std::fs::File::create("target/test_res/multiple.obj").unwrap();
+        TMFMesh::write_obj(&meshes,&mut out).unwrap();
+        todo!();
     }
     #[ignore]
     #[test]
     fn rw_2mlm_sph() {
+        init_test_env();
         let mut file = std::fs::File::open("testing/ico_2mln_points.obj").unwrap();
-        let tmf_mesh = TMFMesh::read_from_obj_one(&mut file).unwrap();
+        let tmf_mesh = TMFMesh::read_from_obj_one(&mut file).unwrap().0;
         tmf_mesh.verify().unwrap();
         let mut out = Vec::new();
         {
@@ -362,16 +402,17 @@ mod testing {
                 .write_tmf_one(&mut out, &TMFPrecisionInfo::default(), "")
                 .unwrap();
         }
-        let r_mesh = TMFMesh::read_tmf_one(&mut (&out as &[u8])).unwrap().0;
+        let (r_mesh,name) = TMFMesh::read_tmf_one(&mut (&out as &[u8])).unwrap();
         r_mesh.verify().unwrap();
         let mut out = std::fs::File::create("target/ico_2mln_points_ftmf.obj").unwrap();
-        r_mesh.write_obj(&mut out).unwrap();
+        r_mesh.write_obj_one(&mut out,&name).unwrap();
     }
     #[ignore]
     #[test]
     fn save_2mlm_sph_tmf() {
+        init_test_env();
         let mut file = std::fs::File::open("testing/ico_2mln_points.obj").unwrap();
-        let tmf_mesh = TMFMesh::read_from_obj_one(&mut file).unwrap();
+        let tmf_mesh = TMFMesh::read_from_obj_one(&mut file).unwrap().0;
         tmf_mesh.verify().unwrap();
         let mut out = std::fs::File::create("target/ico_2mln_points.tmf").unwrap();
         let mut prec = TMFPrecisionInfo::default();
