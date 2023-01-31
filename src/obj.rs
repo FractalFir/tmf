@@ -67,7 +67,7 @@ pub fn load_vec3(split: &mut Split<&[char; 2]>) -> Result<Vector3> {
         parse_float_type(z)?,
     ))
 }
-fn save_obj<W: Write>(w:&mut W,mesh:&TMFMesh,index_offset:IndexType,name:&str)->Result<IndexType>{
+fn save_obj<W: Write>(w:&mut W,mesh:&TMFMesh,index_offset:(IndexType,IndexType,IndexType),name:&str)->Result<(IndexType,IndexType,IndexType)>{
     writeln!(w,"o {name}")?;
     let vertex_count = match mesh.get_vertices(){
         None=>0,
@@ -109,7 +109,7 @@ fn save_obj<W: Write>(w:&mut W,mesh:&TMFMesh,index_offset:IndexType,name:&str)->
             if mesh.get_uv_faces().is_some(){
                 return Err(Error::new(ErrorKind::Other, "If vertex faces data is not present, uv face data must not be present either!"));
             }
-            return Ok(0);
+            return Ok((0,0,0));
         },
     };
     // Ensure normal face array, if present, has the right length.
@@ -134,22 +134,30 @@ fn save_obj<W: Write>(w:&mut W,mesh:&TMFMesh,index_offset:IndexType,name:&str)->
     for i in 0..vert_face_len{
         if i%3 == 0{write!(w,"f ")?};
         // Why unwrap? Vertex face array MUST be present at this point in time, because if it was not, this function would have already returned.
-        let vertex = mesh.get_vertex_faces().unwrap()[i] + index_offset;
+        let vertex = mesh.get_vertex_faces().unwrap()[i] + index_offset.0;
         write!(w,"{}",vertex)?;
         let normals = mesh.get_normal_faces();
         match mesh.get_uv_faces(){
-            Some(uvs)=>write!(w,"/{}",uvs[i] + index_offset)?,
+            Some(uvs)=>write!(w,"/{}",uvs[i] + index_offset.1)?,
             None=>if normals.is_some(){write!(w,"/")?},
         }
         match normals{
-            Some(normals)=>write!(w,"/{}",normals[i] + index_offset)?,
+            Some(normals)=>write!(w,"/{}",normals[i] + index_offset.2)?,
             None=>(),
         }
         if i%3 == 2{writeln!(w)?}
         else {write!(w," ")?}
     }
+    let normal_count = match mesh.get_normals(){
+        Some(normals)=>normals.len(),
+        None=>0,
+    };
+     let uv_count = match mesh.get_uvs(){
+        Some(uvs)=>uvs.len(),
+        None=>0,
+    };
     /// If no vertices present, then no vertex faces SHOULD be present, so if they are present, it is an error.
-    Ok(vertex_count as IndexType)
+    Ok((vertex_count as IndexType,uv_count as IndexType,normal_count as IndexType))
 }
 /// Returns the readen mesh and name of the next object if present
 fn load_obj<R: std::io::BufRead>(
@@ -262,9 +270,12 @@ pub fn read_from_obj<R: Read>(reader: &mut R) -> Result<Vec<(TMFMesh,String)>> {
 /// Writes this TMF  mesh to a .obj file.
 pub fn write_obj<W: Write,S: std::borrow::Borrow<str>>(meshes:&[(TMFMesh,S)], w: &mut W) -> Result<()> {
     let mut w = BufWriter::new(w);
-    let mut index_offset = 1;
+    let mut index_offsets = (1,1,1);
     for (mesh,name) in meshes{
-        index_offset += save_obj(&mut w,mesh,index_offset,name.borrow())?;
+        let curr_offsets = save_obj(&mut w,mesh,index_offsets,name.borrow())?;
+        index_offsets.0 += curr_offsets.0;
+        index_offsets.1 += curr_offsets.1;
+        index_offsets.2 += curr_offsets.2;
     }
     w.flush()?;
     Ok(())
