@@ -1,5 +1,5 @@
 use crate::{FloatType, IndexType, TMFMesh, Vector2, Vector3};
-use std::io::{BufReader, BufWriter, Read, Result, Write,Error,ErrorKind};
+use std::io::{BufReader, BufWriter, Error, ErrorKind, Read, Result, Write};
 fn parse_float_type(float: &str) -> Result<FloatType> {
     match float.parse::<FloatType>() {
         Ok(float) => Ok(float),
@@ -67,97 +67,124 @@ pub fn load_vec3(split: &mut Split<&[char; 2]>) -> Result<Vector3> {
         parse_float_type(z)?,
     ))
 }
-fn save_obj<W: Write>(w:&mut W,mesh:&TMFMesh,index_offset:(IndexType,IndexType,IndexType),name:&str)->Result<(IndexType,IndexType,IndexType)>{
-    writeln!(w,"o {name}")?;
-    let vertex_count = match mesh.get_vertices(){
-        None=>0,
-        Some(vertices)=>{
-            for vertex in vertices{
-                writeln!(w,"v {} {} {}",vertex.0,vertex.1,vertex.2)?;
+fn save_obj<W: Write>(
+    w: &mut W,
+    mesh: &TMFMesh,
+    index_offset: (IndexType, IndexType, IndexType),
+    name: &str,
+) -> Result<(IndexType, IndexType, IndexType)> {
+    writeln!(w, "o {name}")?;
+    let vertex_count = match mesh.get_vertices() {
+        None => 0,
+        Some(vertices) => {
+            for vertex in vertices {
+                writeln!(w, "v {} {} {}", vertex.0, vertex.1, vertex.2)?;
             }
             vertices.len()
-        },
+        }
     };
     // DEBUG
     println!("obj:{name}");
     println!("vc:{vertex_count}");
-    match mesh.get_normals(){
-        None=>(),
-        Some(normals)=>{
-            for normal in normals{
-                writeln!(w,"vn {} {} {}",normal.0,normal.1,normal.2)?;
+    match mesh.get_normals() {
+        None => (),
+        Some(normals) => {
+            for normal in normals {
+                writeln!(w, "vn {} {} {}", normal.0, normal.1, normal.2)?;
             }
-        },
+        }
     }
-    match mesh.get_uvs(){
-        None=>(),
-        Some(uvs)=>{
-            for uv in uvs{
-                writeln!(w,"vt {} {}",uv.0,uv.1)?;
+    match mesh.get_uvs() {
+        None => (),
+        Some(uvs) => {
+            for uv in uvs {
+                writeln!(w, "vt {} {}", uv.0, uv.1)?;
             }
-        },
+        }
     }
-    // Check face arrays       
+    // Check face arrays
     // Get the length of the vertex face array to use for later array size comparison
-    let vert_face_len = match mesh.get_vertex_faces(){
-        Some(vertex_faces)=>vertex_faces.len(),
+    let vert_face_len = match mesh.get_vertex_faces() {
+        Some(vertex_faces) => vertex_faces.len(),
         // If no vertex face array, then object is a point cloud, so should not have any other face array.
-        None=>{
-            if mesh.get_normal_faces().is_some(){
+        None => {
+            if mesh.get_normal_faces().is_some() {
                 return Err(Error::new(ErrorKind::Other, "If vertex faces data is not present, normal face data must not be present either!"));
             }
-            if mesh.get_uv_faces().is_some(){
-                return Err(Error::new(ErrorKind::Other, "If vertex faces data is not present, uv face data must not be present either!"));
+            if mesh.get_uv_faces().is_some() {
+                return Err(Error::new(
+                    ErrorKind::Other,
+                    "If vertex faces data is not present, uv face data must not be present either!",
+                ));
             }
-            return Ok((0,0,0));
-        },
+            return Ok((0, 0, 0));
+        }
     };
     // Ensure normal face array, if present, has the right length.
-    match mesh.get_normal_faces(){
-        Some(normal_faces)=>{
-            if normal_faces.len() != vert_face_len{
-                 return Err(Error::new(ErrorKind::Other, "Number of faces in the vertex face and normal face array differs."));
+    match mesh.get_normal_faces() {
+        Some(normal_faces) => {
+            if normal_faces.len() != vert_face_len {
+                return Err(Error::new(
+                    ErrorKind::Other,
+                    "Number of faces in the vertex face and normal face array differs.",
+                ));
             }
-        },
-        None=>(),
+        }
+        None => (),
     }
     // Ensure uv face array, if present, has the right length.
-    match mesh.get_uv_faces(){
-        Some(uv_faces)=>{
-            if uv_faces.len() != vert_face_len{
-                 return Err(Error::new(ErrorKind::Other, "Number of faces in the vertex face and uv face array differs."));
+    match mesh.get_uv_faces() {
+        Some(uv_faces) => {
+            if uv_faces.len() != vert_face_len {
+                return Err(Error::new(
+                    ErrorKind::Other,
+                    "Number of faces in the vertex face and uv face array differs.",
+                ));
             }
-        },
-        None=>(),
+        }
+        None => (),
     }
     // TODO: this part can be rewritten to be more efficient by checking if arrays are present beforehand.
-    for i in 0..vert_face_len{
-        if i%3 == 0{write!(w,"f ")?};
+    for i in 0..vert_face_len {
+        if i % 3 == 0 {
+            write!(w, "f ")?
+        };
         // Why unwrap? Vertex face array MUST be present at this point in time, because if it was not, this function would have already returned.
         let vertex = mesh.get_vertex_faces().unwrap()[i] + index_offset.0;
-        write!(w,"{}",vertex)?;
+        write!(w, "{}", vertex)?;
         let normals = mesh.get_normal_faces();
-        match mesh.get_uv_faces(){
-            Some(uvs)=>write!(w,"/{}",uvs[i] + index_offset.1)?,
-            None=>if normals.is_some(){write!(w,"/")?},
+        match mesh.get_uv_faces() {
+            Some(uvs) => write!(w, "/{}", uvs[i] + index_offset.1)?,
+            None => {
+                if normals.is_some() {
+                    write!(w, "/")?
+                }
+            }
         }
-        match normals{
-            Some(normals)=>write!(w,"/{}",normals[i] + index_offset.2)?,
-            None=>(),
+        match normals {
+            Some(normals) => write!(w, "/{}", normals[i] + index_offset.2)?,
+            None => (),
         }
-        if i%3 == 2{writeln!(w)?}
-        else {write!(w," ")?}
+        if i % 3 == 2 {
+            writeln!(w)?
+        } else {
+            write!(w, " ")?
+        }
     }
-    let normal_count = match mesh.get_normals(){
-        Some(normals)=>normals.len(),
-        None=>0,
+    let normal_count = match mesh.get_normals() {
+        Some(normals) => normals.len(),
+        None => 0,
     };
-     let uv_count = match mesh.get_uvs(){
-        Some(uvs)=>uvs.len(),
-        None=>0,
+    let uv_count = match mesh.get_uvs() {
+        Some(uvs) => uvs.len(),
+        None => 0,
     };
     /// If no vertices present, then no vertex faces SHOULD be present, so if they are present, it is an error.
-    Ok((vertex_count as IndexType,uv_count as IndexType,normal_count as IndexType))
+    Ok((
+        vertex_count as IndexType,
+        uv_count as IndexType,
+        normal_count as IndexType,
+    ))
 }
 /// Returns the readen mesh and name of the next object if present
 fn load_obj<R: std::io::BufRead>(
@@ -208,16 +235,16 @@ fn load_obj<R: std::io::BufRead>(
                     let mut res = TMFMesh::empty();
                     // Needed to remove some vertices which do not belong to this mesh.
                     let mut n_v = vertices.clone();
-                    crate::utilis::fast_prune(&mut n_v,&mut vertex_faces);
+                    crate::utilis::fast_prune(&mut n_v, &mut vertex_faces);
                     // Needed to remove some uvs which do not belong to this mesh.
                     let mut n_uv = uvs.clone();
-                    crate::utilis::fast_prune(&mut n_uv,&mut uv_faces);
+                    crate::utilis::fast_prune(&mut n_uv, &mut uv_faces);
                     // Needed to remove some normals which do not belong to this mesh.
                     let mut n_n = normals.clone();
-                    crate::utilis::fast_prune(&mut n_n,&mut normal_faces);
+                    crate::utilis::fast_prune(&mut n_n, &mut normal_faces);
                     //DEBUG
                     println!("ld_o:{name}");
-                    println!("ld_vc:{}",vertices.len());
+                    println!("ld_vc:{}", vertices.len());
                     res.set_vertices(&n_v);
                     res.set_normals(&n_n);
                     res.set_uvs(&n_uv);
@@ -244,7 +271,7 @@ fn load_obj<R: std::io::BufRead>(
         Ok((None, None))
     }
 }
-pub fn read_from_obj<R: Read>(reader: &mut R) -> Result<Vec<(TMFMesh,String)>> {
+pub fn read_from_obj<R: Read>(reader: &mut R) -> Result<Vec<(TMFMesh, String)>> {
     use std::io::BufRead;
     let reader = BufReader::new(reader);
     let mut vertices = Vec::with_capacity(0x100);
@@ -258,7 +285,7 @@ pub fn read_from_obj<R: Read>(reader: &mut R) -> Result<Vec<(TMFMesh,String)>> {
         let (curr, curr_name) = load_obj(&mut lines, &mut vertices, &mut normals, &mut uvs)?;
         if curr.is_some() {
             // TODO: find way to remove unnecessary clone call
-            res.push((curr.unwrap(),name.clone().unwrap_or("".to_owned())));
+            res.push((curr.unwrap(), name.clone().unwrap_or("".to_owned())));
         }
         if !curr_name.is_some() {
             break;
@@ -268,11 +295,14 @@ pub fn read_from_obj<R: Read>(reader: &mut R) -> Result<Vec<(TMFMesh,String)>> {
     Ok(res)
 }
 /// Writes this TMF  mesh to a .obj file.
-pub fn write_obj<W: Write,S: std::borrow::Borrow<str>>(meshes:&[(TMFMesh,S)], w: &mut W) -> Result<()> {
+pub fn write_obj<W: Write, S: std::borrow::Borrow<str>>(
+    meshes: &[(TMFMesh, S)],
+    w: &mut W,
+) -> Result<()> {
     let mut w = BufWriter::new(w);
-    let mut index_offsets = (1,1,1);
-    for (mesh,name) in meshes{
-        let curr_offsets = save_obj(&mut w,mesh,index_offsets,name.borrow())?;
+    let mut index_offsets = (1, 1, 1);
+    for (mesh, name) in meshes {
+        let curr_offsets = save_obj(&mut w, mesh, index_offsets, name.borrow())?;
         index_offsets.0 += curr_offsets.0;
         index_offsets.1 += curr_offsets.1;
         index_offsets.2 += curr_offsets.2;
