@@ -27,7 +27,7 @@ byte_rw = []
 name = "unaligned_rw"
 harness = false
 [[bench]]
-name = "read_tmf"
+name = "read_write_tmf"
 harness = false
 [profile.bench]
 debug = true

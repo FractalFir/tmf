@@ -83,9 +83,6 @@ fn save_obj<W: Write>(
             vertices.len()
         }
     };
-    // DEBUG
-    println!("obj:{name}");
-    println!("vc:{vertex_count}");
     match mesh.get_normals() {
         None => (),
         Some(normals) => {
@@ -179,7 +176,7 @@ fn save_obj<W: Write>(
         Some(uvs) => uvs.len(),
         None => 0,
     };
-    /// If no vertices present, then no vertex faces SHOULD be present, so if they are present, it is an error.
+    // If no vertices present, then no vertex faces SHOULD be present, so if they are present, it is an error.
     Ok((
         vertex_count as IndexType,
         uv_count as IndexType,
@@ -234,20 +231,18 @@ fn load_obj<R: std::io::BufRead>(
                 if vertices.len() > 0 {
                     let mut res = TMFMesh::empty();
                     // Needed to remove some vertices which do not belong to this mesh.
-                    let mut n_v = vertices.clone();
-                    crate::utilis::fast_prune(&mut n_v, &mut vertex_faces);
+                    let mut new_vertices = vertices.clone();
+                    crate::utilis::fast_prune(&mut new_vertices, &mut vertex_faces);
                     // Needed to remove some uvs which do not belong to this mesh.
-                    let mut n_uv = uvs.clone();
-                    crate::utilis::fast_prune(&mut n_uv, &mut uv_faces);
+                    let mut new_uvs = uvs.clone();
+                    crate::utilis::fast_prune(&mut new_uvs, &mut uv_faces);
                     // Needed to remove some normals which do not belong to this mesh.
-                    let mut n_n = normals.clone();
-                    crate::utilis::fast_prune(&mut n_n, &mut normal_faces);
-                    //DEBUG
-                    println!("ld_o:{name}");
-                    println!("ld_vc:{}", vertices.len());
-                    res.set_vertices(&n_v);
-                    res.set_normals(&n_n);
-                    res.set_uvs(&n_uv);
+                    let mut new_normals = normals.clone();
+                    crate::utilis::fast_prune(&mut new_normals, &mut normal_faces);
+                    // Set mesh data
+                    res.set_vertices(&new_vertices);
+                    res.set_normals(&new_normals);
+                    res.set_uvs(&new_uvs);
                     res.set_vertex_faces(&vertex_faces);
                     res.set_normal_faces(&normal_faces);
                     res.set_uv_faces(&uv_faces);
@@ -300,6 +295,7 @@ pub fn write_obj<W: Write, S: std::borrow::Borrow<str>>(
     w: &mut W,
 ) -> Result<()> {
     let mut w = BufWriter::new(w);
+    writeln!(w, "s 1")?;
     let mut index_offsets = (1, 1, 1);
     for (mesh, name) in meshes {
         let curr_offsets = save_obj(&mut w, mesh, index_offsets, name.borrow())?;

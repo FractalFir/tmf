@@ -1,5 +1,5 @@
 use crate::unaligned_rw::{UnalignedRWMode, UnalignedReader, UnalignedWriter};
-use crate::{FloatType, IndexType, Vector2};
+use crate::{FloatType, Vector2};
 use std::io::{Read, Result, Write};
 pub fn save_uvs<W: Write>(uvs: &[Vector2], writer: &mut W, precision: FloatType) -> Result<()> {
     let precision = (1.0 / precision).log2().ceil() as u8;
@@ -42,6 +42,7 @@ pub fn read_uvs<R: Read>(reader: &mut R) -> Result<Box<[Vector2]>> {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::IndexType;
     fn dst(a: Vector2, b: Vector2) -> FloatType {
         let dx = a.0 - b.0;
         let dy = a.1 - b.1;

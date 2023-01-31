@@ -62,6 +62,12 @@ pub(crate) fn write_mesh<W: Write>(
     //Calculate shortest edge, or if no edges present, 1.0
     let shortest_edge = match &mesh.vertex_faces {
         Some(vertex_faces) => {
+            fn dst(a: Vector3, b: Vector3) -> FloatType {
+                let dx = a.0 - b.0;
+                let dy = a.1 - b.1;
+                let dz = a.2 - b.2;
+                (dx * dx + dy * dy + dz * dz).sqrt()
+            }
             let vertices = match &mesh.vertices {
                 Some(vertices) => vertices,
                 None => return Err(std::io::Error::new(
@@ -69,12 +75,6 @@ pub(crate) fn write_mesh<W: Write>(
                     "Saving a mesh with face normal index array without normal array is an error.",
                 )),
             };
-            fn dst(a: Vector3, b: Vector3) -> FloatType {
-                let dx = a.0 - b.0;
-                let dy = a.1 - b.1;
-                let dz = a.2 - b.2;
-                (dx * dx + dy * dy + dz * dz).sqrt()
-            }
             let mut shortest_edge = FloatType::INFINITY;
             for i in 0..(vertex_faces.len() / 3) {
                 let d1 = dst(
@@ -223,8 +223,8 @@ pub fn read_mesh<R: Read>(reader: &mut R) -> Result<(TMFMesh, String)> {
     let name = read_string(reader)?;
     let seg_count = read_u16(reader)?;
     for _ in 0..seg_count {
-        let header = read_u16(reader)?;
-        let header = SectionHeader::from_u16(header);
+        let seg_header = read_u16(reader)?;
+        let seg_header = SectionHeader::from_u16(seg_header);
         let data_length = {
             let mut tmp = [0; std::mem::size_of::<u64>()];
             reader.read_exact(&mut tmp)?;
@@ -232,7 +232,7 @@ pub fn read_mesh<R: Read>(reader: &mut R) -> Result<(TMFMesh, String)> {
         };
         let mut data = vec![0; data_length as usize];
         reader.read_exact(&mut data)?;
-        match header {
+        match seg_header {
             SectionHeader::VertexSegment => {
                 use crate::vertices::read_tmf_vertices;
                 if res

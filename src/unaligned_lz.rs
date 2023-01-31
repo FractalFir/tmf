@@ -8,14 +8,14 @@ pub struct UlzEncoder {
 fn bytes_to_bits(bytes: &[u8]) -> Box<[bool]> {
     let mut bits = Vec::with_capacity(bytes.len() * 8);
     for byte in bytes {
-        bits.push(byte & 0b10000000 != 0);
-        bits.push(byte & 0b01000000 != 0);
-        bits.push(byte & 0b00100000 != 0);
-        bits.push(byte & 0b00010000 != 0);
-        bits.push(byte & 0b00001000 != 0);
-        bits.push(byte & 0b00000100 != 0);
-        bits.push(byte & 0b00000010 != 0);
-        bits.push(byte & 0b00000001 != 0);
+        bits.push(byte & 0b1000_0000 != 0);
+        bits.push(byte & 0b0100_0000 != 0);
+        bits.push(byte & 0b0010_0000 != 0);
+        bits.push(byte & 0b0001_0000 != 0);
+        bits.push(byte & 0b0000_1000 != 0);
+        bits.push(byte & 0b0000_0100 != 0);
+        bits.push(byte & 0b0000_0010 != 0);
+        bits.push(byte & 0b0000_0001 != 0);
     }
     bits.into()
 }

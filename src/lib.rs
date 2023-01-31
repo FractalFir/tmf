@@ -386,15 +386,9 @@ mod testing {
         let meshes = TMFMesh::read_from_obj(&mut file).unwrap();
         for mesh_name in &meshes {
             mesh_name.0.verify().unwrap();
-            println!(
-                "name:{} vlen:{}",
-                mesh_name.1,
-                mesh_name.0.get_vertices().unwrap().len()
-            );
         }
         let mut out = std::fs::File::create("target/test_res/multiple.obj").unwrap();
         TMFMesh::write_obj(&meshes, &mut out).unwrap();
-        todo!();
     }
     #[ignore]
     #[test]
