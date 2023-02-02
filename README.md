@@ -16,7 +16,7 @@ The model sued in test is the blender monkey(Suzzane). TMF files were compressed
 ## Model render comparison
 | Uncompresssed .obj | Compressed .tmf file(default settings) |
 | ------------------ | ---------------------------------------|
-| [<img src="docs/orignal.png">] | [<img src="docs/tmf.png">] |
+| <img src="docs/original.png"> | <img src="docs/tmf.png"> |
 ## Math-based savings
 Many formats used for saving of 3D models are shockingly wasteful. There is *a lot* of opportunities to reduce file size, even when using lossless compression. For example, many model formats treat surface normal vectors like any other vectors. But they *aren't* like other vectors! They have some special properties, which can be exploited to save them more efficiently. Namely:
 1. All components in a normal vector fall into range <-1,1>. This means that values such as 1.3, 123.0, 69.323, or even 6.50e+12 can **never** occur in a normal vector, so saving them using a format which supports those values is wasteful.
