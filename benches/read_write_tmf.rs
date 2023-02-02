@@ -6,7 +6,7 @@ use tmf::unaligned_rw::{UnalignedRWMode, UnalignedReader, UnalignedWriter};
 fn read_tmf(bench: &mut Bencher) {
     use std::io::Read;
     use tmf::TMFMesh;
-    let mut file = std::fs::File::open("testing/susan_bench.tmf").unwrap();
+    let mut file = std::fs::File::open("testing/susan.tmf").unwrap();
     let mut out = Vec::new();
     file.read_to_end(&mut out);
     bench.iter(|| {
@@ -17,7 +17,7 @@ fn write_tmf(bench: &mut Bencher) {
     use std::io::Read;
     use tmf::TMFMesh;
     use tmf::TMFPrecisionInfo;
-    let mut file = std::fs::File::open("testing/susan_bench.tmf").unwrap();
+    let mut file = std::fs::File::open("testing/susan.tmf").unwrap();
     let mut out = Vec::new();
     file.read_to_end(&mut out);
     let r_mesh = TMFMesh::read_tmf_one(&mut (&out as &[u8])).unwrap().0;
