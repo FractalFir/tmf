@@ -1,4 +1,4 @@
-use crate::normals::magnitude;
+use crate::utilis::*;
 use crate::{FloatType, IndexType, TMFMesh};
 /// Enum representing the result of integrity check.
 #[derive(Clone)]
@@ -24,6 +24,7 @@ pub enum TMFIntegrityStatus {
     /// More than one error
     CompositeError(Box<[Self]>),
 }
+//TODO: Redo this to work properly(wrong panic location).
 impl TMFIntegrityStatus {
     /// Works like unwrap on [`Result`](panics if not Ok)
     pub fn unwrap(&self) {

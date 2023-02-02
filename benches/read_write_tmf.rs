@@ -22,7 +22,7 @@ fn write_tmf(bench: &mut Bencher) {
     file.read_to_end(&mut out);
     let r_mesh = TMFMesh::read_tmf_one(&mut (&out as &[u8])).unwrap().0;
     let mut prec = TMFPrecisionInfo::default();
-    prec.prune_normals = false;
+    //prec.prune_normals = false;
     bench.iter(|| {
         // clear out
         out.clear();

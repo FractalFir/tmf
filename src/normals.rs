@@ -8,44 +8,12 @@ impl NormalPrecisionMode {
         let prec = (90.0 / deg).log2().ceil() as u8;
         Self(prec)
     }
+    pub fn bits(&self)->u8{
+        self.0
+    }
 }
 const SIGN_PREC: UnalignedRWMode = UnalignedRWMode::precision_bits(1);
-#[allow(non_camel_case_types)]
-#[cfg(feature = "fast_trig")]
-type fprec = f64;
-#[cfg(feature = "fast_trig")]
-#[cfg(feature = "fast_trig")]
-const F_PI: fprec = std::f64::consts::PI;
-// https://www.gamedev.net/forums/topic/621589-extremely-fast-sin-approximation/
-#[cfg(feature = "fast_trig")]
-#[inline(always)]
-fn fsin(mut x: fprec) -> fprec {
-    let mut z = (x * 0.3183098861837907) + 6755399441055744.0;
-    let k: i32 = unsafe { *(&z as *const _ as *const _) };
-    z = (k as fprec) * F_PI;
-    x -= z;
-    let y = x * x;
-    let z = (0.0073524681968701 * y - 0.1652891139701474) * y + 0.9996919862959676;
-    x *= z;
-    let mut k = k & 1;
-    k += k;
-    let z = (k as fprec) * x;
-    return x - z;
-}
-pub(crate) fn magnitude(i: Vector3) -> FloatType {
-    let xx = i.0 * i.0;
-    let yy = i.1 * i.1;
-    let zz = i.2 * i.2;
-    (xx + yy + zz).sqrt()
-}
-fn normalize(i: Vector3) -> Vector3 {
-    let xx = i.0 * i.0;
-    let yy = i.1 * i.1;
-    let zz = i.2 * i.2;
-    let mag = (xx + yy + zz).sqrt();
-
-    (i.0 / mag, i.1 / mag, i.2 / mag)
-}
+use crate::utilis::*;
 pub fn normalize_arr(normals: &mut [Vector3]) {
     for normal in normals {
         *normal = normalize(*normal);
@@ -53,7 +21,7 @@ pub fn normalize_arr(normals: &mut [Vector3]) {
 }
 fn normal_to_encoding(
     normal: Vector3,
-    precision: NormalPrecisionMode,
+    precision: &NormalPrecisionMode,
 ) -> (u64, u64, bool, bool, bool) {
     let multiplier = ((1 << precision.0) - 1) as FloatType;
     //Calculate asine
@@ -110,7 +78,7 @@ fn save_normal<W: Write>(
     precision: NormalPrecisionMode,
     writer: &mut UnalignedWriter<W>,
 ) -> Result<()> {
-    let (asine, z, sx, sy, sz) = normal_to_encoding(normal, precision);
+    let (asine, z, sx, sy, sz) = normal_to_encoding(normal, &precision);
     let main_prec = UnalignedRWMode::precision_bits(precision.0);
 
     writer.write_unaligned(SIGN_PREC, sx as u64)?;
@@ -169,39 +137,6 @@ pub(crate) fn read_normal_array<R: Read>(reader: &mut R) -> Result<Box<[Vector3]
         normals.push(normal);
     }
     Ok(normals.into())
-}
-/// Merges normals that would be identical in saved file during saving process.
-pub(crate) fn merge_identical_normals(
-    normals: &[Vector3],
-    faces: &[IndexType],
-    prec: NormalPrecisionMode,
-) -> (Vec<Vector3>, Vec<IndexType>) {
-    let mut faces: Vec<IndexType> = faces.into();
-    let encoded: Vec<_> = normals
-        .iter()
-        .map(|normal| normal_to_encoding(*normal, prec))
-        .collect();
-    let mut mappings: Vec<IndexType> = vec![0; encoded.len()];
-    let mut new_normals = Vec::with_capacity(normals.len());
-    for i in 0..encoded.len() {
-        let mut is_unique = true;
-        for j in 0..i {
-            if encoded[i] == encoded[j] {
-                mappings[i] = mappings[j];
-                is_unique = false;
-                break;
-            }
-        }
-        if is_unique {
-            let index = new_normals.len();
-            mappings[i] = index as IndexType;
-            new_normals.push(normals[i]);
-        }
-    }
-    for i in 0..faces.len() {
-        faces[i] = mappings[faces[i] as usize];
-    }
-    (new_normals, faces)
 }
 #[cfg(test)]
 mod test_normal {
@@ -295,4 +230,45 @@ mod test_normal {
             assert!(dt < 0.000333, "{x}:{sin} - {fsin} = {dt}");
         }
     }
+}
+// Calcuates size of the map necesary for map pruning of normals
+fn map_size(prec:&NormalPrecisionMode)->u128{
+    let asine_bits = prec.bits();
+    let z_bits = prec.bits();
+    let sign_bits = 1 * 3;
+    let toatal_bits = asine_bits + z_bits + sign_bits;
+    1<<toatal_bits
+}
+fn normal_to_map_index(normal:Vector3,prec:&NormalPrecisionMode)->u64{
+    let (asine,z,sx,sy,sz) = normal_to_encoding(normal,prec);
+    let (sx,sy,sz) = (sx as u64,sy as u64, sz as u64);
+    let z_offset = prec.bits();
+    let s_offset = z_offset + prec.bits();
+    asine | (z<<z_offset) | (sx<<s_offset) | (sy<<(s_offset + 1)) | (sz<<(s_offset + 2))
+}
+use crate::TMFPrecisionInfo;
+pub(crate) fn map_prune(normals:&mut Vec<Vector3>, normal_faces:&mut [IndexType],map_max:usize,prec:&TMFPrecisionInfo){
+    let map_size = map_size(&prec.normal_precision);
+    // Map size exceeds maximal allowed map size, return.
+    if map_size > map_max as u128{
+        return;
+    }
+    let map_size = map_size as usize;
+    let mut map:Vec<IndexType> = vec![IndexType::MAX;map_size];
+    // New, smaller normals
+    let mut new_normals = Vec::with_capacity(normals.len());
+    for normal in normals.iter(){//
+        // Calculate index into the map
+        let index = normal_to_map_index(*normal,&prec.normal_precision) as usize;
+        if map[index] == IndexType::MAX{
+            let new_map_index = new_normals.len();
+            map[index] = new_map_index as IndexType;
+            new_normals.push(*normal);
+        }
+    }
+    for mut index in normal_faces{
+        *index = map[normal_to_map_index(normals[*index as usize],&prec.normal_precision) as usize];
+        //assert!(((*index) as usize) < new_normals.len());
+    }
+    *normals = new_normals;
 }

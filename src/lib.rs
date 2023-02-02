@@ -53,7 +53,7 @@ pub struct TMFPrecisionInfo {
     pub vertex_precision: VertexPrecisionMode,
     /// How much can normal angle deviate, as an angle in degrees.
     pub normal_precision: NormalPrecisionMode,
-    /// Should normals with identical data be merged during saving?(Causes no degradation in mesh quality, but computationally expensive and size reduction can vary wildly depending on saved models).
+    /// What is 
     pub prune_normals: bool,
 }
 impl Default for TMFPrecisionInfo {
