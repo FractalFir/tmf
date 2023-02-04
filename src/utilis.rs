@@ -1,4 +1,4 @@
-use crate::{IndexType,Vector3,FloatType};
+use crate::{FloatType, IndexType, Vector3};
 /// Fast method for pruning unused vertices. Finds the lowest used vertex and removes it. O(n), does **not** remove all unused vertices. Used mostly
 /// in .obj loading. Fast because if not needed exits quickly.
 pub(crate) fn fast_prune<T: Sized>(data: &mut Vec<T>, indices: &mut [IndexType]) {

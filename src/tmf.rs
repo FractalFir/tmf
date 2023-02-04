@@ -25,7 +25,7 @@ impl SectionHeader {
         }
     }
 }
-use crate::{FloatType, TMFMesh, TMFPrecisionInfo, Vector3,IndexType, TMF_MAJOR, TMF_MINOR};
+use crate::{FloatType, IndexType, TMFMesh, TMFPrecisionInfo, Vector3, TMF_MAJOR, TMF_MINOR};
 use std::io::{Read, Result, Write};
 pub(crate) fn write_mesh<W: Write>(
     mesh: &TMFMesh,
@@ -40,15 +40,10 @@ pub(crate) fn write_mesh<W: Write>(
         && mesh.get_normal_faces().is_some()
         && p_info.prune_normals
     {
-        let mut normals:Vec<Vector3> = mesh.get_normals().unwrap().into();
-        let mut normal_faces:Vec<IndexType> = mesh.get_normal_faces().unwrap().into();
+        let mut normals: Vec<Vector3> = mesh.get_normals().unwrap().into();
+        let mut normal_faces: Vec<IndexType> = mesh.get_normal_faces().unwrap().into();
         use crate::normals::map_prune;
-        map_prune(
-            &mut normals,
-            &mut normal_faces,
-            0x1_00_00_00,
-            p_info,
-        );
+        map_prune(&mut normals, &mut normal_faces, 0x1_00_00_00, p_info);
         (Some(normals), Some(normal_faces))
     } else {
         let normals = match mesh.get_normals() {

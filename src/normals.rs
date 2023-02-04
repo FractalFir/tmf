@@ -8,7 +8,7 @@ impl NormalPrecisionMode {
         let prec = (90.0 / deg).log2().ceil() as u8;
         Self(prec)
     }
-    pub fn bits(&self)->u8{
+    pub fn bits(&self) -> u8 {
         self.0
     }
 }
@@ -232,42 +232,49 @@ mod test_normal {
     }
 }
 // Calcuates size of the map necesary for map pruning of normals
-fn map_size(prec:&NormalPrecisionMode)->u128{
+fn map_size(prec: &NormalPrecisionMode) -> u128 {
     let asine_bits = prec.bits();
     let z_bits = prec.bits();
     let sign_bits = 1 * 3;
     let toatal_bits = asine_bits + z_bits + sign_bits;
-    1<<toatal_bits
+    1 << toatal_bits
 }
-fn normal_to_map_index(normal:Vector3,prec:&NormalPrecisionMode)->u64{
-    let (asine,z,sx,sy,sz) = normal_to_encoding(normal,prec);
-    let (sx,sy,sz) = (sx as u64,sy as u64, sz as u64);
+fn normal_to_map_index(normal: Vector3, prec: &NormalPrecisionMode) -> u64 {
+    let (asine, z, sx, sy, sz) = normal_to_encoding(normal, prec);
+    let (sx, sy, sz) = (sx as u64, sy as u64, sz as u64);
     let z_offset = prec.bits();
     let s_offset = z_offset + prec.bits();
-    asine | (z<<z_offset) | (sx<<s_offset) | (sy<<(s_offset + 1)) | (sz<<(s_offset + 2))
+    asine | (z << z_offset) | (sx << s_offset) | (sy << (s_offset + 1)) | (sz << (s_offset + 2))
 }
 use crate::TMFPrecisionInfo;
-pub(crate) fn map_prune(normals:&mut Vec<Vector3>, normal_faces:&mut [IndexType],map_max:usize,prec:&TMFPrecisionInfo){
+pub(crate) fn map_prune(
+    normals: &mut Vec<Vector3>,
+    normal_faces: &mut [IndexType],
+    map_max: usize,
+    prec: &TMFPrecisionInfo,
+) {
     let map_size = map_size(&prec.normal_precision);
     // Map size exceeds maximal allowed map size, return.
-    if map_size > map_max as u128{
+    if map_size > map_max as u128 {
         return;
     }
     let map_size = map_size as usize;
-    let mut map:Vec<IndexType> = vec![IndexType::MAX;map_size];
+    let mut map: Vec<IndexType> = vec![IndexType::MAX; map_size];
     // New, smaller normals
     let mut new_normals = Vec::with_capacity(normals.len());
-    for normal in normals.iter(){//
+    for normal in normals.iter() {
+        //
         // Calculate index into the map
-        let index = normal_to_map_index(*normal,&prec.normal_precision) as usize;
-        if map[index] == IndexType::MAX{
+        let index = normal_to_map_index(*normal, &prec.normal_precision) as usize;
+        if map[index] == IndexType::MAX {
             let new_map_index = new_normals.len();
             map[index] = new_map_index as IndexType;
             new_normals.push(*normal);
         }
     }
-    for mut index in normal_faces{
-        *index = map[normal_to_map_index(normals[*index as usize],&prec.normal_precision) as usize];
+    for mut index in normal_faces {
+        *index =
+            map[normal_to_map_index(normals[*index as usize], &prec.normal_precision) as usize];
         //assert!(((*index) as usize) < new_normals.len());
     }
     *normals = new_normals;

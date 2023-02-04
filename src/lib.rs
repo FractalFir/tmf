@@ -53,7 +53,7 @@ pub struct TMFPrecisionInfo {
     pub vertex_precision: VertexPrecisionMode,
     /// How much can normal angle deviate, as an angle in degrees.
     pub normal_precision: NormalPrecisionMode,
-    /// What is 
+    /// What is
     pub prune_normals: bool,
 }
 impl Default for TMFPrecisionInfo {
