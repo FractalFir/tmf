@@ -183,17 +183,33 @@ fn save_obj<W: Write>(
         normal_count as IndexType,
     ))
 }
+// Stores information shared between objects.
+struct ObjReadCtx {
+    pub mtl_lib: String,
+    pub mtl: String,
+}
+impl Default for ObjReadCtx {
+    fn default() -> Self {
+        Self {
+            mtl_lib: "".to_owned(),
+            mtl: "".to_owned(),
+        }
+    }
+}
 /// Returns the readen mesh and name of the next object if present
 fn load_obj<R: std::io::BufRead>(
     lines: &mut std::io::Lines<R>,
     vertices: &mut Vec<Vector3>,
     normals: &mut Vec<Vector3>,
     uvs: &mut Vec<Vector2>,
+    ctx: &mut ObjReadCtx,
 ) -> Result<(Option<TMFMesh>, Option<String>)> {
     // Prepare face data
     let mut vertex_faces = Vec::with_capacity(0x100);
     let mut normal_faces = Vec::with_capacity(0x100);
     let mut uv_faces = Vec::with_capacity(0x100);
+    let mut materials:Vec<String> = Vec::new();
+    let mut last_mtl_face_index = 0;
     // Iterate over all lines in input to parse them
     for line in lines {
         // Check that line is properly readen
@@ -203,9 +219,25 @@ fn load_obj<R: std::io::BufRead>(
         // Get the beginning of the line
         let beg = match_split(split.next())?;
         match beg {
-            "#" => (),      //Ignore comments
-            "mtllib" => (), //Ignore material lib info for now.
-            "usemtl" => (), //Ignore material info for now.
+            "#" => (), //Ignore comments
+            "mtllib" => {
+                let lib = match_split(split.next())?;
+                ctx.mtl_lib = lib.to_owned();
+                ctx.mtl = "".to_owned();
+            }
+            "usemtl" => {
+                 // If a material is in use  AND there have been some faces since last mtl push
+                if (ctx.mtl != "" || ctx.mtl_lib != "") && last_mtl_face_index < vertex_faces.len() {
+                    println!("pushing mtl {} in lib {}",ctx.mtl,ctx.mtl_lib);
+                    last_mtl_face_index = (vertex_faces.len() - 1);
+                    let mtl_name = ctx.mtl_lib.to_owned() + "/" + &ctx.mtl;
+                    // Index of the found material
+                    let mut index = 0;
+                     println!("mtl_name:{mtl_name}");
+                }
+                let mtl = match_split(split.next())?;
+                ctx.mtl = mtl.to_owned();
+            },
             "s" => (),      //Ignore smothnes info
             "v" => {
                 vertices.push(load_vec3(&mut split)?);
@@ -276,8 +308,10 @@ pub fn read_from_obj<R: Read>(reader: &mut R) -> Result<Vec<(TMFMesh, String)>> 
     let mut lines = reader.lines();
     let mut name: Option<String> = None;
     let mut res = Vec::new();
+    let mut ctx = ObjReadCtx::default();
     loop {
-        let (curr, curr_name) = load_obj(&mut lines, &mut vertices, &mut normals, &mut uvs)?;
+        let (curr, curr_name) =
+            load_obj(&mut lines, &mut vertices, &mut normals, &mut uvs, &mut ctx)?;
         if curr.is_some() {
             // TODO: find way to remove unnecessary clone call
             res.push((curr.unwrap(), name.clone().unwrap_or("".to_owned())));

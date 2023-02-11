@@ -1,7 +1,18 @@
+use crate::IndexType;
 #[derive(Clone)]
 pub struct MaterialInfo {
-    /// Custom field that can be used to store info about all materials in object, named that way only because it is more or less analogous to .obj material library.
-    material_lib: String,
     // Names of all materials in model
     materials: Box<[String]>,
+    material_groups: Box<[(IndexType, IndexType)]>,
+}
+impl MaterialInfo {
+    fn create<M: Into<Box<[String]>>, MB: Into<Box<[(IndexType, IndexType)]>>>(
+        materials: M,
+        material_groups: MB,
+    ) -> Self {
+        Self {
+            materials: materials.into(),
+            material_groups: material_groups.into(),
+        }
+    }
 }

@@ -77,8 +77,6 @@ pub struct TMFMesh {
     uvs: Option<Box<[Vector2]>>,
     uv_faces: Option<Box<[IndexType]>>,
     materials: Option<MaterialInfo>,
-    material_groups: Option<Box<[(IndexType, IndexType)]>>,
-    //groups: Option<Box<[String]>,Box<[IndexType]>>,
 }
 impl Default for TMFMesh {
     fn default() -> Self {
@@ -114,9 +112,6 @@ impl TMFMesh {
             count += 1
         };
         if self.materials.is_some() {
-            count += 1
-        };
-        if self.material_groups.is_some() {
             count += 1
         };
         count
@@ -274,7 +269,6 @@ impl TMFMesh {
             vertex_faces: None,
             vertices: None,
             materials: None,
-            material_groups: None,
         }
     }
     /// Reads all meshes from a .tmf file.
@@ -389,6 +383,14 @@ mod testing {
         }
         let mut out = std::fs::File::create("target/test_res/multiple.obj").unwrap();
         TMFMesh::write_obj(&meshes, &mut out).unwrap();
+    }
+    #[test]
+    fn read_multi_mtl_obj() {
+        init_test_env();
+        let mut file = std::fs::File::open("testing/multi_mtl.obj").unwrap();
+        let tmf_mesh = TMFMesh::read_from_obj_one(&mut file).unwrap().0;
+        tmf_mesh.verify().unwrap();
+        todo!();
     }
     #[ignore]
     #[test]
