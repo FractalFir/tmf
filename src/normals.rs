@@ -7,6 +7,7 @@ pub struct NormalPrecisionMode(u8);
 impl NormalPrecisionMode {
     /// Creates [`NormalPrecisionMode`] from maximal allowed deviation angle in degrees, for radians use [`Self::from_rad_dev`]
     /// ```
+    /// # use tmf::NormalPrecisionMode;
     /// // Maximal angle between compressed and original normal will be 1.0 degrees.
     /// let dev_1_deg = NormalPrecisionMode::from_deg_dev(1.0);
     /// // Maximal angle between compressed and original normal will be 0.01 degrees.
@@ -20,13 +21,14 @@ impl NormalPrecisionMode {
     }
     /// Creates NormalPrecisionMode from maximal allowed deviation angle in radians, for degrees use [`Self::from_deg_dev`]
     /// ```
+    /// # use tmf::NormalPrecisionMode;
     /// // Maximal angle between compressed and original normal will be 0.01 radians
     /// let dev_0_point_01_rad = NormalPrecisionMode::from_rad_dev(0.01);
     /// // Maximal angle between compressed and original normal will be 0.05 radians
     /// let dev_0_point_05_rad = NormalPrecisionMode::from_rad_dev(0.05);
     /// ```
-    pub fn from_rad_dev(deg: FloatType) -> Self {
-        let prec = (1.57079633 / deg).log2().ceil() as u8;
+    pub fn from_rad_dev(rad: FloatType) -> Self {
+        let prec = (1.57079633 / rad).log2().ceil() as u8;
         Self(prec)
     }
     pub(crate) fn bits(&self) -> u8 {

@@ -1,4 +1,5 @@
 #![warn(missing_docs)]
+#![warn(rustdoc::missing_doc_code_examples)]
 //! **tmf** is a crate used to save and read 3D models saved in *.tmf* format. This format is focused on 2 things:
 //! 1. Reducing size of the saved file as much as possible, without reducing visual quality
 //! 2. Loading models as fast as possible(without sacrificing model size reduction)
@@ -8,9 +9,9 @@
 mod material;
 mod normals;
 mod obj;
-mod tmf;
 /// Module used when saving vertex grups
 mod pile_map;
+mod tmf;
 /// Module used to handle reads of data which is not bit aligned(for example, 3 or 17 bits). This is the module that allows for heavy compression used in this format.
 #[doc(hidden)]
 pub mod unaligned_rw;
@@ -121,19 +122,79 @@ impl TMFMesh {
         };
         count
     }
-    /// Sets mesh vertex array and returns old vertex array if present. New mesh data is **not** checked during this function call, so to ensure mesh is valid call `verify` before saving.
+    /// Sets mesh vertex array and returns old vertex array if present. New mesh data is **not** checked during this function call, so to ensure mesh is valid call [`Self::verify`] before saving.
+    ///```
+    /// # use tmf::FloatType;
+    /// # use tmf::TMFMesh;
+    /// # let mut mesh = TMFMesh::empty();
+    /// # let vertices = Vec::new();
+    /// // Set the vertices of the mesh
+    /// mesh.set_vertices(&vertices);
+    ///```
+    ///```
+    /// # use tmf::FloatType;
+    /// # fn do_something(_:&[(FloatType,FloatType,FloatType)]){}
+    /// # let new_vertices = Vec::new();
+    /// # let mut mesh = TMFMesh::empty();
+    /// # mesh.set_vertices(&new_vertices);
+    /// # use tmf::TMFMesh;
+    /// // Change the vertices for some other vertices...
+    /// let old_vertices = mesh.set_vertices(&new_vertices).expect("Mesh had no vertices!");
+    /// // ... and the do something with old vertices
+    /// do_something(&old_vertices);
+    ///```
     pub fn set_vertices(&mut self, vertices: &[Vector3]) -> Option<Box<[Vector3]>> {
         let mut vertices = Some(slice_to_box(vertices));
         std::mem::swap(&mut vertices, &mut self.vertices);
         vertices
     }
     /// Sets mesh normal array and returns old normal array if present. New mesh data is **not** checked during this function call, so to ensure mesh is valid call `verify` before saving.
+    ///```
+    /// # use tmf::TMFMesh;
+    /// // Set the normals of the mesh
+    /// # let normals = Vec::new();
+    /// # let mut mesh = TMFMesh::empty();
+    /// mesh.set_normals(&normals);
+    ///```
+    ///```
+    /// # fn do_something(_:&[(FloatType,FloatType,FloatType)]){}
+    /// # use tmf::TMFMesh;
+    /// # use tmf::FloatType;
+    /// # let new_normals = Vec::new();
+    /// # let mut mesh = TMFMesh::empty();
+    /// # mesh.set_normals(&new_normals);
+    /// // Change the normals  of this mesh for some other normals...
+    /// let old_normals = mesh.set_normals(&new_normals).expect("Mesh had no normals!");
+    /// // ... and the do something with old normals
+    /// do_something(&old_normals);
+    ///```
     pub fn set_normals(&mut self, normals: &[Vector3]) -> Option<Box<[Vector3]>> {
         let mut normals = Some(slice_to_box(normals));
         std::mem::swap(&mut normals, &mut self.normals);
         normals
     }
     /// Sets mesh uv array and returns old uv array if present. New mesh daata is **not** checked during this function call, so to ensure mesh is valid call [`Self::verify`] before saving.
+    ///```
+    /// # use tmf::FloatType;
+    /// # fn do_something(_:&[(FloatType,FloatType)]){}
+    /// # use tmf::TMFMesh;
+    /// # let mut mesh = TMFMesh::empty();
+    /// # let uvs = Vec::new();
+    /// // Set the uvs of the mesh
+    /// mesh.set_uvs(&uvs);
+    ///```
+    ///```
+    /// # use tmf::FloatType;
+    /// # use tmf::TMFMesh;
+    /// # fn do_something(_:&[(FloatType,FloatType)]){}
+    /// # let new_uvs = Vec::new();
+    /// # let mut mesh = TMFMesh::empty();
+    /// # mesh.set_uvs(&new_uvs);
+    /// // Change the uvs  of this mesh for some other normals...
+    /// let old_uvs = mesh.set_uvs(&new_uvs).expect("Mesh had no uvs!");
+    /// // ... and the do something with old uvs
+    /// do_something(&old_uvs);
+    ///```
     pub fn set_uvs(&mut self, uvs: &[Vector2]) -> Option<Box<[Vector2]>> {
         let mut uvs = Some(slice_to_box(uvs));
         std::mem::swap(&mut uvs, &mut self.uvs);
@@ -157,35 +218,60 @@ impl TMFMesh {
         std::mem::swap(&mut faces, &mut self.uv_faces);
         faces
     }
-    /// Gets the vertices of this TMFMesh.
+    /// Gets the vertex array of this [`TMFMesh`].
+    ///```
+    /// # use tmf::TMFMesh;
+    /// # let mesh = TMFMesh::empty();
+    /// let vertices = mesh.get_vertices();
+    ///```
     pub fn get_vertices(&self) -> Option<&[Vector3]> {
         match &self.vertices {
             Some(vertices) => Some(vertices.as_ref()),
             None => None,
         }
     }
-    /// Gets the normals of this TMFMesh.
+    /// Gets the normal array of this [`TMFMesh`].
+    ///```
+    /// # use tmf::TMFMesh;
+    /// # let mesh = TMFMesh::empty();
+    /// let normals = mesh.get_normals();
+    ///```
     pub fn get_normals(&self) -> Option<&[Vector3]> {
         match &self.normals {
             Some(normals) => Some(normals.as_ref()),
             None => None,
         }
     }
-    /// Gets the uv of this TMFMesh.
+    /// Gets the uv array of this [`TMFMesh`].
+    ///```
+    /// # use tmf::TMFMesh;
+    /// # let mesh = TMFMesh::empty();
+    /// let uvs = mesh.get_uvs();
+    ///```
     pub fn get_uvs(&self) -> Option<&[Vector2]> {
         match &self.uvs {
             Some(uvs) => Some(uvs.as_ref()),
             None => None,
         }
     }
-    /// Gets the vertex face index array of this TMFMesh.
+    /// Gets the vertex face index array of this [`TMFMesh`].
+    ///```
+    /// # use tmf::TMFMesh;
+    /// # let mesh = TMFMesh::empty();
+    /// let vertex_faces = mesh.get_vertex_faces();
+    ///```
     pub fn get_vertex_faces(&self) -> Option<&[IndexType]> {
         match &self.vertex_faces {
             Some(vertex_faces) => Some(vertex_faces.as_ref()),
             None => None,
         }
     }
-    /// Gets the normal face index array of this TMFMesh.
+    /// Gets the normal face index array of this [`TMFMesh`].
+    ///```
+    /// # use tmf::TMFMesh;
+    /// # let mesh = TMFMesh::empty();
+    /// let normal_faces = mesh.get_normal_faces();
+    ///```
     pub fn get_normal_faces(&self) -> Option<&[IndexType]> {
         match &self.normal_faces {
             Some(normal_faces) => Some(normal_faces.as_ref()),
@@ -193,6 +279,11 @@ impl TMFMesh {
         }
     }
     /// Gets the uv face index array of this TMFMesh.
+    ///```
+    /// # use tmf::TMFMesh;
+    /// # let mesh = TMFMesh::empty();
+    /// let uv_faces = mesh.get_uv_faces();
+    ///```
     pub fn get_uv_faces(&self) -> Option<&[IndexType]> {
         match &self.uv_faces {
             Some(uv_faces) => Some(uv_faces.as_ref()),
@@ -200,25 +291,53 @@ impl TMFMesh {
         }
     }
     /// Normalizes normal array, if present
-    /*
-    pub fn normalize(&mut self){
+    fn normalize(&mut self){
+        /*
         use crate::normals::normalize_arr;
         match &self.normals{
             Some(mut normals) => normalize_arr(&mut normals),
             None=>(),
         }
-
+        */
     }
-    */
     /// Checks if mesh is valid and can be saved.
-    pub fn verify(&self) -> TMFIntegrityStatus {
+    /// ```
+    /// # use tmf::TMFMesh;
+    /// # let mesh = TMFMesh::empty();
+    /// // Get the tmf mesh form somewhere
+    /// mesh.verify().expect("Mesh had errors!");
+    /// ```
+    pub fn verify(&self) -> std::result::Result<(), TMFIntegrityStatus> {
         verify::verify_tmf_mesh(self)
     }
-    /// Reads tmf mesh from a .obj file in *reader*
+    /// Reads tmf meshes from a .obj file in *reader*
+    ///```
+    /// # use tmf::TMFMesh;
+    /// # fn do_something(_:TMFMesh,_:String){}
+    /// # use std::fs::File;
+    /// # let dot_obj_path = "testing/susan.obj";
+    /// // Open the file with the .obj model
+    /// let mut file = File::open(dot_obj_path).expect("Could not open .obj file!");
+    /// // And multiple meshes from it
+    /// let meshes = TMFMesh::read_from_obj(&mut file).expect("Could not parse .obj file!");
+    /// for (mesh,name) in meshes{
+    ///     // Do something with the mesh and name
+    ///     do_something(mesh,name);
+    /// }
+    ///```
     pub fn read_from_obj<R: Read>(reader: &mut R) -> Result<Vec<(Self, String)>> {
         obj::read_from_obj(reader)
     }
-    /// Reads tmf mesh from a .obj file in *reader*
+    /// Reads a *single* named tmf mesh from a .obj file in *reader*, if more than one mesh present an error will be returned.
+    ///```
+    /// # use tmf::TMFMesh;
+    /// # use std::fs::File;
+    /// # let dot_obj_path = "testing/susan.obj";
+    /// // Open the file with the .obj model
+    /// let mut file = File::open(dot_obj_path).expect("Could not open .obj file!");
+    /// // And read a mesh from it
+    /// let (mesh,name) = TMFMesh::read_from_obj_one(&mut file).expect("Could not parse .obj file!");
+    ///```
     pub fn read_from_obj_one<R: Read>(reader: &mut R) -> Result<(Self, String)> {
         let meshes = obj::read_from_obj(reader)?;
         if meshes.len() < 1 {
@@ -236,6 +355,14 @@ impl TMFMesh {
         }
     }
     /// Writes this TMF  mesh to a .obj file.
+    /// ``` 
+    /// # use std::fs::File;
+    /// # use tmf::{TMFMesh,TMFPrecisionInfo};
+    /// # let mesh = TMFMesh::empty();
+    /// # let out_path ="target/test_res/doc.obj";
+    /// let mut obj_out = File::create(out_path).expect("Could not create obj out file!");
+    /// mesh.write_obj_one(&mut obj_out,"mesh name").expect("Could not write the .obj file!");
+    /// ```
     pub fn write_obj_one<W: Write>(&self, w: &mut W, name: &str) -> Result<()> {
         obj::write_obj(&[(self.clone(), name)], w)
     }

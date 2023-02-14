@@ -208,7 +208,7 @@ fn load_obj<R: std::io::BufRead>(
     let mut vertex_faces = Vec::with_capacity(0x100);
     let mut normal_faces = Vec::with_capacity(0x100);
     let mut uv_faces = Vec::with_capacity(0x100);
-    let mut materials:Vec<String> = Vec::new();
+    let mut materials: Vec<String> = Vec::new();
     let mut last_mtl_face_index = 0;
     // Iterate over all lines in input to parse them
     for line in lines {
@@ -226,19 +226,20 @@ fn load_obj<R: std::io::BufRead>(
                 ctx.mtl = "".to_owned();
             }
             "usemtl" => {
-                 // If a material is in use  AND there have been some faces since last mtl push
-                if (ctx.mtl != "" || ctx.mtl_lib != "") && last_mtl_face_index < vertex_faces.len() {
-                    println!("pushing mtl {} in lib {}",ctx.mtl,ctx.mtl_lib);
+                // If a material is in use  AND there have been some faces since last mtl push
+                if (ctx.mtl != "" || ctx.mtl_lib != "") && last_mtl_face_index < vertex_faces.len()
+                {
+                    println!("pushing mtl {} in lib {}", ctx.mtl, ctx.mtl_lib);
                     last_mtl_face_index = vertex_faces.len() - 1;
                     let mtl_name = ctx.mtl_lib.to_owned() + "/" + &ctx.mtl;
                     // Index of the found material
                     let mut index = 0;
-                     println!("mtl_name:{mtl_name}");
+                    println!("mtl_name:{mtl_name}");
                 }
                 let mtl = match_split(split.next())?;
                 ctx.mtl = mtl.to_owned();
-            },
-            "s" => (),      //Ignore smothnes info
+            }
+            "s" => (), //Ignore smothnes info
             "v" => {
                 vertices.push(load_vec3(&mut split)?);
             }
