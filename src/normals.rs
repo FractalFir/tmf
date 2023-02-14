@@ -2,13 +2,34 @@ use crate::unaligned_rw::{UnalignedRWMode, UnalignedReader, UnalignedWriter};
 use crate::{FloatType, IndexType, Vector3};
 use std::io::{Read, Result, Write};
 #[derive(Clone, Copy)]
+/// Setting dictating how much can any normal in a model deviate, expressed as an angle.
 pub struct NormalPrecisionMode(u8);
 impl NormalPrecisionMode {
+    /// Creates [`NormalPrecisionMode`] from maximal allowed deviation angle in degrees, for radians use [`Self::from_rad_dev`]
+    /// ```
+    /// // Maximal angle between compressed and original normal will be 1.0 degrees.
+    /// let dev_1_deg = NormalPrecisionMode::from_deg_dev(1.0);
+    /// // Maximal angle between compressed and original normal will be 0.01 degrees.
+    /// let dev_0_point_01_deg = NormalPrecisionMode::from_deg_dev(0.01);
+    /// // Maximal angle between compressed and original normal will be 5.0 degrees.
+    /// let dev_5_deg = NormalPrecisionMode::from_deg_dev(5.0);
+    /// ```
     pub fn from_deg_dev(deg: FloatType) -> Self {
         let prec = (90.0 / deg).log2().ceil() as u8;
         Self(prec)
     }
-    pub fn bits(&self) -> u8 {
+    /// Creates NormalPrecisionMode from maximal allowed deviation angle in radians, for degrees use [`Self::from_deg_dev`]
+    /// ```
+    /// // Maximal angle between compressed and original normal will be 0.01 radians
+    /// let dev_0_point_01_rad = NormalPrecisionMode::from_rad_dev(0.01);
+    /// // Maximal angle between compressed and original normal will be 0.05 radians
+    /// let dev_0_point_05_rad = NormalPrecisionMode::from_rad_dev(0.05);
+    /// ```
+    pub fn from_rad_dev(deg: FloatType) -> Self {
+        let prec = (1.57079633 / deg).log2().ceil() as u8;
+        Self(prec)
+    }
+    pub(crate) fn bits(&self) -> u8 {
         self.0
     }
 }

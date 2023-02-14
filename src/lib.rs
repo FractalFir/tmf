@@ -1,3 +1,4 @@
+#![warn(missing_docs)]
 //! **tmf** is a crate used to save and read 3D models saved in *.tmf* format. This format is focused on 2 things:
 //! 1. Reducing size of the saved file as much as possible, without reducing visual quality
 //! 2. Loading models as fast as possible(without sacrificing model size reduction)
@@ -8,6 +9,8 @@ mod material;
 mod normals;
 mod obj;
 mod tmf;
+/// Module used when saving vertex grups
+mod pile_map;
 /// Module used to handle reads of data which is not bit aligned(for example, 3 or 17 bits). This is the module that allows for heavy compression used in this format.
 #[doc(hidden)]
 pub mod unaligned_rw;
@@ -21,6 +24,8 @@ mod vertices;
 mod unaligned_lz;
 const TMF_MAJOR: u16 = 0;
 const TMF_MINOR: u16 = 1;
+const MIN_TMF_MAJOR: u16 = 0;
+const MIN_TMF_MINOR: u16 = 1;
 /// Index type used for representing triangle indices.
 #[cfg(not(any(feature = "long_indices", feature = "short_indices")))]
 pub type IndexType = u32;
@@ -40,8 +45,8 @@ pub type Vector3 = (FloatType, FloatType, FloatType);
 /// Type used for representing 2d floating-point vectors
 pub type Vector2 = (FloatType, FloatType);
 #[doc(inline)]
-pub use crate::material::MaterialInfo;
-use crate::normals::NormalPrecisionMode;
+use crate::material::MaterialInfo;
+pub use crate::normals::NormalPrecisionMode;
 #[doc(inline)]
 pub use crate::vertices::VertexPrecisionMode;
 use std::io::{Read, Write};
@@ -53,7 +58,7 @@ pub struct TMFPrecisionInfo {
     pub vertex_precision: VertexPrecisionMode,
     /// How much can normal angle deviate, as an angle in degrees.
     pub normal_precision: NormalPrecisionMode,
-    /// What is
+    /// Do additional normal pruning before saving (has considerable performance impact if model has many vertices
     pub prune_normals: bool,
 }
 impl Default for TMFPrecisionInfo {
@@ -394,9 +399,9 @@ mod testing {
     }
     #[ignore]
     #[test]
-    fn rw_2mlm_sph() {
+    fn rw_60k_sph() {
         init_test_env();
-        let mut file = std::fs::File::open("testing/ico_2mln_points.obj").unwrap();
+        let mut file = std::fs::File::open("testing/60k.obj").unwrap();
         let tmf_mesh = TMFMesh::read_from_obj_one(&mut file).unwrap().0;
         tmf_mesh.verify().unwrap();
         let mut out = Vec::new();
@@ -407,17 +412,17 @@ mod testing {
         }
         let (r_mesh, name) = TMFMesh::read_tmf_one(&mut (&out as &[u8])).unwrap();
         r_mesh.verify().unwrap();
-        let mut out = std::fs::File::create("target/ico_2mln_points_ftmf.obj").unwrap();
+        let mut out = std::fs::File::create("target/60k_ftmf.obj").unwrap();
         r_mesh.write_obj_one(&mut out, &name).unwrap();
     }
     #[ignore]
     #[test]
-    fn save_2mlm_sph_tmf() {
+    fn save_60k_sph_tmf() {
         init_test_env();
-        let mut file = std::fs::File::open("testing/ico_2mln_points.obj").unwrap();
+        let mut file = std::fs::File::open("testing/60k.obj").unwrap();
         let tmf_mesh = TMFMesh::read_from_obj_one(&mut file).unwrap().0;
         tmf_mesh.verify().unwrap();
-        let mut out = std::fs::File::create("target/ico_2mln_points.tmf").unwrap();
+        let mut out = std::fs::File::create("target/60k.tmf").unwrap();
         let mut prec = TMFPrecisionInfo::default();
         prec.prune_normals = false;
         tmf_mesh.write_tmf_one(&mut out, &prec, "").unwrap();

@@ -2,7 +2,20 @@ use crate::unaligned_rw::{UnalignedRWMode, UnalignedReader, UnalignedWriter};
 use crate::{FloatType, IndexType, Vector3};
 use std::io::{Read, Result, Write};
 #[derive(Clone, Copy)]
+/// Setting dictating how much the length of any edge can change because of vertex precision loss during saving. This is expressed as a fraction of the length of the shortest edge.
+///```
+/// // No edge will deviate by more than 0.1(10%) of the shortest edge in the model,
+/// // eg. for edges 10, 234, and 1, their length will not change by more than  1*0.1 = 0.1
+/// let ten_percent = VertexPrecisionMode(0.1);
+/// 
+///```
 pub struct VertexPrecisionMode(pub FloatType);
+impl Default for VertexPrecisionMode{
+    /// Default maximum edge deviation is 0.1 or 10%
+    fn default()->Self{
+        Self(0.1)
+    }
+}
 pub fn save_tmf_vertices<W: Write>(
     vertices: &[Vector3],
     precision: VertexPrecisionMode,

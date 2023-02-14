@@ -25,7 +25,7 @@ impl SectionHeader {
         }
     }
 }
-use crate::{FloatType, IndexType, TMFMesh, TMFPrecisionInfo, Vector3, TMF_MAJOR, TMF_MINOR};
+use crate::{FloatType, IndexType, TMFMesh, TMFPrecisionInfo, Vector3, TMF_MAJOR, TMF_MINOR,MIN_TMF_MAJOR, MIN_TMF_MINOR};
 use std::io::{Read, Result, Write};
 pub(crate) fn write_mesh<W: Write>(
     mesh: &TMFMesh,
@@ -203,6 +203,8 @@ pub(crate) fn write_tmf_header<W: Write>(w: &mut W, mesh_count: u32) -> Result<(
     w.write_all(b"TMF")?;
     w.write_all(&TMF_MAJOR.to_le_bytes())?;
     w.write_all(&TMF_MINOR.to_le_bytes())?;
+    w.write_all(&MIN_TMF_MAJOR.to_le_bytes())?;
+    w.write_all(&MIN_TMF_MINOR.to_le_bytes())?;
     w.write_all(&mesh_count.to_le_bytes())
 }
 pub(crate) fn write<W: Write>(
@@ -319,6 +321,21 @@ pub fn read<R: Read>(reader: &mut R) -> Result<Vec<(TMFMesh, String)>> {
     let _major = read_u16(reader)?;
     // Not used ATM, but can be used for compatiblity in the future.
     let _minor = read_u16(reader)?;
+    // Minimum version of reader required to read
+    let min_major = read_u16(reader)?;
+    let min_minor = read_u16(reader)?;
+    if min_major > TMF_MAJOR{
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "TMF file requires newer version of TMF reader",
+        ));
+    }
+    else if min_major == TMF_MAJOR && min_minor > TMF_MINOR {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "TMF file requires newer version of TMF reader",
+        ));
+    }
     let mesh_count = {
         let mut tmp = [0; std::mem::size_of::<u32>()];
         reader.read_exact(&mut tmp)?;

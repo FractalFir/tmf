@@ -229,7 +229,7 @@ fn load_obj<R: std::io::BufRead>(
                  // If a material is in use  AND there have been some faces since last mtl push
                 if (ctx.mtl != "" || ctx.mtl_lib != "") && last_mtl_face_index < vertex_faces.len() {
                     println!("pushing mtl {} in lib {}",ctx.mtl,ctx.mtl_lib);
-                    last_mtl_face_index = (vertex_faces.len() - 1);
+                    last_mtl_face_index = vertex_faces.len() - 1;
                     let mtl_name = ctx.mtl_lib.to_owned() + "/" + &ctx.mtl;
                     // Index of the found material
                     let mut index = 0;
