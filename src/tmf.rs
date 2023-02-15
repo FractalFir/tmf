@@ -28,6 +28,94 @@ use crate::{
     FloatType, IndexType, TMFMesh, TMFPrecisionInfo, Vector3, MIN_TMF_MAJOR, MIN_TMF_MINOR,
     TMF_MAJOR, TMF_MINOR,
 };
+fn calc_shortest_edge(
+    vertex_faces: Option<&[IndexType]>,
+    vertices: Option<&[Vector3]>,
+) -> Result<FloatType> {
+    let shortest_edge = match vertex_faces {
+        Some(vertex_faces) => {
+            use crate::utilis::distance;
+            let vertices =
+                match vertices {
+                    Some(vertices) => vertices,
+                    None => return Err(std::io::Error::new(
+                        std::io::ErrorKind::Other,
+                        "Saving a mesh with face vertex array without normal array is an error.",
+                    )),
+                };
+            let mut shortest_edge = FloatType::INFINITY;
+            for i in 0..(vertex_faces.len() / 3) {
+                let d1 = distance(
+                    vertices[vertex_faces[i * 3] as usize],
+                    vertices[vertex_faces[i * 3 + 1] as usize],
+                );
+                let d2 = distance(
+                    vertices[vertex_faces[i * 3 + 1] as usize],
+                    vertices[vertex_faces[i * 3 + 2] as usize],
+                );
+                let d3 = distance(
+                    vertices[vertex_faces[i * 3 + 2] as usize],
+                    vertices[vertex_faces[i * 3] as usize],
+                );
+                shortest_edge = shortest_edge.min(d1.min(d2.min(d3)));
+            }
+            shortest_edge
+        }
+        // TODO: Calculate distance between closest points for point cloud
+        None => 1.0,
+    };
+    Ok(shortest_edge)
+}
+fn save_normals<W: Write>(
+    normals: Option<Vec<Vector3>>,
+    w: &mut W,
+    curr_segment_data: &mut Vec<u8>,
+    p_info: &TMFPrecisionInfo,
+) -> Result<()> {
+    // Save Normals
+    match normals {
+        Some(normals) => {
+            use crate::normals::*;
+            save_normal_array(
+                &normals,
+                curr_segment_data,
+                NormalPrecisionMode::from_deg_dev(0.01),
+            )?;
+            w.write_all(&(SectionHeader::NormalSegment as u16).to_le_bytes())?;
+            w.write_all(&(curr_segment_data.len() as u64).to_le_bytes())?;
+            w.write_all(&curr_segment_data)?;
+            curr_segment_data.clear();
+        }
+        None => (),
+    };
+    Ok(())
+}
+fn save_vertices<W: Write>(
+    vertices: Option<&[Vector3]>,
+    w: &mut W,
+    curr_segment_data: &mut Vec<u8>,
+    p_info: &TMFPrecisionInfo,
+    shortest_edge: FloatType,
+) -> Result<()> {
+    match vertices {
+        Some(vertices) => {
+            use crate::vertices::save_tmf_vertices;
+            save_tmf_vertices(
+                &vertices,
+                p_info.vertex_precision,
+                curr_segment_data,
+                shortest_edge,
+            )?;
+            w.write_all(&(SectionHeader::VertexSegment as u16).to_le_bytes())?;
+            w.write_all(&(curr_segment_data.len() as u64).to_le_bytes())?;
+            w.write_all(&curr_segment_data)?;
+            curr_segment_data.clear();
+        }
+        None => (),
+    }
+    Ok(())
+}
+use crate::normals::map_prune;
 use std::io::{Read, Result, Write};
 pub(crate) fn write_mesh<W: Write>(
     mesh: &TMFMesh,
@@ -44,7 +132,6 @@ pub(crate) fn write_mesh<W: Write>(
     {
         let mut normals: Vec<Vector3> = mesh.get_normals().unwrap().into();
         let mut normal_faces: Vec<IndexType> = mesh.get_normal_faces().unwrap().into();
-        use crate::normals::map_prune;
         map_prune(&mut normals, &mut normal_faces, 0x1_00_00_00, p_info);
         (Some(normals), Some(normal_faces))
     } else {
@@ -60,58 +147,15 @@ pub(crate) fn write_mesh<W: Write>(
     };
     let mut curr_segment_data = Vec::with_capacity(0x100);
     //Calculate shortest edge, or if no edges present, 1.0
-    let shortest_edge = match &mesh.vertex_faces {
-        Some(vertex_faces) => {
-            fn dst(a: Vector3, b: Vector3) -> FloatType {
-                let dx = a.0 - b.0;
-                let dy = a.1 - b.1;
-                let dz = a.2 - b.2;
-                (dx * dx + dy * dy + dz * dz).sqrt()
-            }
-            let vertices = match &mesh.vertices {
-                Some(vertices) => vertices,
-                None => return Err(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    "Saving a mesh with face normal index array without normal array is an error.",
-                )),
-            };
-            let mut shortest_edge = FloatType::INFINITY;
-            for i in 0..(vertex_faces.len() / 3) {
-                let d1 = dst(
-                    vertices[vertex_faces[i * 3] as usize],
-                    vertices[vertex_faces[i * 3 + 1] as usize],
-                );
-                let d2 = dst(
-                    vertices[vertex_faces[i * 3 + 1] as usize],
-                    vertices[vertex_faces[i * 3 + 2] as usize],
-                );
-                let d3 = dst(
-                    vertices[vertex_faces[i * 3 + 2] as usize],
-                    vertices[vertex_faces[i * 3] as usize],
-                );
-                shortest_edge = shortest_edge.min(d1.min(d2.min(d3)));
-            }
-            shortest_edge
-        }
-        None => 1.0,
-    };
+    let shortest_edge = calc_shortest_edge(mesh.get_vertex_faces(), mesh.get_vertices())?;
     // Save vertices
-    match &mesh.vertices {
-        Some(vertices) => {
-            use crate::vertices::save_tmf_vertices;
-            save_tmf_vertices(
-                vertices,
-                p_info.vertex_precision,
-                &mut curr_segment_data,
-                shortest_edge,
-            )?;
-            w.write_all(&(SectionHeader::VertexSegment as u16).to_le_bytes())?;
-            w.write_all(&(curr_segment_data.len() as u64).to_le_bytes())?;
-            w.write_all(&curr_segment_data)?;
-            curr_segment_data.clear();
-        }
-        None => (),
-    }
+    save_vertices(
+        mesh.get_vertices(),
+        w,
+        &mut curr_segment_data,
+        p_info,
+        shortest_edge,
+    )?;
     // Save vertex faces
     match &mesh.vertex_faces {
         Some(vertex_faces) => {
@@ -127,21 +171,7 @@ pub(crate) fn write_mesh<W: Write>(
         None => (),
     };
     // Save Normals
-    match normals {
-        Some(normals) => {
-            use crate::normals::*;
-            save_normal_array(
-                &normals,
-                &mut curr_segment_data,
-                NormalPrecisionMode::from_deg_dev(0.01),
-            )?;
-            w.write_all(&(SectionHeader::NormalSegment as u16).to_le_bytes())?;
-            w.write_all(&(curr_segment_data.len() as u64).to_le_bytes())?;
-            w.write_all(&curr_segment_data)?;
-            curr_segment_data.clear();
-        }
-        None => (),
-    };
+    save_normals(normals, w, &mut curr_segment_data, p_info)?;
     // Save normal faces
     match normal_faces {
         Some(normal_faces) => {

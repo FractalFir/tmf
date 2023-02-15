@@ -22,6 +22,16 @@ pub enum TMFIntegrityStatus {
     /// More than one error
     CompositeError(Box<[Self]>),
 }
+fn write_composite_error(
+    f: &mut std::fmt::Formatter<'_>,
+    errors: &[TMFIntegrityStatus],
+) -> std::fmt::Result {
+    write!(f, "MultipleErrors{{")?;
+    for err in errors.iter() {
+        write!(f, ",{err}")?;
+    }
+    write!(f, "}}")
+}
 impl std::fmt::Display for TMFIntegrityStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -39,13 +49,7 @@ impl std::fmt::Display for TMFIntegrityStatus {
             }
             Self::UVOutsideRange(x, y) => write!(f, "UVOutsideRange{{x:{x},y:{y}}}"),
             Self::UVArrayMissing => write!(f, "UVArrayMissing"),
-            Self::CompositeError(errors) => {
-                write!(f, "MultipleErrors{{")?;
-                for err in errors.iter() {
-                    write!(f, ",{err}")?;
-                }
-                write!(f, "}}")
-            }
+            Self::CompositeError(errors) => write_composite_error(f, errors),
         }
     }
 }
@@ -53,6 +57,15 @@ impl std::fmt::Debug for TMFIntegrityStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         core::fmt::Display::fmt(self, f)
     }
+}
+/// Checks if indices fit inside the array of *length*, returned None if so or Some(index) if not.
+fn indices_inside_array(array: &[IndexType], length: IndexType) -> Option<IndexType> {
+    for index in array {
+        if *index > length as IndexType {
+            return Some(*index);
+        }
+    }
+    None
 }
 fn verify_vertices(mesh: &TMFMesh) -> Result<(), TMFIntegrityStatus> {
     match mesh.get_vertices() {
@@ -64,17 +77,13 @@ fn verify_vertices(mesh: &TMFMesh) -> Result<(), TMFIntegrityStatus> {
             }
         }
         Some(vertices) => match mesh.get_vertex_faces() {
-            Some(faces) => {
-                for index in faces {
-                    if *index > vertices.len() as IndexType {
-                        return Err(TMFIntegrityStatus::IndexOutsideVertexArray(
-                            *index,
-                            vertices.len() as IndexType,
-                        ));
-                    }
-                }
-                Ok(())
-            }
+            Some(faces) => match indices_inside_array(faces, vertices.len() as IndexType) {
+                Some(index) => Err(TMFIntegrityStatus::IndexOutsideVertexArray(
+                    index,
+                    vertices.len() as IndexType,
+                )),
+                None => Ok(()),
+            },
             None => Ok(()),
         },
     }
@@ -95,17 +104,13 @@ fn verify_uvs(mesh: &TMFMesh) -> Result<(), TMFIntegrityStatus> {
                 }
             }
             match mesh.get_uv_faces() {
-                Some(faces) => {
-                    for index in faces {
-                        if *index > uvs.len() as IndexType {
-                            return Err(TMFIntegrityStatus::IndexOutsideUVArray(
-                                *index,
-                                uvs.len() as IndexType,
-                            ));
-                        }
-                    }
-                    Ok(())
-                }
+                Some(faces) => match indices_inside_array(faces, uvs.len() as IndexType) {
+                    Some(index) => Err(TMFIntegrityStatus::IndexOutsideUVArray(
+                        index,
+                        uvs.len() as IndexType,
+                    )),
+                    None => Ok(()),
+                },
                 None => Ok(()),
             }
         }
@@ -128,17 +133,13 @@ fn verify_normals(mesh: &TMFMesh) -> Result<(), TMFIntegrityStatus> {
                 }
             }
             match mesh.get_normal_faces() {
-                Some(faces) => {
-                    for index in faces {
-                        if *index > normals.len() as IndexType {
-                            return Err(TMFIntegrityStatus::IndexOutsideNormalArray(
-                                *index,
-                                normals.len() as IndexType,
-                            ));
-                        }
-                    }
-                    Ok(())
-                }
+                Some(faces) => match indices_inside_array(faces, normals.len() as IndexType) {
+                    Some(index) => Err(TMFIntegrityStatus::IndexOutsideNormalArray(
+                        index,
+                        normals.len() as IndexType,
+                    )),
+                    None => Ok(()),
+                },
                 None => Ok(()),
             }
         }

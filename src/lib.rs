@@ -217,7 +217,7 @@ impl TMFMesh {
     }
     /// Gets the vertex array of this [`TMFMesh`].
     ///```
-    /// # use tmf::TMFMesh;
+    /// # use tmf::TMFMesh;  
     /// # let mesh = TMFMesh::empty();
     /// let vertices = mesh.get_vertices();
     ///```
@@ -292,11 +292,11 @@ impl TMFMesh {
     /// # use tmf::{TMFMesh,FloatType,Vector3};
     /// # let normals = vec![(0.2,3.4,4.3),(-5.4,1.412,3.32),(5.5,-2.1,-2.3)];
     /// # let mut mesh = TMFMesh::empty();
-    /// # pub(crate) fn magnitude(i: Vector3) -> FloatType 
+    /// # pub(crate) fn magnitude(i: Vector3) -> FloatType
     /// # {let xx = i.0 * i.0;let yy = i.1 * i.1;let zz = i.2 * i.2;(xx + yy + zz).sqrt()}
     /// // Some mesh with normals which are not normalzed
     /// mesh.set_normals(&normals);
-    /// // 
+    /// //
     /// mesh.normalize();
     /// for normal in mesh.get_normals().expect("Mesh has no normals"){
     ///     let mag = magnitude(*normal);
@@ -308,12 +308,12 @@ impl TMFMesh {
     /// # let mut mesh = TMFMesh::empty();
     /// mesh.normalize();
     ///```
-    pub fn normalize(&mut self){
+    pub fn normalize(&mut self) {
         use crate::normals::normalize_arr;
         let normals = self.normals.as_mut();
-        match normals{
-            Some(normals)=>normalize_arr(normals),
-            None=>(),
+        match normals {
+            Some(normals) => normalize_arr(normals),
+            None => (),
         }
     }
     /// Checks if mesh is valid and can be saved.
@@ -371,7 +371,7 @@ impl TMFMesh {
         }
     }
     /// Writes this TMF  mesh to a .obj file.
-    /// ``` 
+    /// ```
     /// # use std::fs::File;
     /// # use tmf::TMFMesh;
     /// # let mesh = TMFMesh::empty();
@@ -439,7 +439,7 @@ impl TMFMesh {
     /// # use tmf::{TMFMesh,TMFPrecisionInfo};
     /// # let tmf_path = "testing/susan.tmf";
     /// # fn do_something(_:TMFMesh,_:String){}
-    /// // Open file containg the meshes 
+    /// // Open file containg the meshes
     /// let mut file = File::open(tmf_path).expect("Could not open .tmf file");
     /// // Get meshes and their names
     /// let meshes = TMFMesh::read_tmf(&mut file).expect("Could not load .tmf mesh!");

@@ -28,7 +28,7 @@ impl NormalPrecisionMode {
     /// let dev_0_point_05_rad = NormalPrecisionMode::from_rad_dev(0.05);
     /// ```
     pub fn from_rad_dev(rad: FloatType) -> Self {
-        let prec = (1.57079633 / rad).log2().ceil() as u8;
+        let prec = (1.570_796_33 / rad).log2().ceil() as u8;
         Self(prec)
     }
     pub(crate) fn bits(&self) -> u8 {

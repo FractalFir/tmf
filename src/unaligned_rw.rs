@@ -13,8 +13,24 @@ pub struct UnalignedReader<R: Read> {
     bits_read: u8,
 }
 impl<R: Read> UnalignedReader<R> {
+    fn read_to_internal_storage(&mut self) -> Result<()> {
+        // For u8, use simpler, old version. For others, this branch can never be taken an will be optimised out.
+        if std::mem::size_of::<UnalignedStorage>() == 1 {
+            let mut tmp: [u8; std::mem::size_of::<UnalignedStorage>()] =
+                [0; std::mem::size_of::<UnalignedStorage>()];
+            self.bits_read = 0;
+            self.reader.read_exact(&mut tmp)?;
+            self.current_byte = tmp[0] as UnalignedStorage;
+        } else {
+            let mut tmp: [u8; std::mem::size_of::<UnalignedStorage>()] =
+                [0; std::mem::size_of::<UnalignedStorage>()];
+            self.bits_read = (8 * std::mem::size_of::<UnalignedStorage>()
+                - self.reader.read(&mut tmp)? * 8) as u8;
+            self.current_byte = UnalignedStorage::from_be_bytes(tmp);
+        }
+        Ok(())
+    }
     /// Reads *mode.0* bits from self, keeping internal alignment
-    
     pub fn read_unaligned(&mut self, mode: UnalignedRWMode) -> Result<u64> {
         // Prepare result integer, in which read result is stored.
         let mut res: u64 = 0;
@@ -23,21 +39,7 @@ impl<R: Read> UnalignedReader<R> {
         while total_read > 0 {
             // If all bits in current_byte read, read new byte with new bits, and set amount of bits bits_read in current bit back to 0.
             if self.bits_read >= UNALIGNED_STORAGE_BITS {
-                // For u8, use simpler, old version. For others, this branch can never be taken an will be optimised out.
-                if std::mem::size_of::<UnalignedStorage>() == 1 {
-                    let mut tmp: [u8; std::mem::size_of::<UnalignedStorage>()] =
-                        [0; std::mem::size_of::<UnalignedStorage>()];
-                    self.bits_read = 0;
-                    self.reader.read_exact(&mut tmp)?;
-                    self.current_byte = tmp[0] as UnalignedStorage;
-                } else {
-                    let mut tmp: [u8; std::mem::size_of::<UnalignedStorage>()] =
-                        [0; std::mem::size_of::<UnalignedStorage>()];
-                    self.bits_read = (8 * std::mem::size_of::<UnalignedStorage>()
-                        - self.reader.read(&mut tmp)? * 8)
-                        as u8;
-                    self.current_byte = UnalignedStorage::from_be_bytes(tmp);
-                }
+                self.read_to_internal_storage()?;
             }
             // Get amount of bits to read in current iteration: either all bits left in current_byte, or all bits remaining to read, whichever lower
             let read_ammount = total_read.min(UNALIGNED_STORAGE_BITS - self.bits_read);

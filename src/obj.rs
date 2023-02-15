@@ -67,6 +67,15 @@ pub fn load_vec3(split: &mut Split<&[char; 2]>) -> Result<Vector3> {
         parse_float_type(z)?,
     ))
 }
+pub fn load_vec2(split: &mut Split<&[char; 2]>) -> Result<Vector2> {
+    let (x, y) = (match_split(split.next())?, match_split(split.next())?);
+    Ok((parse_float_type(x)?, parse_float_type(y)?))
+}
+fn get_fast_pruned_array<T: Sized + Clone>(data: &[T], indices: &mut [IndexType]) -> Vec<T> {
+    let mut new_data: Vec<T> = data.into();
+    crate::utilis::fast_prune(&mut new_data, indices);
+    new_data
+}
 fn save_obj<W: Write>(
     w: &mut W,
     mesh: &TMFMesh,
@@ -239,39 +248,24 @@ fn load_obj<R: std::io::BufRead>(
                 let mtl = match_split(split.next())?;
                 ctx.mtl = mtl.to_owned();
             }
-            "s" => (), //Ignore smothnes info
-            "v" => {
-                vertices.push(load_vec3(&mut split)?);
-            }
-            "vn" => {
-                normals.push(load_vec3(&mut split)?);
-            }
-            "vt" => {
-                let (x, y) = (match_split(split.next())?, match_split(split.next())?);
-                let uv = (parse_float_type(x)?, parse_float_type(y)?);
-                uvs.push(uv);
-            }
-            "f" => {
-                load_face(
-                    &mut split,
-                    &mut vertex_faces,
-                    &mut normal_faces,
-                    &mut uv_faces,
-                )?;
-            }
+            "s" => (), //Ignore smoothness info
+            "v" => vertices.push(load_vec3(&mut split)?),
+            "vn" => normals.push(load_vec3(&mut split)?),
+            "vt" => uvs.push(load_vec2(&mut split)?),
+            "f" => load_face(
+                &mut split,
+                &mut vertex_faces,
+                &mut normal_faces,
+                &mut uv_faces,
+            )?,
             "o" => {
                 let name = match_split(split.next())?;
                 if vertices.len() > 0 {
                     let mut res = TMFMesh::empty();
-                    // Needed to remove some vertices which do not belong to this mesh.
-                    let mut new_vertices = vertices.clone();
-                    crate::utilis::fast_prune(&mut new_vertices, &mut vertex_faces);
-                    // Needed to remove some uvs which do not belong to this mesh.
-                    let mut new_uvs = uvs.clone();
-                    crate::utilis::fast_prune(&mut new_uvs, &mut uv_faces);
-                    // Needed to remove some normals which do not belong to this mesh.
-                    let mut new_normals = normals.clone();
-                    crate::utilis::fast_prune(&mut new_normals, &mut normal_faces);
+                    // Needed to remove some data which do not belong to this mesh.
+                    let new_vertices = get_fast_pruned_array(&vertices, &mut vertex_faces);
+                    let new_uvs = get_fast_pruned_array(&uvs, &mut uv_faces);
+                    let new_normals = get_fast_pruned_array(&normals, &mut normal_faces);
                     // Set mesh data
                     res.set_vertices(&new_vertices);
                     res.set_normals(&new_normals);

@@ -52,3 +52,9 @@ pub(crate) fn normalize(i: Vector3) -> Vector3 {
 
     (i.0 / mag, i.1 / mag, i.2 / mag)
 }
+pub(crate) fn distance(a: Vector3, b: Vector3) -> FloatType {
+    let dx = a.0 - b.0;
+    let dy = a.1 - b.1;
+    let dz = a.2 - b.2;
+    (dx * dx + dy * dy + dz * dz).sqrt()
+}
