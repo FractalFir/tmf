@@ -8,9 +8,8 @@ pub(crate) enum SectionHeader {
     NormalFaceSegment = 4,
     UvSegment = 5,
     UvFaceSegment = 6,
-    MetadataSegment = 7,
-    MaterialInfo = 8,
-    MaterialFaces = 9,
+    MaterialInfo = 7,
+    MaterialFaces = 8,
 }
 impl SectionHeader {
     pub fn from_u16(input: u16) -> Self {
@@ -210,14 +209,14 @@ pub(crate) fn write_tmf_header<W: Write>(w: &mut W, mesh_count: u32) -> Result<(
     w.write_all(&MIN_TMF_MINOR.to_le_bytes())?;
     w.write_all(&mesh_count.to_le_bytes())
 }
-pub(crate) fn write<W: Write>(
-    meshes_names: &[(TMFMesh, &str)],
+pub(crate) fn write<W: Write, S: std::borrow::Borrow<str>>(
+    meshes_names: &[(TMFMesh, S)],
     w: &mut W,
     p_info: &TMFPrecisionInfo,
 ) -> Result<()> {
     write_tmf_header(w, meshes_names.len() as u32)?;
     for (mesh, name) in meshes_names {
-        write_mesh(mesh, w, p_info, name)?;
+        write_mesh(mesh, w, p_info, name.borrow())?;
     }
     Ok(())
 }

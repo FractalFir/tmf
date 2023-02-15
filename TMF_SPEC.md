@@ -13,9 +13,13 @@ Type prefix and type size are explained in depth in their respective sections
 ### 2.1 Enidianess
 All data is little ennidian unless explicitly stated otherwise. 
 ### 2.2 Type Prefix
-All types have a prefix identifing what data is stored inside that type. Used prefixes are:
+All types have a prefix identifier what data is stored inside that type. Used prefixes are:
 |prefix|meaning|
 |------|-------|
-| f | IEEE 754 floating point type. |
-| u | unsigned 
+| fs | IEEE 754 floating point type of size *s* bits. |
+| us | unsigned integer type of size *s* bits|
+| ps | portion(fraction) type |
+#### 2.2.1 Portion type
+Portion type is saved as an integer between 0 and 2^s - 1. It can be translated to a fraction of 1 by dividing it by 2^s.
+### 2.3 Type size 
 

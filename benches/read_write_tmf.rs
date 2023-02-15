@@ -26,7 +26,7 @@ fn write_tmf(bench: &mut Bencher) {
     bench.iter(|| {
         // clear out
         out.clear();
-        r_mesh.write_tmf_one(&mut out, &prec, &"").unwrap();
+        r_mesh.write_tmf_one(&mut out, &prec, "").unwrap();
     });
 }
 benchmark_group!(benches, read_tmf, write_tmf);

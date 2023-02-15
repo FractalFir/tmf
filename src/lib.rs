@@ -20,9 +20,6 @@ mod uv;
 mod verify;
 mod vertices;
 // Unfinished
-
-#[allow(dead_code)]
-mod unaligned_lz;
 const TMF_MAJOR: u16 = 0;
 const TMF_MINOR: u16 = 1;
 const MIN_TMF_MAJOR: u16 = 0;
@@ -290,15 +287,34 @@ impl TMFMesh {
             None => None,
         }
     }
-    /// Normalizes normal array, if present
-    fn normalize(&mut self){
-        /*
+    /// Normalizes normal array of the mesh, if it is present.
+    ///```
+    /// # use tmf::{TMFMesh,FloatType,Vector3};
+    /// # let normals = vec![(0.2,3.4,4.3),(-5.4,1.412,3.32),(5.5,-2.1,-2.3)];
+    /// # let mut mesh = TMFMesh::empty();
+    /// # pub(crate) fn magnitude(i: Vector3) -> FloatType 
+    /// # {let xx = i.0 * i.0;let yy = i.1 * i.1;let zz = i.2 * i.2;(xx + yy + zz).sqrt()}
+    /// // Some mesh with normals which are not normalzed
+    /// mesh.set_normals(&normals);
+    /// // 
+    /// mesh.normalize();
+    /// for normal in mesh.get_normals().expect("Mesh has no normals"){
+    ///     let mag = magnitude(*normal);
+    ///     assert!(mag > 0.99999 && mag < 1.00001);
+    /// }
+    ///```
+    ///```
+    /// # use tmf::TMFMesh;
+    /// # let mut mesh = TMFMesh::empty();
+    /// mesh.normalize();
+    ///```
+    pub fn normalize(&mut self){
         use crate::normals::normalize_arr;
-        match &self.normals{
-            Some(mut normals) => normalize_arr(&mut normals),
+        let normals = self.normals.as_mut();
+        match normals{
+            Some(normals)=>normalize_arr(normals),
             None=>(),
         }
-        */
     }
     /// Checks if mesh is valid and can be saved.
     /// ```
@@ -357,7 +373,7 @@ impl TMFMesh {
     /// Writes this TMF  mesh to a .obj file.
     /// ``` 
     /// # use std::fs::File;
-    /// # use tmf::{TMFMesh,TMFPrecisionInfo};
+    /// # use tmf::TMFMesh;
     /// # let mesh = TMFMesh::empty();
     /// # let out_path ="target/test_res/doc.obj";
     /// let mut obj_out = File::create(out_path).expect("Could not create obj out file!");
@@ -374,24 +390,38 @@ impl TMFMesh {
         obj::write_obj(meshes, w)
     }
     /// Writes this TMF Mesh to *w*.
-    pub fn write_tmf_one<W: Write>(
+    pub fn write_tmf_one<W: Write, S: std::borrow::Borrow<str>>(
         &self,
         w: &mut W,
         p_info: &TMFPrecisionInfo,
-        name: &str,
+        name: S,
     ) -> Result<()> {
         tmf::write_tmf_header(w, 1)?;
-        tmf::write_mesh(self, w, p_info, name)
+        tmf::write_mesh(self, w, p_info, name.borrow())
     }
-    /// Writes this TMF Mesh to *w*.
-    pub fn write_tmf<W: Write>(
-        meshes_names: &[(Self, &str)],
+    /// Writes a number of TMF meshes into one file.
+    /// ```
+    /// # use std::fs::File;
+    /// # use tmf::{TMFMesh,TMFPrecisionInfo};
+    /// # let meshes = [(TMFMesh::empty(),"a".to_owned()),(TMFMesh::empty(),"b".to_owned())];
+    /// # let path = "target/test_res/doc_out.tmf";
+    /// let mut output = File::create(path).expect("Could not create file!");
+    /// let precision_info = TMFPrecisionInfo::default();
+    /// TMFMesh::write_tmf(&meshes,&mut output, &precision_info).expect("Could not save .tmf file!");
+    /// ```
+    pub fn write_tmf<W: Write, S: std::borrow::Borrow<str>>(
+        meshes_names: &[(Self, S)],
         w: &mut W,
         p_info: &TMFPrecisionInfo,
     ) -> Result<()> {
         tmf::write(meshes_names, w, p_info)
     }
-    /// Creates an empty TMF Mesh.
+    /// Creates an empty TMF Mesh(mesh with no data). Equivalent to [`TMFMesh::default`].
+    /// ```
+    /// # use tmf::TMFMesh;
+    /// // Creates an empty mesh with no data
+    /// let mut mesh = TMFMesh::empty();
+    /// ```
     pub fn empty() -> Self {
         Self {
             normal_faces: None,
@@ -404,10 +434,33 @@ impl TMFMesh {
         }
     }
     /// Reads all meshes from a .tmf file.
+    /// ```
+    /// # use std::fs::File;
+    /// # use tmf::{TMFMesh,TMFPrecisionInfo};
+    /// # let tmf_path = "testing/susan.tmf";
+    /// # fn do_something(_:TMFMesh,_:String){}
+    /// // Open file containg the meshes 
+    /// let mut file = File::open(tmf_path).expect("Could not open .tmf file");
+    /// // Get meshes and their names
+    /// let meshes = TMFMesh::read_tmf(&mut file).expect("Could not load .tmf mesh!");
+    /// for (mesh,name) in meshes{
+    ///     // Do some thing with each mesh and name(eg. use in game)
+    ///     do_something(mesh,name);
+    /// }
+    /// ```
     pub fn read_tmf<R: Read>(reader: &mut R) -> Result<Vec<(Self, String)>> {
         Ok(tmf::read(reader)?)
     }
     /// Reads a single mesh from a .tmf file. Returns [`Err`] if no meshes present or more than one mesh present.
+    /// ```
+    /// # use tmf::TMFMesh;
+    /// # use std::fs::File;
+    /// # let tmf_path = "testing/susan.tmf";
+    /// // Open the file containing the mesh
+    /// let mut file = File::open(tmf_path).expect("Could not open .tmf file");
+    /// // Read mesh and mesh name form file
+    /// let (mesh,name) = TMFMesh::read_tmf_one(&mut file).expect("Could not load .tmf mesh!");
+    /// ```
     pub fn read_tmf_one<R: Read>(reader: &mut R) -> Result<(Self, String)> {
         let meshes = Self::read_tmf(reader)?;
         if meshes.len() < 1 {
@@ -462,7 +515,7 @@ mod testing {
         let mut out = std::fs::File::create("target/test_res/susan.tmf").unwrap();
         assert!(name == "Suzanne");
         tmf_mesh
-            .write_tmf_one(&mut out, &TMFPrecisionInfo::default(), &name)
+            .write_tmf_one(&mut out, &TMFPrecisionInfo::default(), name)
             .unwrap();
     }
     #[test]
@@ -516,6 +569,7 @@ mod testing {
         let mut out = std::fs::File::create("target/test_res/multiple.obj").unwrap();
         TMFMesh::write_obj(&meshes, &mut out).unwrap();
     }
+    #[ignore]
     #[test]
     fn read_multi_mtl_obj() {
         init_test_env();

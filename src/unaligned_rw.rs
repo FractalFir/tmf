@@ -14,7 +14,7 @@ pub struct UnalignedReader<R: Read> {
 }
 impl<R: Read> UnalignedReader<R> {
     /// Reads *mode.0* bits from self, keeping internal alignment
-    #[inline(always)]
+    
     pub fn read_unaligned(&mut self, mode: UnalignedRWMode) -> Result<u64> {
         // Prepare result integer, in which read result is stored.
         let mut res: u64 = 0;
