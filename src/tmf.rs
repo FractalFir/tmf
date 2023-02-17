@@ -24,6 +24,42 @@ impl SectionType {
         }
     }
 }
+#[repr(u8)]
+enum CompressionType{
+    None = 0,
+    Ommited = 1,
+    UnalignedLZZ = 2,
+}
+impl CompressionType{
+    fn from_u8(input:u8)->Self{
+        match input{
+            0=>Self::None,
+            1=>Self::Ommited,
+            2=>Self::UnalignedLZZ,
+            _=>panic!("Unknow CompressionType {input}"),
+        }
+    }
+}
+fn read_segment_header<R: Read>(reader: &mut R)->Result<(SectionType,usize,CompressionType)>{
+    let seg_type = read_u16(reader)?;
+    let seg_type = SectionType::from_u16(seg_type);
+    let data_length = {
+        let mut tmp = [0; std::mem::size_of::<u64>()];
+        reader.read_exact(&mut tmp)?;
+        u64::from_le_bytes(tmp)
+    };
+    let compression_type = {
+        let mut tmp = [0;1];
+        reader.read_exact(&mut tmp);
+        CompressionType::from_u8(tmp[0])
+    };
+    Ok((seg_type,data_length as usize,compression_type))
+}
+fn write_segment_header<W:Write>(w:&mut W,seg_type:SectionType,data_length:usize,comperssion_type:CompressionType)->Result<()>{
+    w.write_all(&(seg_type as u16).to_le_bytes())?;
+    w.write_all(&(data_length as u64).to_le_bytes())?;
+    w.write_all(&[comperssion_type as u8])
+}
 use crate::{
     FloatType, IndexType, TMFMesh, TMFPrecisionInfo, Vector3, MIN_TMF_MAJOR, MIN_TMF_MINOR,
     TMF_MAJOR, TMF_MINOR,
@@ -81,8 +117,7 @@ fn save_normals<W: Write>(
                 curr_segment_data,
                 p_info.normal_precision,
             )?;
-            w.write_all(&(SectionType::NormalSegment as u16).to_le_bytes())?;
-            w.write_all(&(curr_segment_data.len() as u64).to_le_bytes())?;
+            write_segment_header(w,SectionType::NormalSegment,curr_segment_data.len(),CompressionType::None)?;
             w.write_all(&curr_segment_data)?;
             curr_segment_data.clear();
         }
@@ -106,8 +141,7 @@ fn save_vertices<W: Write>(
                 curr_segment_data,
                 shortest_edge,
             )?;
-            w.write_all(&(SectionType::VertexSegment as u16).to_le_bytes())?;
-            w.write_all(&(curr_segment_data.len() as u64).to_le_bytes())?;
+            write_segment_header(w,SectionType::VertexSegment,curr_segment_data.len(),CompressionType::None)?;
             w.write_all(&curr_segment_data)?;
             curr_segment_data.clear();
         }
@@ -163,8 +197,7 @@ pub(crate) fn write_mesh<W: Write>(
             //If saving vertex triangles, vertices must be present, so unwrap can't fail
             let v_count = mesh.vertices.as_ref().unwrap().len();
             save_triangles(vertex_triangles, v_count, &mut curr_segment_data)?;
-            w.write_all(&(SectionType::VertexTriangleSegment as u16).to_le_bytes())?;
-            w.write_all(&(curr_segment_data.len() as u64).to_le_bytes())?;
+            write_segment_header(w,SectionType::VertexTriangleSegment,curr_segment_data.len(),CompressionType::None);
             w.write_all(&curr_segment_data)?;
             curr_segment_data.clear();
         }
@@ -179,8 +212,7 @@ pub(crate) fn write_mesh<W: Write>(
             //If saving normal triangles, normals must be present, so unwrap can't fail
             let n_count = mesh.normals.as_ref().unwrap().len();
             save_triangles(&normal_triangles, n_count, &mut curr_segment_data)?;
-            w.write_all(&(SectionType::NormalTriangleSegment as u16).to_le_bytes())?;
-            w.write_all(&(curr_segment_data.len() as u64).to_le_bytes())?;
+            write_segment_header(w,SectionType::NormalTriangleSegment,curr_segment_data.len(),CompressionType::None)?;
             w.write_all(&curr_segment_data)?;
             curr_segment_data.clear();
         }
@@ -189,8 +221,7 @@ pub(crate) fn write_mesh<W: Write>(
     match &mesh.uvs {
         Some(uvs) => {
             crate::uv::save_uvs(uvs, &mut curr_segment_data, 0.001)?;
-            w.write_all(&(SectionType::UvSegment as u16).to_le_bytes())?;
-            w.write_all(&(curr_segment_data.len() as u64).to_le_bytes())?;
+            write_segment_header(w,SectionType::UvSegment,curr_segment_data.len(),CompressionType::None)?;
             w.write_all(&curr_segment_data)?;
             curr_segment_data.clear();
         }
@@ -203,8 +234,7 @@ pub(crate) fn write_mesh<W: Write>(
             //If saving uv triangles, uvs must be present, so unwrap can't fail
             let uv_count = mesh.uvs.as_ref().unwrap().len();
             save_triangles(uv_triangles, uv_count, &mut curr_segment_data)?;
-            w.write_all(&(SectionType::UvTriangleSegment as u16).to_le_bytes())?;
-            w.write_all(&(curr_segment_data.len() as u64).to_le_bytes())?;
+            write_segment_header(w,SectionType::UvTriangleSegment,curr_segment_data.len(),CompressionType::None)?;
             w.write_all(&curr_segment_data)?;
             curr_segment_data.clear();
         }
@@ -250,28 +280,12 @@ pub(crate) fn write<W: Write, S: std::borrow::Borrow<str>>(
     }
     Ok(())
 }
-#[repr(u8)]
-enum CompresionType{
-    None,
-    Ommited,
-    UnalignedLZZ,
-}
-fn read_segment_header<R: Read>(reader: &mut R)->Result<(SectionType,usize)>{
-    let seg_type = read_u16(reader)?;
-    let seg_type = SectionType::from_u16(seg_type);
-    let data_length = {
-            let mut tmp = [0; std::mem::size_of::<u64>()];
-            reader.read_exact(&mut tmp)?;
-            u64::from_le_bytes(tmp)
-    };
-    Ok((seg_type,data_length as usize))
-}
 pub fn read_mesh<R: Read>(reader: &mut R) -> Result<(TMFMesh, String)> {
     let mut res = TMFMesh::empty();
     let name = read_string(reader)?;
     let seg_count = read_u16(reader)?;
     for _ in 0..seg_count {
-        let (seg_type,data_length) = read_segment_header(reader)?;
+        let (seg_type,data_length,compersion_type) = read_segment_header(reader)?;
         let mut data = vec![0; data_length as usize];
         reader.read_exact(&mut data)?;
         match seg_type {
