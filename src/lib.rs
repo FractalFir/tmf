@@ -3,7 +3,7 @@
 //! **tmf** is a crate used to save and read 3D models saved in *.tmf* format. This format is focused on 2 things:
 //! 1. Reducing size of the saved file as much as possible, without reducing visual quality
 //! 2. Loading models as fast as possible(without sacrificing model size reduction)
-//! This means that while saving a model may take a slightly longer time (4-6x loading), models can be loaded at considerable speed(Current estimation are around 25 milion vertices per second)
+//! This means that while saving a model may take a slightly longer time (2-4x loading), models can be loaded at considerable speed(loading a model with around 40 000 points takes 1.6 ms)
 //! ## Feature flags
 #![doc = document_features::document_features!()]
 mod material;
@@ -44,6 +44,7 @@ pub type Vector3 = (FloatType, FloatType, FloatType);
 pub type Vector2 = (FloatType, FloatType);
 #[doc(inline)]
 use crate::material::MaterialInfo;
+#[doc(inline)]
 pub use crate::normals::NormalPrecisionMode;
 #[doc(inline)]
 pub use crate::vertices::VertexPrecisionMode;
@@ -70,7 +71,7 @@ impl Default for TMFPrecisionInfo {
     }
 }
 use std::io::Result;
-/// Representation of a TMF mesh. Can be loaded from disk, imported from diffrent format, saved to disk, and exported to a diffrent format, or created using special functions. Since it can be user generated it may be invalid and **must** be verified before being saved, otherwise a "garbage" mesh may be saved, an error may occur or a panic may occur.
+/// Representation of a TMF mesh. Can be loaded from disk, imported from diffrent format, saved to disk, and exported to a diffrent format, or created using special functions. Any mesh created at run time *should* but does not *have to* be checked before saving with [`Self::verify`] call. If the mesh is known to be OK before saving this step can be skipped(even tough it is still advised).
 #[derive(Clone)]
 pub struct TMFMesh {
     normals: Option<Box<[Vector3]>>,
@@ -82,6 +83,7 @@ pub struct TMFMesh {
     materials: Option<MaterialInfo>,
 }
 impl Default for TMFMesh {
+    /// Creates default, empty [`TMFMesh`]. Equivalent to [`TMFMesh::empty`] call.
     fn default() -> Self {
         Self::empty()
     }
@@ -198,6 +200,11 @@ impl TMFMesh {
         uvs
     }
     /// Sets vertex face array to *faces* and returns old faces if present.
+    ///```
+    /// # use tmf::TMFMesh;
+    /// # let mesh = TMFMesh::empty();
+    /// 
+    ///```
     pub fn set_vertex_faces(&mut self, faces: &[IndexType]) -> Option<Box<[IndexType]>> {
         let mut faces = Some(slice_to_box(faces));
         std::mem::swap(&mut faces, &mut self.vertex_faces);
@@ -296,16 +303,23 @@ impl TMFMesh {
     /// # {let xx = i.0 * i.0;let yy = i.1 * i.1;let zz = i.2 * i.2;(xx + yy + zz).sqrt()}
     /// // Some mesh with normals which are not normalzed
     /// mesh.set_normals(&normals);
-    /// //
+    /// // Normalize all normals
     /// mesh.normalize();
+    /// // All normals are normalised (their magnitude is equal to 1)
     /// for normal in mesh.get_normals().expect("Mesh has no normals"){
     ///     let mag = magnitude(*normal);
+    ///     // Magnitude of the normal is not exactly equal to 1
+    ///     // because of imprecision of floating-point numbers.
     ///     assert!(mag > 0.99999 && mag < 1.00001);
     /// }
     ///```
+    /// Normalising a mesh without normals is a NOP.
     ///```
     /// # use tmf::TMFMesh;
     /// # let mut mesh = TMFMesh::empty();
+    /// // Mesh has no normals
+    /// assert!(mesh.get_normals().is_none());
+    /// // This does nothing
     /// mesh.normalize();
     ///```
     pub fn normalize(&mut self) {
@@ -382,7 +396,15 @@ impl TMFMesh {
     pub fn write_obj_one<W: Write>(&self, w: &mut W, name: &str) -> Result<()> {
         obj::write_obj(&[(self.clone(), name)], w)
     }
-    /// Writes this TMF  mesh to a .obj file.
+    /// Writes multiple TMF meshes to a .obj file.
+    ///```
+    /// # use std::fs::File;
+    /// # use tmf::{TMFMesh,TMFPrecisionInfo};
+    /// # let meshes = [(TMFMesh::empty(),"a".to_owned()),(TMFMesh::empty(),"b".to_owned())];
+    /// # let path = "target/test_res/doc_multiple_out.obj";
+    /// let mut output = File::create(path).expect("Could not create file!");
+    /// TMFMesh::write_obj(&meshes,&mut output).expect("Could not export to .obj");
+    ///```
     pub fn write_obj<W: Write, S: std::borrow::Borrow<str>>(
         meshes: &[(TMFMesh, S)],
         w: &mut W,
@@ -390,6 +412,16 @@ impl TMFMesh {
         obj::write_obj(meshes, w)
     }
     /// Writes this TMF Mesh to *w*.
+    ///```
+    /// # use std::fs::File;
+    /// # use tmf::{TMFMesh,TMFPrecisionInfo};
+    /// # let mesh = TMFMesh::empty();
+    /// # let path = "target/test_res/doc_out.tmf";
+    /// let mut output = File::create(path).expect("Could not create file!");
+    /// // Settings dictating how to save the mesh
+    /// let precision_info = TMFPrecisionInfo::default();
+    /// mesh.write_tmf_one(&mut output,&precision_info,"mesh_name").expect("Could not save .tmf mesh!");;
+    ///```
     pub fn write_tmf_one<W: Write, S: std::borrow::Borrow<str>>(
         &self,
         w: &mut W,
@@ -404,8 +436,9 @@ impl TMFMesh {
     /// # use std::fs::File;
     /// # use tmf::{TMFMesh,TMFPrecisionInfo};
     /// # let meshes = [(TMFMesh::empty(),"a".to_owned()),(TMFMesh::empty(),"b".to_owned())];
-    /// # let path = "target/test_res/doc_out.tmf";
+    /// # let path = "target/test_res/doc_multiple_out.tmf";
     /// let mut output = File::create(path).expect("Could not create file!");
+    /// // Settings dictating how to save the mesh
     /// let precision_info = TMFPrecisionInfo::default();
     /// TMFMesh::write_tmf(&meshes,&mut output, &precision_info).expect("Could not save .tmf file!");
     /// ```

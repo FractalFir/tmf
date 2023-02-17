@@ -1,6 +1,13 @@
 use crate::unaligned_rw::{UnalignedRWMode, UnalignedReader, UnalignedWriter};
 use crate::{FloatType, Vector2};
 use std::io::{Read, Result, Write};
+pub struct UvPrecisionMode(u8);
+impl UvPrecisionMode{
+    /// Creates a new [`UvPrecisionMode`] form texture resolution and maximal allowed deviation in pixels.
+    fn form_texture_resolution(resolution:f32,pixel_dev:f32)->Self{
+        Self((resolution/pixel_dev).log2().ceil() as u8)
+    }
+}
 pub fn save_uvs<W: Write>(uvs: &[Vector2], writer: &mut W, precision: FloatType) -> Result<()> {
     let precision = (1.0 / precision).log2().ceil() as u8;
     let multpiler = ((1 << precision) - 1) as FloatType;

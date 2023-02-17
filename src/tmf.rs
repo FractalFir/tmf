@@ -79,7 +79,7 @@ fn save_normals<W: Write>(
             save_normal_array(
                 &normals,
                 curr_segment_data,
-                NormalPrecisionMode::from_deg_dev(0.01),
+                p_info.normal_precision,
             )?;
             w.write_all(&(SectionHeader::NormalSegment as u16).to_le_bytes())?;
             w.write_all(&(curr_segment_data.len() as u64).to_le_bytes())?;

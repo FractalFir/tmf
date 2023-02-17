@@ -11,8 +11,8 @@ The model sued in test is the blender monkey(Suzzane). TMF files were compressed
 | zip(deflate) compressed .obj | 367.7 kB |
 | .fbx | 651.0 kB |
 | zip(deflate) compressed .fbx | 600.6 kB |
-| .tmf |  321.3 kB |
-| zip(deflate) compressed .tmf | 320.5 kB |
+| .tmf |  308.3 kB |
+| zip(deflate) compressed .tmf | 308.0 kB |
 ## Model render comparison
 | Uncompresssed .obj | Compressed .tmf file(default settings) |
 | ------------------ | ---------------------------------------|
