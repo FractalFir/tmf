@@ -48,6 +48,8 @@ use crate::material::MaterialInfo;
 pub use crate::normals::NormalPrecisionMode;
 #[doc(inline)]
 pub use crate::vertices::VertexPrecisionMode;
+#[doc(inline)]
+pub use crate::uv::UvPrecisionMode;
 use std::io::{Read, Write};
 #[doc(inline)]
 pub use verify::TMFIntegrityStatus;
@@ -57,6 +59,8 @@ pub struct TMFPrecisionInfo {
     pub vertex_precision: VertexPrecisionMode,
     /// How much can normal angle deviate, as an angle in degrees.
     pub normal_precision: NormalPrecisionMode,
+    /// How much can saved UVs deviate. 
+    pub uv_precision:  UvPrecisionMode,
     /// Do additional normal pruning before saving (has considerable performance impact if model has many vertices
     pub prune_normals: bool,
 }
@@ -64,8 +68,9 @@ impl Default for TMFPrecisionInfo {
     /// Returns the default, middle-ground settings for saving meshes. Should be indistinguishable by human eye, but the LOD may be not enough for some rare cases (eg. procedural generation).
     fn default() -> Self {
         TMFPrecisionInfo {
-            vertex_precision: VertexPrecisionMode(0.1),
-            normal_precision: NormalPrecisionMode::from_deg_dev(1.0),
+            vertex_precision: VertexPrecisionMode::default(),
+            normal_precision: NormalPrecisionMode::default(),
+            uv_precision:UvPrecisionMode::default(),
             prune_normals: true,
         }
     }
@@ -75,11 +80,11 @@ use std::io::Result;
 #[derive(Clone)]
 pub struct TMFMesh {
     normals: Option<Box<[Vector3]>>,
-    normal_faces: Option<Box<[IndexType]>>,
+    normal_triangles: Option<Box<[IndexType]>>,
     vertices: Option<Box<[Vector3]>>,
-    vertex_faces: Option<Box<[IndexType]>>,
+    vertex_triangles: Option<Box<[IndexType]>>,
     uvs: Option<Box<[Vector2]>>,
-    uv_faces: Option<Box<[IndexType]>>,
+    uv_triangles: Option<Box<[IndexType]>>,
     materials: Option<MaterialInfo>,
 }
 impl Default for TMFMesh {
@@ -101,19 +106,19 @@ impl TMFMesh {
         if self.normals.is_some() {
             count += 1
         };
-        if self.normal_faces.is_some() {
+        if self.normal_triangles.is_some() {
             count += 1
         };
         if self.vertices.is_some() {
             count += 1
         };
-        if self.vertex_faces.is_some() {
+        if self.vertex_triangles.is_some() {
             count += 1
         };
         if self.uvs.is_some() {
             count += 1
         };
-        if self.uv_faces.is_some() {
+        if self.uv_triangles.is_some() {
             count += 1
         };
         if self.materials.is_some() {
@@ -199,28 +204,41 @@ impl TMFMesh {
         std::mem::swap(&mut uvs, &mut self.uvs);
         uvs
     }
-    /// Sets vertex face array to *faces* and returns old faces if present.
+    /// Sets vertex index array to *triangles* and returns old triangles if present.
     ///```
     /// # use tmf::TMFMesh;
-    /// # let mesh = TMFMesh::empty();
-    /// 
+    /// # let mut mesh = TMFMesh::empty();
+    /// # let triangles = [0,1,2,3,2,1];
+    /// mesh.set_vertex_triangles(&triangles);
     ///```
-    pub fn set_vertex_faces(&mut self, faces: &[IndexType]) -> Option<Box<[IndexType]>> {
-        let mut faces = Some(slice_to_box(faces));
-        std::mem::swap(&mut faces, &mut self.vertex_faces);
-        faces
+    pub fn set_vertex_triangles(&mut self, triangles: &[IndexType]) -> Option<Box<[IndexType]>> {
+        let mut triangles = Some(slice_to_box(triangles));
+        std::mem::swap(&mut triangles, &mut self.vertex_triangles);
+        triangles
     }
-    /// Sets normal face array to *faces* and returns old faces if present.
-    pub fn set_normal_faces(&mut self, faces: &[IndexType]) -> Option<Box<[IndexType]>> {
-        let mut faces = Some(slice_to_box(faces));
-        std::mem::swap(&mut faces, &mut self.normal_faces);
-        faces
+    /// Sets normal index array to *triangles* and returns old triangles if present.
+    ///```
+    /// # use tmf::TMFMesh;
+    /// # let mut mesh = TMFMesh::empty();
+    /// # let triangles = [0,1,2,3,2,1];
+    /// mesh.set_normal_triangles(&triangles);
+    ///```
+    pub fn set_normal_triangles(&mut self, triangles: &[IndexType]) -> Option<Box<[IndexType]>> {
+        let mut triangles = Some(slice_to_box(triangles));
+        std::mem::swap(&mut triangles, &mut self.normal_triangles);
+        triangles
     }
-    /// Sets uv face array to *faces* and returns old faces if present.
-    pub fn set_uv_faces(&mut self, faces: &[IndexType]) -> Option<Box<[IndexType]>> {
-        let mut faces = Some(slice_to_box(faces));
-        std::mem::swap(&mut faces, &mut self.uv_faces);
-        faces
+    /// Sets uv index array to *triangles* and returns old triangles if present.
+    ///```
+    /// # use tmf::TMFMesh;
+    /// # let mut mesh = TMFMesh::empty();
+    /// # let triangles = [0,1,2,3,2,1];
+    /// mesh.set_uv_triangles(&triangles);
+    ///```
+    pub fn set_uv_triangles(&mut self, triangles: &[IndexType]) -> Option<Box<[IndexType]>> {
+        let mut triangles = Some(slice_to_box(triangles));
+        std::mem::swap(&mut triangles, &mut self.uv_triangles);
+        triangles
     }
     /// Gets the vertex array of this [`TMFMesh`].
     ///```
@@ -258,41 +276,117 @@ impl TMFMesh {
             None => None,
         }
     }
-    /// Gets the vertex face index array of this [`TMFMesh`].
+    /// Gets the vertex triangle index array of this [`TMFMesh`].
     ///```
     /// # use tmf::TMFMesh;
     /// # let mesh = TMFMesh::empty();
-    /// let vertex_faces = mesh.get_vertex_faces();
+    /// let vertex_triangles = mesh.get_vertex_triangles();
     ///```
-    pub fn get_vertex_faces(&self) -> Option<&[IndexType]> {
-        match &self.vertex_faces {
-            Some(vertex_faces) => Some(vertex_faces.as_ref()),
+    pub fn get_vertex_triangles(&self) -> Option<&[IndexType]> {
+        match &self.vertex_triangles {
+            Some(vertex_triangles) => Some(vertex_triangles.as_ref()),
             None => None,
         }
     }
-    /// Gets the normal face index array of this [`TMFMesh`].
+    /// Gets the normal triangle index array of this [`TMFMesh`].
     ///```
     /// # use tmf::TMFMesh;
     /// # let mesh = TMFMesh::empty();
-    /// let normal_faces = mesh.get_normal_faces();
+    /// let normal_triangles = mesh.get_normal_triangles();
     ///```
-    pub fn get_normal_faces(&self) -> Option<&[IndexType]> {
-        match &self.normal_faces {
-            Some(normal_faces) => Some(normal_faces.as_ref()),
+    pub fn get_normal_triangles(&self) -> Option<&[IndexType]> {
+        match &self.normal_triangles {
+            Some(normal_triangles) => Some(normal_triangles.as_ref()),
             None => None,
         }
     }
-    /// Gets the uv face index array of this TMFMesh.
+    /// Gets the uv triangle index array of this TMFMesh.
     ///```
     /// # use tmf::TMFMesh;
     /// # let mesh = TMFMesh::empty();
-    /// let uv_faces = mesh.get_uv_faces();
+    /// let uv_triangles = mesh.get_uv_triangles();
     ///```
-    pub fn get_uv_faces(&self) -> Option<&[IndexType]> {
-        match &self.uv_faces {
-            Some(uv_faces) => Some(uv_faces.as_ref()),
+    pub fn get_uv_triangles(&self) -> Option<&[IndexType]> {
+        match &self.uv_triangles {
+            Some(uv_triangles) => Some(uv_triangles.as_ref()),
             None => None,
         }
+    }
+    /// Returns array containing points laid out in such a way that each 3 points create the next triangle.
+    /// If mesh has no vertex array or no vertex triangle array [`None`] is returned.
+    ///```
+    /// # use tmf::TMFMesh;
+    /// # let mut mesh = TMFMesh::empty();
+    /// # let vertices = [(0.0,0.0,0.0),(1.0,0.0,0.0),(1.0,1.0,0.0),(0.0,1.0,0.0)];
+    /// # let vertex_triangles = [0,1,2,0,2,3];
+    /// # mesh.set_vertices(&vertices);
+    /// # mesh.set_vertex_triangles(&vertex_triangles);
+    /// let vert_buff = mesh.get_vertex_buffer().expect("Could not create the array of points creating triangles!");
+    /// // The same number of triangles created by points and triangles created by indices
+    /// assert!(vert_buff.len() == vertex_triangles.len());
+    ///```
+    pub fn get_vertex_buffer(&self)->Option<Box<[Vector3]>>{
+        let vertices = self.get_vertices()?;
+        let triangles = self.get_vertex_triangles()?;
+        let mut vertex_buffer = Vec::with_capacity(triangles.len());
+        for index in triangles{
+            match vertices.get(*index as usize){
+                Some(vertex)=>vertex_buffer.push(*vertex),
+                None=>panic!("Invalid TMFMesh: vertex index outside vertex array!"),
+            }
+        }
+        Some(vertex_buffer.into())
+    }
+    /// Returns array containing normals laid out in such a way that each 3 normals create the next triangle.
+    /// If mesh has no normal array or no normal triangle array [`None`] is returned.
+    ///```
+    /// # use tmf::TMFMesh;
+    /// # let mut mesh = TMFMesh::empty();
+    /// # let normals = [(0.0,0.0,0.0),(1.0,0.0,0.0),(1.0,1.0,0.0),(0.0,1.0,0.0)];
+    /// # let normal_triangles = [0,1,2,0,2,3];
+    /// # mesh.set_normals(&normals);
+    /// # mesh.normalize();
+    /// # mesh.set_normal_triangles(&normal_triangles);
+    /// let normal_buff = mesh.get_normal_buffer().expect("Could not create the array of normals creating triangles!");
+    /// // The same number of triangles created by points and triangles created by indices
+    /// assert!(normal_buff.len() == normal_triangles.len());
+    ///```
+    pub fn get_normal_buffer(&self)->Option<Box<[Vector3]>>{
+        let normals = self.get_normals()?;
+        let triangles = self.get_normal_triangles()?;
+        let mut normals_buffer = Vec::with_capacity(triangles.len());
+        for index in triangles{
+            match normals.get(*index as usize){
+                Some(normal)=>normals_buffer.push(*normal),
+                None=>panic!("Invalid TMFMesh: normal index outside vertex array!"),
+            }
+        }
+        Some(normals_buffer.into())
+    }
+    /// Returns array containing UV coridnates laid out in such a way that each 3 cordiantes create the next triangle.
+    /// If mesh has no UV array or no uv triangle array [`None`] is returned.
+    ///```
+    /// # use tmf::TMFMesh;
+    /// # let mut mesh = TMFMesh::empty();
+    /// # let uvs = [(0.0,0.0),(1.0,0.0),(1.0,1.0),(0.0,1.0)];
+    /// # let uv_triangles = [0,1,2,0,2,3];
+    /// # mesh.set_uvs(&uvs);
+    /// # mesh.set_uv_triangles(&uv_triangles);
+    /// let uv_buff = mesh.get_uv_buffer().expect("Could not create the array of uvs creating triangles!");
+    /// // The same number of triangles created by points and triangles created by indices
+    /// assert!(uv_buff.len() == uv_triangles.len());
+    ///```
+    pub fn get_uv_buffer(&self)->Option<Box<[Vector2]>>{
+        let uvs = self.get_uvs()?;
+        let triangles = self.get_uv_triangles()?;
+        let mut uv_buffer = Vec::with_capacity(triangles.len());
+        for index in triangles{
+            match uvs.get(*index as usize){
+                Some(uv)=>uv_buffer.push(*uv),
+                None=>panic!("Invalid TMFMesh: uv index outside vertex array!"),
+            }
+        }
+        Some(uv_buffer.into())
     }
     /// Normalizes normal array of the mesh, if it is present.
     ///```
@@ -457,11 +551,11 @@ impl TMFMesh {
     /// ```
     pub fn empty() -> Self {
         Self {
-            normal_faces: None,
+            normal_triangles: None,
             normals: None,
-            uv_faces: None,
+            uv_triangles: None,
             uvs: None,
-            vertex_faces: None,
+            vertex_triangles: None,
             vertices: None,
             materials: None,
         }

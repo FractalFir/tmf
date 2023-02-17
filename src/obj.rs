@@ -38,20 +38,20 @@ fn load_indices(split: &mut Split<&[char; 2]>) -> Result<(IndexType, IndexType, 
 }
 pub fn load_face(
     split: &mut Split<&[char; 2]>,
-    vertex_faces: &mut Vec<IndexType>,
-    normal_faces: &mut Vec<IndexType>,
-    uv_faces: &mut Vec<IndexType>,
+    vertex_triangles: &mut Vec<IndexType>,
+    normal_triangles: &mut Vec<IndexType>,
+    uv_triangles: &mut Vec<IndexType>,
 ) -> Result<()> {
-    let mut faces: SmallVec<[(IndexType, IndexType, IndexType); 6]> = SmallVec::new();
+    let mut triangles: SmallVec<[(IndexType, IndexType, IndexType); 6]> = SmallVec::new();
     while let Ok(indices) = load_indices(split) {
-        faces.push(indices);
+        triangles.push(indices);
     }
-    assert!(faces.len() == 3,"Object loader currently supports only loading triangulated faces, but encountered a {} sided polygon!",faces.len());
+    assert!(triangles.len() == 3,"Object loader currently supports only loading triangulated triangles, but encountered a {} sided polygon!",triangles.len());
     //TODO: do triangulation
-    for face in faces {
-        vertex_faces.push(face.0);
-        normal_faces.push(face.2);
-        uv_faces.push(face.1);
+    for triangle in triangles {
+        vertex_triangles.push(triangle.0);
+        normal_triangles.push(triangle.2);
+        uv_triangles.push(triangle.1);
     }
     Ok(())
 }
@@ -108,58 +108,58 @@ fn save_obj<W: Write>(
             }
         }
     }
-    // Check face arrays
-    // Get the length of the vertex face array to use for later array size comparison
-    let vert_face_len = match mesh.get_vertex_faces() {
-        Some(vertex_faces) => vertex_faces.len(),
-        // If no vertex face array, then object is a point cloud, so should not have any other face array.
+    // Check triangle arrays
+    // Get the length of the vertex triangle array to use for later array size comparison
+    let vert_triangle_len = match mesh.get_vertex_triangles() {
+        Some(vertex_triangles) => vertex_triangles.len(),
+        // If no vertex triangle array, then object is a point cloud, so should not have any other triangle array.
         None => {
-            if mesh.get_normal_faces().is_some() {
-                return Err(Error::new(ErrorKind::Other, "If vertex faces data is not present, normal face data must not be present either!"));
+            if mesh.get_normal_triangles().is_some() {
+                return Err(Error::new(ErrorKind::Other, "If vertex triangles data is not present, normal triangle data must not be present either!"));
             }
-            if mesh.get_uv_faces().is_some() {
+            if mesh.get_uv_triangles().is_some() {
                 return Err(Error::new(
                     ErrorKind::Other,
-                    "If vertex faces data is not present, uv face data must not be present either!",
+                    "If vertex triangles data is not present, uv triangle data must not be present either!",
                 ));
             }
             return Ok((0, 0, 0));
         }
     };
-    // Ensure normal face array, if present, has the right length.
-    match mesh.get_normal_faces() {
-        Some(normal_faces) => {
-            if normal_faces.len() != vert_face_len {
+    // Ensure normal triangle array, if present, has the right length.
+    match mesh.get_normal_triangles() {
+        Some(normal_triangles) => {
+            if normal_triangles.len() != vert_triangle_len {
                 return Err(Error::new(
                     ErrorKind::Other,
-                    "Number of faces in the vertex face and normal face array differs.",
+                    "Number of triangles in the vertex triangle and normal triangle array differs.",
                 ));
             }
         }
         None => (),
     }
-    // Ensure uv face array, if present, has the right length.
-    match mesh.get_uv_faces() {
-        Some(uv_faces) => {
-            if uv_faces.len() != vert_face_len {
+    // Ensure uv triangle array, if present, has the right length.
+    match mesh.get_uv_triangles() {
+        Some(uv_triangles) => {
+            if uv_triangles.len() != vert_triangle_len {
                 return Err(Error::new(
                     ErrorKind::Other,
-                    "Number of faces in the vertex face and uv face array differs.",
+                    "Number of triangles in the vertex triangle and uv triangle array differs.",
                 ));
             }
         }
         None => (),
     }
     // TODO: this part can be rewritten to be more efficient by checking if arrays are present beforehand.
-    for i in 0..vert_face_len {
+    for i in 0..vert_triangle_len {
         if i % 3 == 0 {
             write!(w, "f ")?
         };
-        // Why unwrap? Vertex face array MUST be present at this point in time, because if it was not, this function would have already returned.
-        let vertex = mesh.get_vertex_faces().unwrap()[i] + index_offset.0;
+        // Why unwrap? Vertex triangle array MUST be present at this point in time, because if it was not, this function would have already returned.
+        let vertex = mesh.get_vertex_triangles().unwrap()[i] + index_offset.0;
         write!(w, "{}", vertex)?;
-        let normals = mesh.get_normal_faces();
-        match mesh.get_uv_faces() {
+        let normals = mesh.get_normal_triangles();
+        match mesh.get_uv_triangles() {
             Some(uvs) => write!(w, "/{}", uvs[i] + index_offset.1)?,
             None => {
                 if normals.is_some() {
@@ -185,7 +185,7 @@ fn save_obj<W: Write>(
         Some(uvs) => uvs.len(),
         None => 0,
     };
-    // If no vertices present, then no vertex faces SHOULD be present, so if they are present, it is an error.
+    // If no vertices present, then no vertex triangles SHOULD be present, so if they are present, it is an error.
     Ok((
         vertex_count as IndexType,
         uv_count as IndexType,
@@ -213,17 +213,17 @@ fn load_obj<R: std::io::BufRead>(
     uvs: &mut Vec<Vector2>,
     ctx: &mut ObjReadCtx,
 ) -> Result<(Option<TMFMesh>, Option<String>)> {
-    // Prepare face data
-    let mut vertex_faces = Vec::with_capacity(0x100);
-    let mut normal_faces = Vec::with_capacity(0x100);
-    let mut uv_faces = Vec::with_capacity(0x100);
+    // Prepare triangle data
+    let mut vertex_triangles = Vec::with_capacity(0x100);
+    let mut normal_triangles = Vec::with_capacity(0x100);
+    let mut uv_triangles = Vec::with_capacity(0x100);
     let mut materials: Vec<String> = Vec::new();
-    let mut last_mtl_face_index = 0;
+    let mut last_mtl_triangle_index = 0;
     // Iterate over all lines in input to parse them
     for line in lines {
         // Check that line is properly readen
         let line = line?;
-        // Split the line by white spaces and '/' sign used in faces
+        // Split the line by white spaces and '/' sign used in triangles
         let mut split = line.split(&[' ', '/']);
         // Get the beginning of the line
         let beg = match_split(split.next())?;
@@ -235,15 +235,15 @@ fn load_obj<R: std::io::BufRead>(
                 ctx.mtl = "".to_owned();
             }
             "usemtl" => {
-                // If a material is in use  AND there have been some faces since last mtl push
-                if (ctx.mtl != "" || ctx.mtl_lib != "") && last_mtl_face_index < vertex_faces.len()
+                // If a material is in use  AND there have been some triangles since last mtl push
+                if (ctx.mtl != "" || ctx.mtl_lib != "") && last_mtl_triangle_index < vertex_triangles.len()
                 {
-                    println!("pushing mtl {} in lib {}", ctx.mtl, ctx.mtl_lib);
-                    last_mtl_face_index = vertex_faces.len() - 1;
+                    //println!("pushing mtl {} in lib {}", ctx.mtl, ctx.mtl_lib);
+                    last_mtl_triangle_index = vertex_triangles.len() - 1;
                     let mtl_name = ctx.mtl_lib.to_owned() + "/" + &ctx.mtl;
                     // Index of the found material
                     let mut index = 0;
-                    println!("mtl_name:{mtl_name}");
+                    //println!("mtl_name:{mtl_name}");
                 }
                 let mtl = match_split(split.next())?;
                 ctx.mtl = mtl.to_owned();
@@ -254,25 +254,25 @@ fn load_obj<R: std::io::BufRead>(
             "vt" => uvs.push(load_vec2(&mut split)?),
             "f" => load_face(
                 &mut split,
-                &mut vertex_faces,
-                &mut normal_faces,
-                &mut uv_faces,
+                &mut vertex_triangles,
+                &mut normal_triangles,
+                &mut uv_triangles,
             )?,
             "o" => {
                 let name = match_split(split.next())?;
                 if vertices.len() > 0 {
                     let mut res = TMFMesh::empty();
                     // Needed to remove some data which do not belong to this mesh.
-                    let new_vertices = get_fast_pruned_array(&vertices, &mut vertex_faces);
-                    let new_uvs = get_fast_pruned_array(&uvs, &mut uv_faces);
-                    let new_normals = get_fast_pruned_array(&normals, &mut normal_faces);
+                    let new_vertices = get_fast_pruned_array(&vertices, &mut vertex_triangles);
+                    let new_uvs = get_fast_pruned_array(&uvs, &mut uv_triangles);
+                    let new_normals = get_fast_pruned_array(&normals, &mut normal_triangles);
                     // Set mesh data
                     res.set_vertices(&new_vertices);
                     res.set_normals(&new_normals);
                     res.set_uvs(&new_uvs);
-                    res.set_vertex_faces(&vertex_faces);
-                    res.set_normal_faces(&normal_faces);
-                    res.set_uv_faces(&uv_faces);
+                    res.set_vertex_triangles(&vertex_triangles);
+                    res.set_normal_triangles(&normal_triangles);
+                    res.set_uv_triangles(&uv_triangles);
                     return Ok((Some(res), Some(name.to_owned())));
                 }
                 return Ok((None, Some(name.to_owned())));
@@ -285,9 +285,9 @@ fn load_obj<R: std::io::BufRead>(
         res.set_vertices(&vertices);
         res.set_normals(&normals);
         res.set_uvs(&uvs);
-        res.set_vertex_faces(&vertex_faces);
-        res.set_normal_faces(&normal_faces);
-        res.set_uv_faces(&uv_faces);
+        res.set_vertex_triangles(&vertex_triangles);
+        res.set_normal_triangles(&normal_triangles);
+        res.set_uv_triangles(&uv_triangles);
         Ok((Some(res), None))
     } else {
         Ok((None, None))

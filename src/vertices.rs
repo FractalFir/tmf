@@ -51,6 +51,10 @@ pub fn save_tmf_vertices<W: Write>(
     let sx = max_x - min_x;
     let sy = max_y - min_y;
     let sz = max_z - min_z;
+    // Ensure model size is not 0(prevents bugs)
+    let sx = sx.max(0.000_001);
+    let sy = sy.max(0.000_001);
+    let sz = sz.max(0.000_001);
     //Calculate minimal increment
     let inc_x = (shortest_edge / sx) * precision.0;
     let inc_y = (shortest_edge / sy) * precision.0;
@@ -148,18 +152,18 @@ pub fn read_tmf_vertices<R: Read>(reader: &mut R) -> Result<Box<[Vector3]>> {
     }
     Ok(vertices.into())
 }
-pub fn save_faces<W: Write>(faces: &[IndexType], count: usize, writer: &mut W) -> Result<()> {
+pub fn save_triangles<W: Write>(triangles: &[IndexType], count: usize, writer: &mut W) -> Result<()> {
     let precision = (count as FloatType).log2().ceil() as u8;
     writer.write_all(&precision.to_le_bytes())?;
-    writer.write_all(&(faces.len() as u64).to_le_bytes())?;
+    writer.write_all(&(triangles.len() as u64).to_le_bytes())?;
     let precision = UnalignedRWMode::precision_bits(precision);
     let mut writer = UnalignedWriter::new(writer);
-    for index in faces {
+    for index in triangles {
         writer.write_unaligned(precision, *index as u64)?;
     }
     writer.flush()
 }
-pub fn read_faces<R: Read>(reader: &mut R) -> Result<Box<[IndexType]>> {
+pub fn read_triangles<R: Read>(reader: &mut R) -> Result<Box<[IndexType]>> {
     let precision = {
         let mut tmp = [0];
         reader.read_exact(&mut tmp)?;
@@ -188,23 +192,23 @@ mod testing {
     }
     use super::*;
     #[test]
-    fn rw_faces() {
+    fn rw_triangles() {
         use rand::{thread_rng, Rng};
         let mut rng = thread_rng();
         let vertex_count = (rng.gen::<IndexType>() % 0x800) + 0x800;
-        let face_count = (rng.gen::<IndexType>() % 0x800) + 0x800;
-        let mut faces = Vec::with_capacity(face_count as usize);
-        for _ in 0..face_count {
-            faces.push(rng.gen::<IndexType>() % vertex_count);
+        let triangle_count = (rng.gen::<IndexType>() % 0x800) + 0x800;
+        let mut triangles = Vec::with_capacity(triangle_count as usize);
+        for _ in 0..triangle_count {
+            triangles.push(rng.gen::<IndexType>() % vertex_count);
         }
         let mut res = Vec::with_capacity(vertex_count as usize);
         {
-            save_faces(&faces, faces.len(), &mut res).unwrap();
+            save_triangles(&triangles, triangles.len(), &mut res).unwrap();
         }
-        let r_faces = read_faces(&mut (&res as &[u8])).unwrap();
-        assert!(faces.len() == r_faces.len());
-        for i in 0..(face_count as usize) {
-            assert!(r_faces[i] == faces[i]);
+        let r_triangles = read_triangles(&mut (&res as &[u8])).unwrap();
+        assert!(triangles.len() == r_triangles.len());
+        for i in 0..(triangle_count as usize) {
+            assert!(r_triangles[i] == triangles[i]);
         }
     }
     #[test]

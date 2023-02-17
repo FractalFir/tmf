@@ -1,25 +1,25 @@
 #[repr(u16)]
 #[derive(Debug)]
-pub(crate) enum SectionHeader {
+pub(crate) enum SectionType {
     Invalid = 0,
     VertexSegment = 1,
-    VertexFaceSegment = 2,
+    VertexTriangleSegment = 2,
     NormalSegment = 3,
-    NormalFaceSegment = 4,
+    NormalTriangleSegment = 4,
     UvSegment = 5,
-    UvFaceSegment = 6,
+    UvTriangleSegment = 6,
     MaterialInfo = 7,
-    MaterialFaces = 8,
+    Materialtriangles = 8,
 }
-impl SectionHeader {
+impl SectionType {
     pub fn from_u16(input: u16) -> Self {
         match input {
             1 => Self::VertexSegment,
-            2 => Self::VertexFaceSegment,
+            2 => Self::VertexTriangleSegment,
             3 => Self::NormalSegment,
-            4 => Self::NormalFaceSegment,
+            4 => Self::NormalTriangleSegment,
             5 => Self::UvSegment,
-            6 => Self::UvFaceSegment,
+            6 => Self::UvTriangleSegment,
             _ => Self::Invalid,
         }
     }
@@ -29,33 +29,33 @@ use crate::{
     TMF_MAJOR, TMF_MINOR,
 };
 fn calc_shortest_edge(
-    vertex_faces: Option<&[IndexType]>,
+    vertex_triangles: Option<&[IndexType]>,
     vertices: Option<&[Vector3]>,
 ) -> Result<FloatType> {
-    let shortest_edge = match vertex_faces {
-        Some(vertex_faces) => {
+    let shortest_edge = match vertex_triangles {
+        Some(vertex_triangles) => {
             use crate::utilis::distance;
             let vertices =
                 match vertices {
                     Some(vertices) => vertices,
                     None => return Err(std::io::Error::new(
                         std::io::ErrorKind::Other,
-                        "Saving a mesh with face vertex array without normal array is an error.",
+                        "Saving a mesh with triangle vertex array without normal array is an error.",
                     )),
                 };
             let mut shortest_edge = FloatType::INFINITY;
-            for i in 0..(vertex_faces.len() / 3) {
+            for i in 0..(vertex_triangles.len() / 3) {
                 let d1 = distance(
-                    vertices[vertex_faces[i * 3] as usize],
-                    vertices[vertex_faces[i * 3 + 1] as usize],
+                    vertices[vertex_triangles[i * 3] as usize],
+                    vertices[vertex_triangles[i * 3 + 1] as usize],
                 );
                 let d2 = distance(
-                    vertices[vertex_faces[i * 3 + 1] as usize],
-                    vertices[vertex_faces[i * 3 + 2] as usize],
+                    vertices[vertex_triangles[i * 3 + 1] as usize],
+                    vertices[vertex_triangles[i * 3 + 2] as usize],
                 );
                 let d3 = distance(
-                    vertices[vertex_faces[i * 3 + 2] as usize],
-                    vertices[vertex_faces[i * 3] as usize],
+                    vertices[vertex_triangles[i * 3 + 2] as usize],
+                    vertices[vertex_triangles[i * 3] as usize],
                 );
                 shortest_edge = shortest_edge.min(d1.min(d2.min(d3)));
             }
@@ -81,7 +81,7 @@ fn save_normals<W: Write>(
                 curr_segment_data,
                 p_info.normal_precision,
             )?;
-            w.write_all(&(SectionHeader::NormalSegment as u16).to_le_bytes())?;
+            w.write_all(&(SectionType::NormalSegment as u16).to_le_bytes())?;
             w.write_all(&(curr_segment_data.len() as u64).to_le_bytes())?;
             w.write_all(&curr_segment_data)?;
             curr_segment_data.clear();
@@ -106,7 +106,7 @@ fn save_vertices<W: Write>(
                 curr_segment_data,
                 shortest_edge,
             )?;
-            w.write_all(&(SectionHeader::VertexSegment as u16).to_le_bytes())?;
+            w.write_all(&(SectionType::VertexSegment as u16).to_le_bytes())?;
             w.write_all(&(curr_segment_data.len() as u64).to_le_bytes())?;
             w.write_all(&curr_segment_data)?;
             curr_segment_data.clear();
@@ -126,28 +126,28 @@ pub(crate) fn write_mesh<W: Write>(
     write_string(w, name)?;
     w.write_all(&(mesh.get_segment_count() as u16).to_le_bytes())?;
     // If needed, prune redundant normal data.
-    let (normals, normal_faces) = if mesh.get_normals().is_some()
-        && mesh.get_normal_faces().is_some()
+    let (normals, normal_triangles) = if mesh.get_normals().is_some()
+        && mesh.get_normal_triangles().is_some()
         && p_info.prune_normals
     {
         let mut normals: Vec<Vector3> = mesh.get_normals().unwrap().into();
-        let mut normal_faces: Vec<IndexType> = mesh.get_normal_faces().unwrap().into();
-        map_prune(&mut normals, &mut normal_faces, 0x1_00_00_00, p_info);
-        (Some(normals), Some(normal_faces))
+        let mut normal_triangles: Vec<IndexType> = mesh.get_normal_triangles().unwrap().into();
+        map_prune(&mut normals, &mut normal_triangles, 0x1_00_00_00, p_info);
+        (Some(normals), Some(normal_triangles))
     } else {
         let normals = match mesh.get_normals() {
             Some(normals) => Some(normals.into()),
             None => None,
         };
-        let normal_faces = match mesh.get_normal_faces() {
-            Some(normal_faces) => Some(normal_faces.into()),
+        let normal_triangles = match mesh.get_normal_triangles() {
+            Some(normal_triangles) => Some(normal_triangles.into()),
             None => None,
         };
-        (normals, normal_faces)
+        (normals, normal_triangles)
     };
     let mut curr_segment_data = Vec::with_capacity(0x100);
     //Calculate shortest edge, or if no edges present, 1.0
-    let shortest_edge = calc_shortest_edge(mesh.get_vertex_faces(), mesh.get_vertices())?;
+    let shortest_edge = calc_shortest_edge(mesh.get_vertex_triangles(), mesh.get_vertices())?;
     // Save vertices
     save_vertices(
         mesh.get_vertices(),
@@ -156,14 +156,14 @@ pub(crate) fn write_mesh<W: Write>(
         p_info,
         shortest_edge,
     )?;
-    // Save vertex faces
-    match &mesh.vertex_faces {
-        Some(vertex_faces) => {
-            use crate::vertices::save_faces;
-            //If saving vertex faces, vertices must be present, so unwrap can't fail
+    // Save vertex triangles
+    match &mesh.vertex_triangles {
+        Some(vertex_triangles) => {
+            use crate::vertices::save_triangles;
+            //If saving vertex triangles, vertices must be present, so unwrap can't fail
             let v_count = mesh.vertices.as_ref().unwrap().len();
-            save_faces(vertex_faces, v_count, &mut curr_segment_data)?;
-            w.write_all(&(SectionHeader::VertexFaceSegment as u16).to_le_bytes())?;
+            save_triangles(vertex_triangles, v_count, &mut curr_segment_data)?;
+            w.write_all(&(SectionType::VertexTriangleSegment as u16).to_le_bytes())?;
             w.write_all(&(curr_segment_data.len() as u64).to_le_bytes())?;
             w.write_all(&curr_segment_data)?;
             curr_segment_data.clear();
@@ -172,14 +172,14 @@ pub(crate) fn write_mesh<W: Write>(
     };
     // Save Normals
     save_normals(normals, w, &mut curr_segment_data, p_info)?;
-    // Save normal faces
-    match normal_faces {
-        Some(normal_faces) => {
-            use crate::vertices::save_faces;
-            //If saving normal faces, normals must be present, so unwrap can't fail
+    // Save normal triangles
+    match normal_triangles {
+        Some(normal_triangles) => {
+            use crate::vertices::save_triangles;
+            //If saving normal triangles, normals must be present, so unwrap can't fail
             let n_count = mesh.normals.as_ref().unwrap().len();
-            save_faces(&normal_faces, n_count, &mut curr_segment_data)?;
-            w.write_all(&(SectionHeader::NormalFaceSegment as u16).to_le_bytes())?;
+            save_triangles(&normal_triangles, n_count, &mut curr_segment_data)?;
+            w.write_all(&(SectionType::NormalTriangleSegment as u16).to_le_bytes())?;
             w.write_all(&(curr_segment_data.len() as u64).to_le_bytes())?;
             w.write_all(&curr_segment_data)?;
             curr_segment_data.clear();
@@ -189,21 +189,21 @@ pub(crate) fn write_mesh<W: Write>(
     match &mesh.uvs {
         Some(uvs) => {
             crate::uv::save_uvs(uvs, &mut curr_segment_data, 0.001)?;
-            w.write_all(&(SectionHeader::UvSegment as u16).to_le_bytes())?;
+            w.write_all(&(SectionType::UvSegment as u16).to_le_bytes())?;
             w.write_all(&(curr_segment_data.len() as u64).to_le_bytes())?;
             w.write_all(&curr_segment_data)?;
             curr_segment_data.clear();
         }
         None => (),
     }
-    // Save uv faces
-    match &mesh.uv_faces {
-        Some(uv_faces) => {
-            use crate::vertices::save_faces;
-            //If saving uv faces, uvs must be present, so unwrap can't fail
+    // Save uv triangles
+    match &mesh.uv_triangles {
+        Some(uv_triangles) => {
+            use crate::vertices::save_triangles;
+            //If saving uv triangles, uvs must be present, so unwrap can't fail
             let uv_count = mesh.uvs.as_ref().unwrap().len();
-            save_faces(uv_faces, uv_count, &mut curr_segment_data)?;
-            w.write_all(&(SectionHeader::UvFaceSegment as u16).to_le_bytes())?;
+            save_triangles(uv_triangles, uv_count, &mut curr_segment_data)?;
+            w.write_all(&(SectionType::UvTriangleSegment as u16).to_le_bytes())?;
             w.write_all(&(curr_segment_data.len() as u64).to_le_bytes())?;
             w.write_all(&curr_segment_data)?;
             curr_segment_data.clear();
@@ -250,22 +250,32 @@ pub(crate) fn write<W: Write, S: std::borrow::Borrow<str>>(
     }
     Ok(())
 }
+#[repr(u8)]
+enum CompresionType{
+    None,
+    Ommited,
+    UnalignedLZZ,
+}
+fn read_segment_header<R: Read>(reader: &mut R)->Result<(SectionType,usize)>{
+    let seg_type = read_u16(reader)?;
+    let seg_type = SectionType::from_u16(seg_type);
+    let data_length = {
+            let mut tmp = [0; std::mem::size_of::<u64>()];
+            reader.read_exact(&mut tmp)?;
+            u64::from_le_bytes(tmp)
+    };
+    Ok((seg_type,data_length as usize))
+}
 pub fn read_mesh<R: Read>(reader: &mut R) -> Result<(TMFMesh, String)> {
     let mut res = TMFMesh::empty();
     let name = read_string(reader)?;
     let seg_count = read_u16(reader)?;
     for _ in 0..seg_count {
-        let seg_header = read_u16(reader)?;
-        let seg_header = SectionHeader::from_u16(seg_header);
-        let data_length = {
-            let mut tmp = [0; std::mem::size_of::<u64>()];
-            reader.read_exact(&mut tmp)?;
-            u64::from_le_bytes(tmp)
-        };
+        let (seg_type,data_length) = read_segment_header(reader)?;
         let mut data = vec![0; data_length as usize];
         reader.read_exact(&mut data)?;
-        match seg_header {
-            SectionHeader::VertexSegment => {
+        match seg_type {
+            SectionType::VertexSegment => {
                 use crate::vertices::read_tmf_vertices;
                 if res
                     .set_vertices(&read_tmf_vertices(&mut (&data as &[u8]))?)
@@ -277,7 +287,7 @@ pub fn read_mesh<R: Read>(reader: &mut R) -> Result<(TMFMesh, String)> {
                     ));
                 }
             }
-            SectionHeader::NormalSegment => {
+            SectionType::NormalSegment => {
                 use crate::normals::read_normal_array;
                 if res
                     .set_normals(&read_normal_array(&mut (&data as &[u8]))?)
@@ -289,7 +299,7 @@ pub fn read_mesh<R: Read>(reader: &mut R) -> Result<(TMFMesh, String)> {
                     ));
                 }
             }
-            SectionHeader::UvSegment => {
+            SectionType::UvSegment => {
                 use crate::uv::read_uvs;
                 if res.set_uvs(&read_uvs(&mut (&data as &[u8]))?).is_some() {
                     return Err(std::io::Error::new(
@@ -298,39 +308,39 @@ pub fn read_mesh<R: Read>(reader: &mut R) -> Result<(TMFMesh, String)> {
                     ));
                 }
             }
-            SectionHeader::VertexFaceSegment => {
-                use crate::vertices::read_faces;
+            SectionType::VertexTriangleSegment => {
+                use crate::vertices::read_triangles;
                 if res
-                    .set_vertex_faces(&read_faces(&mut (&data as &[u8]))?)
+                    .set_vertex_triangles(&read_triangles(&mut (&data as &[u8]))?)
                     .is_some()
                 {
                     return Err(std::io::Error::new(
                         std::io::ErrorKind::Other,
-                        "Only one vertex index array(face array) can be present in a model.",
+                        "Only one vertex index array(triangle array) can be present in a model.",
                     ));
                 }
             }
-            SectionHeader::NormalFaceSegment => {
-                use crate::vertices::read_faces;
+            SectionType::NormalTriangleSegment => {
+                use crate::vertices::read_triangles;
                 if res
-                    .set_normal_faces(&read_faces(&mut (&data as &[u8]))?)
+                    .set_normal_triangles(&read_triangles(&mut (&data as &[u8]))?)
                     .is_some()
                 {
                     return Err(std::io::Error::new(
                         std::io::ErrorKind::Other,
-                        "Only one normal index array(face array) can be present in a model.",
+                        "Only one normal index array(triangle array) can be present in a model.",
                     ));
                 }
             }
-            SectionHeader::UvFaceSegment => {
-                use crate::vertices::read_faces;
+            SectionType::UvTriangleSegment => {
+                use crate::vertices::read_triangles;
                 if res
-                    .set_uv_faces(&read_faces(&mut (&data as &[u8]))?)
+                    .set_uv_triangles(&read_triangles(&mut (&data as &[u8]))?)
                     .is_some()
                 {
                     return Err(std::io::Error::new(
                         std::io::ErrorKind::Other,
-                        "Only one uv index array(face array) can be present in a model.",
+                        "Only one uv index array(triangle array) can be present in a model.",
                     ));
                 }
             }

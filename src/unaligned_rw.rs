@@ -200,7 +200,6 @@ mod test_reader {
         let mut reader = UnalignedReader::new(&bytes as &[u8]);
         for byte in 0..0x10 {
             let rbyte = reader.read_unaligned(UnalignedRWMode(4)).unwrap() as u8;
-            println!("{rbyte}, {byte}");
             assert!(rbyte == byte, "{rbyte} != {byte}");
         }
     }
@@ -260,7 +259,6 @@ mod test_writter {
             }
         }
         for i in 0..3 {
-            println!("i:{i}");
             assert!(
                 result[i] == bytes[i],
                 "{:08b} != {:08b}",

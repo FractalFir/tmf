@@ -3,11 +3,11 @@ use crate::{FloatType, IndexType, TMFMesh};
 /// Enum representing the result of integrity check.
 #[derive(Clone)]
 pub enum TMFIntegrityStatus {
-    /// Vertex array is not present despite being required(eg. Vertex Face array is present);
+    /// Vertex array is not present despite being required(eg. Vertex triangle array is present);
     VertexArrayMissing,
     /// An *index* is larger than length of array *length*
     IndexOutsideVertexArray(IndexType, IndexType),
-    /// Normal  array is not present despite being required(eg. Normal Face array is present);
+    /// Normal  array is not present despite being required(eg. Normal triangle array is present);
     NormalArrayMissing,
     /// Some or all normals in the normal array are not normalised.
     NormalsNotNormalized,
@@ -15,7 +15,7 @@ pub enum TMFIntegrityStatus {
     IndexOutsideNormalArray(IndexType, IndexType),
     /// UV corrds outside range
     UVOutsideRange(FloatType, FloatType),
-    /// UV array is not present despite being required(eg. UV Face array is present);
+    /// UV array is not present despite being required(eg. UV triangle array is present);
     UVArrayMissing,
     /// An *index* is larger than length of array *length*
     IndexOutsideUVArray(IndexType, IndexType),
@@ -70,14 +70,14 @@ fn indices_inside_array(array: &[IndexType], length: IndexType) -> Option<IndexT
 fn verify_vertices(mesh: &TMFMesh) -> Result<(), TMFIntegrityStatus> {
     match mesh.get_vertices() {
         None => {
-            if mesh.get_vertex_faces().is_some() {
+            if mesh.get_vertex_triangles().is_some() {
                 Err(TMFIntegrityStatus::VertexArrayMissing)
             } else {
                 Ok(())
             }
         }
-        Some(vertices) => match mesh.get_vertex_faces() {
-            Some(faces) => match indices_inside_array(faces, vertices.len() as IndexType) {
+        Some(vertices) => match mesh.get_vertex_triangles() {
+            Some(triangles) => match indices_inside_array(triangles, vertices.len() as IndexType) {
                 Some(index) => Err(TMFIntegrityStatus::IndexOutsideVertexArray(
                     index,
                     vertices.len() as IndexType,
@@ -91,7 +91,7 @@ fn verify_vertices(mesh: &TMFMesh) -> Result<(), TMFIntegrityStatus> {
 fn verify_uvs(mesh: &TMFMesh) -> Result<(), TMFIntegrityStatus> {
     match mesh.get_uvs() {
         None => {
-            if mesh.get_uv_faces().is_some() {
+            if mesh.get_uv_triangles().is_some() {
                 Err(TMFIntegrityStatus::UVArrayMissing)
             } else {
                 Ok(())
@@ -103,8 +103,8 @@ fn verify_uvs(mesh: &TMFMesh) -> Result<(), TMFIntegrityStatus> {
                     return Err(TMFIntegrityStatus::UVOutsideRange(uv.0, uv.1));
                 }
             }
-            match mesh.get_uv_faces() {
-                Some(faces) => match indices_inside_array(faces, uvs.len() as IndexType) {
+            match mesh.get_uv_triangles() {
+                Some(triangles) => match indices_inside_array(triangles, uvs.len() as IndexType) {
                     Some(index) => Err(TMFIntegrityStatus::IndexOutsideUVArray(
                         index,
                         uvs.len() as IndexType,
@@ -120,7 +120,7 @@ fn verify_uvs(mesh: &TMFMesh) -> Result<(), TMFIntegrityStatus> {
 fn verify_normals(mesh: &TMFMesh) -> Result<(), TMFIntegrityStatus> {
     match mesh.get_normals() {
         None => {
-            if mesh.get_normal_faces().is_some() {
+            if mesh.get_normal_triangles().is_some() {
                 Err(TMFIntegrityStatus::NormalArrayMissing)
             } else {
                 Ok(())
@@ -132,8 +132,8 @@ fn verify_normals(mesh: &TMFMesh) -> Result<(), TMFIntegrityStatus> {
                     return Err(TMFIntegrityStatus::NormalsNotNormalized);
                 }
             }
-            match mesh.get_normal_faces() {
-                Some(faces) => match indices_inside_array(faces, normals.len() as IndexType) {
+            match mesh.get_normal_triangles() {
+                Some(triangles) => match indices_inside_array(triangles, normals.len() as IndexType) {
                     Some(index) => Err(TMFIntegrityStatus::IndexOutsideNormalArray(
                         index,
                         normals.len() as IndexType,

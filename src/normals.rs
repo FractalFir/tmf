@@ -35,6 +35,12 @@ impl NormalPrecisionMode {
         self.0
     }
 }
+impl Default for NormalPrecisionMode{
+    /// Default precision of saved normals is 1.0 degrees
+    fn default()->Self{
+        Self::from_deg_dev(1.0)
+    }
+}
 const SIGN_PREC: UnalignedRWMode = UnalignedRWMode::precision_bits(1);
 use crate::utilis::*;
 pub fn normalize_arr(normals: &mut [Vector3]) {
