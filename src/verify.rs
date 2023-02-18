@@ -133,13 +133,15 @@ fn verify_normals(mesh: &TMFMesh) -> Result<(), TMFIntegrityStatus> {
                 }
             }
             match mesh.get_normal_triangles() {
-                Some(triangles) => match indices_inside_array(triangles, normals.len() as IndexType) {
-                    Some(index) => Err(TMFIntegrityStatus::IndexOutsideNormalArray(
-                        index,
-                        normals.len() as IndexType,
-                    )),
-                    None => Ok(()),
-                },
+                Some(triangles) => {
+                    match indices_inside_array(triangles, normals.len() as IndexType) {
+                        Some(index) => Err(TMFIntegrityStatus::IndexOutsideNormalArray(
+                            index,
+                            normals.len() as IndexType,
+                        )),
+                        None => Ok(()),
+                    }
+                }
                 None => Ok(()),
             }
         }

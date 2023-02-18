@@ -236,7 +236,8 @@ fn load_obj<R: std::io::BufRead>(
             }
             "usemtl" => {
                 // If a material is in use  AND there have been some triangles since last mtl push
-                if (ctx.mtl != "" || ctx.mtl_lib != "") && last_mtl_triangle_index < vertex_triangles.len()
+                if (ctx.mtl != "" || ctx.mtl_lib != "")
+                    && last_mtl_triangle_index < vertex_triangles.len()
                 {
                     //println!("pushing mtl {} in lib {}", ctx.mtl, ctx.mtl_lib);
                     last_mtl_triangle_index = vertex_triangles.len() - 1;

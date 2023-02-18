@@ -25,22 +25,23 @@ impl SectionType {
     }
 }
 #[repr(u8)]
-enum CompressionType{
+#[derive(PartialEq)]
+enum CompressionType {
     None = 0,
     Ommited = 1,
     UnalignedLZZ = 2,
 }
-impl CompressionType{
-    fn from_u8(input:u8)->Self{
-        match input{
-            0=>Self::None,
-            1=>Self::Ommited,
-            2=>Self::UnalignedLZZ,
-            _=>panic!("Unknow CompressionType {input}"),
+impl CompressionType {
+    fn from_u8(input: u8) -> Self {
+        match input {
+            0 => Self::None,
+            1 => Self::Ommited,
+            2 => Self::UnalignedLZZ,
+            _ => panic!("Unknow CompressionType {input}"),
         }
     }
 }
-fn read_segment_header<R: Read>(reader: &mut R)->Result<(SectionType,usize,CompressionType)>{
+fn read_segment_header<R: Read>(reader: &mut R) -> Result<(SectionType, usize, CompressionType)> {
     let seg_type = read_u16(reader)?;
     let seg_type = SectionType::from_u16(seg_type);
     let data_length = {
@@ -49,13 +50,18 @@ fn read_segment_header<R: Read>(reader: &mut R)->Result<(SectionType,usize,Compr
         u64::from_le_bytes(tmp)
     };
     let compression_type = {
-        let mut tmp = [0;1];
+        let mut tmp = [0; 1];
         reader.read_exact(&mut tmp);
         CompressionType::from_u8(tmp[0])
     };
-    Ok((seg_type,data_length as usize,compression_type))
+    Ok((seg_type, data_length as usize, compression_type))
 }
-fn write_segment_header<W:Write>(w:&mut W,seg_type:SectionType,data_length:usize,comperssion_type:CompressionType)->Result<()>{
+fn write_segment_header<W: Write>(
+    w: &mut W,
+    seg_type: SectionType,
+    data_length: usize,
+    comperssion_type: CompressionType,
+) -> Result<()> {
     w.write_all(&(seg_type as u16).to_le_bytes())?;
     w.write_all(&(data_length as u64).to_le_bytes())?;
     w.write_all(&[comperssion_type as u8])
@@ -71,14 +77,13 @@ fn calc_shortest_edge(
     let shortest_edge = match vertex_triangles {
         Some(vertex_triangles) => {
             use crate::utilis::distance;
-            let vertices =
-                match vertices {
-                    Some(vertices) => vertices,
-                    None => return Err(std::io::Error::new(
-                        std::io::ErrorKind::Other,
-                        "Saving a mesh with triangle vertex array without normal array is an error.",
-                    )),
-                };
+            let vertices = match vertices {
+                Some(vertices) => vertices,
+                None => return Err(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    "Saving a mesh with triangle vertex array without normal array is an error.",
+                )),
+            };
             let mut shortest_edge = FloatType::INFINITY;
             for i in 0..(vertex_triangles.len() / 3) {
                 let d1 = distance(
@@ -103,7 +108,7 @@ fn calc_shortest_edge(
     Ok(shortest_edge)
 }
 fn save_normals<W: Write>(
-    normals: Option<Vec<Vector3>>,
+    normals: &Option<Vec<Vector3>>,
     w: &mut W,
     curr_segment_data: &mut Vec<u8>,
     p_info: &TMFPrecisionInfo,
@@ -112,12 +117,13 @@ fn save_normals<W: Write>(
     match normals {
         Some(normals) => {
             use crate::normals::*;
-            save_normal_array(
-                &normals,
-                curr_segment_data,
-                p_info.normal_precision,
+            save_normal_array(&normals, curr_segment_data, p_info.normal_precision)?;
+            write_segment_header(
+                w,
+                SectionType::NormalSegment,
+                curr_segment_data.len(),
+                CompressionType::None,
             )?;
-            write_segment_header(w,SectionType::NormalSegment,curr_segment_data.len(),CompressionType::None)?;
             w.write_all(&curr_segment_data)?;
             curr_segment_data.clear();
         }
@@ -141,12 +147,92 @@ fn save_vertices<W: Write>(
                 curr_segment_data,
                 shortest_edge,
             )?;
-            write_segment_header(w,SectionType::VertexSegment,curr_segment_data.len(),CompressionType::None)?;
+            write_segment_header(
+                w,
+                SectionType::VertexSegment,
+                curr_segment_data.len(),
+                CompressionType::None,
+            )?;
             w.write_all(&curr_segment_data)?;
             curr_segment_data.clear();
         }
         None => (),
     }
+    Ok(())
+}
+fn save_normals_and_normal_triangles<W: Write>(
+    w: &mut W,
+    normals: Option<Vec<Vector3>>,
+    normal_triangles: Option<Vec<IndexType>>,
+    curr_segment_data: &mut Vec<u8>,
+    p_info: &TMFPrecisionInfo,
+) -> Result<()> {
+    use crate::normals::get_predicted_normal_array_size;
+    // Calculate size of the normal array
+    let normal_arr_size = match normals {
+        Some(ref normals) => get_predicted_normal_array_size(p_info.normal_precision, normals.len()),
+        None => {
+            if normal_triangles.is_some() {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    "Normal triangle index array can't be present without the normal array.",
+                ));
+            } else {
+                return Ok(());
+            }
+        }
+    };
+    // Calculate size of index array in different compression variants
+    let (index_arr_size,index_norm_size) = match normal_triangles{
+        Some(ref normal_triangles)=>{
+            // Unwrap can't fail, or else would have returned previously.
+            let normals = normals.as_ref().unwrap();
+            let precision = (normals.len() as f64).log2().ceil() as usize;
+            ((normal_triangles.len()*precision + 8 - 1)/8 + 1 +  std::mem::size_of::<u64>() ,get_predicted_normal_array_size(p_info.normal_precision,normal_triangles.len()))
+        },
+        None=>return save_normals(&normals, w, curr_segment_data, p_info),
+    };
+    let no_compression = normal_arr_size + index_arr_size;
+    let omitted = index_norm_size;
+    
+    if no_compression > omitted{
+        // Unwraps can't fail, or else would have returned previously.
+        let normal_triangles = normal_triangles.unwrap();
+        let normals = normals.unwrap();
+        
+        let mut new_normals = Vec::with_capacity(normal_triangles.len());
+        for index in normal_triangles{
+            new_normals.push(normals[index as usize]);
+        }
+        save_normals(&Some(new_normals), w, curr_segment_data, p_info)?;
+        write_segment_header(
+            w,
+            SectionType::NormalTriangleSegment,
+            0,
+            CompressionType::Ommited,
+        )?;
+        return Ok(());
+    }
+    // Save Normals
+    save_normals(&normals, w, curr_segment_data, p_info)?;
+    // Save normal triangles
+    match normal_triangles {
+        Some(normal_triangles) => {
+            use crate::vertices::save_triangles;
+            //If saving normal triangles, normals must be present, so unwrap can't fail
+            let n_count = normals.as_ref().unwrap().len();
+            save_triangles(&normal_triangles, n_count, curr_segment_data)?;
+            write_segment_header(
+                w,
+                SectionType::NormalTriangleSegment,
+                curr_segment_data.len(),
+                CompressionType::None,
+            )?;
+            w.write_all(&curr_segment_data)?;
+            curr_segment_data.clear();
+        }
+        None => (),
+    };
     Ok(())
 }
 use crate::normals::map_prune;
@@ -197,31 +283,33 @@ pub(crate) fn write_mesh<W: Write>(
             //If saving vertex triangles, vertices must be present, so unwrap can't fail
             let v_count = mesh.vertices.as_ref().unwrap().len();
             save_triangles(vertex_triangles, v_count, &mut curr_segment_data)?;
-            write_segment_header(w,SectionType::VertexTriangleSegment,curr_segment_data.len(),CompressionType::None);
+            write_segment_header(
+                w,
+                SectionType::VertexTriangleSegment,
+                curr_segment_data.len(),
+                CompressionType::None,
+            );
             w.write_all(&curr_segment_data)?;
             curr_segment_data.clear();
         }
         None => (),
     };
-    // Save Normals
-    save_normals(normals, w, &mut curr_segment_data, p_info)?;
-    // Save normal triangles
-    match normal_triangles {
-        Some(normal_triangles) => {
-            use crate::vertices::save_triangles;
-            //If saving normal triangles, normals must be present, so unwrap can't fail
-            let n_count = mesh.normals.as_ref().unwrap().len();
-            save_triangles(&normal_triangles, n_count, &mut curr_segment_data)?;
-            write_segment_header(w,SectionType::NormalTriangleSegment,curr_segment_data.len(),CompressionType::None)?;
-            w.write_all(&curr_segment_data)?;
-            curr_segment_data.clear();
-        }
-        None => (),
-    };
+    save_normals_and_normal_triangles(
+        w,
+        normals,
+        normal_triangles,
+        &mut curr_segment_data,
+        p_info,
+    )?;
     match &mesh.uvs {
         Some(uvs) => {
             crate::uv::save_uvs(uvs, &mut curr_segment_data, 0.001)?;
-            write_segment_header(w,SectionType::UvSegment,curr_segment_data.len(),CompressionType::None)?;
+            write_segment_header(
+                w,
+                SectionType::UvSegment,
+                curr_segment_data.len(),
+                CompressionType::None,
+            )?;
             w.write_all(&curr_segment_data)?;
             curr_segment_data.clear();
         }
@@ -234,7 +322,12 @@ pub(crate) fn write_mesh<W: Write>(
             //If saving uv triangles, uvs must be present, so unwrap can't fail
             let uv_count = mesh.uvs.as_ref().unwrap().len();
             save_triangles(uv_triangles, uv_count, &mut curr_segment_data)?;
-            write_segment_header(w,SectionType::UvTriangleSegment,curr_segment_data.len(),CompressionType::None)?;
+            write_segment_header(
+                w,
+                SectionType::UvTriangleSegment,
+                curr_segment_data.len(),
+                CompressionType::None,
+            )?;
             w.write_all(&curr_segment_data)?;
             curr_segment_data.clear();
         }
@@ -280,14 +373,48 @@ pub(crate) fn write<W: Write, S: std::borrow::Borrow<str>>(
     }
     Ok(())
 }
+fn read_normal_faces(
+    mesh: &mut TMFMesh,
+    compression_type: CompressionType,
+    data: &[u8],
+) -> Result<()> {
+    use crate::vertices::read_triangles;
+    // If normal triangle indices are omitted, assume that normal array is already laid out in triangles.
+    let normal_triangles = if compression_type == CompressionType::Ommited {
+        let normals_len = match mesh.get_normals(){
+                        Some(normals)=>normals.len(),
+                        None=>return Err(std::io::Error::new(
+                            std::io::ErrorKind::Other,
+                            "If normal index array is saved as omitted, the normal array must be present before it."
+                        )),
+                    };
+        let mut normal_triangles = Vec::with_capacity(normals_len);
+        for index in 0..normals_len {
+            normal_triangles.push(index as IndexType);
+        }
+        normal_triangles.into()
+    } else {
+        read_triangles(&mut (&data as &[u8]))?
+    };
+    if mesh.set_normal_triangles(&normal_triangles).is_some() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "Only one normal index array(triangle array) can be present in a model.",
+        ));
+    }
+    Ok(())
+}
+
 pub fn read_mesh<R: Read>(reader: &mut R) -> Result<(TMFMesh, String)> {
     let mut res = TMFMesh::empty();
     let name = read_string(reader)?;
     let seg_count = read_u16(reader)?;
     for _ in 0..seg_count {
-        let (seg_type,data_length,compersion_type) = read_segment_header(reader)?;
+        let (seg_type, data_length, compression_type) = read_segment_header(reader)?;
         let mut data = vec![0; data_length as usize];
         reader.read_exact(&mut data)?;
+        //DEBUG: Temporary segment sizes in bytes
+        //println!("{seg_type:?}:{data_length} bytes.");
         match seg_type {
             SectionType::VertexSegment => {
                 use crate::vertices::read_tmf_vertices;
@@ -336,15 +463,7 @@ pub fn read_mesh<R: Read>(reader: &mut R) -> Result<(TMFMesh, String)> {
             }
             SectionType::NormalTriangleSegment => {
                 use crate::vertices::read_triangles;
-                if res
-                    .set_normal_triangles(&read_triangles(&mut (&data as &[u8]))?)
-                    .is_some()
-                {
-                    return Err(std::io::Error::new(
-                        std::io::ErrorKind::Other,
-                        "Only one normal index array(triangle array) can be present in a model.",
-                    ));
-                }
+                read_normal_faces(&mut res, compression_type, &data)?
             }
             SectionType::UvTriangleSegment => {
                 use crate::vertices::read_triangles;

@@ -47,9 +47,9 @@ use crate::material::MaterialInfo;
 #[doc(inline)]
 pub use crate::normals::NormalPrecisionMode;
 #[doc(inline)]
-pub use crate::vertices::VertexPrecisionMode;
-#[doc(inline)]
 pub use crate::uv::UvPrecisionMode;
+#[doc(inline)]
+pub use crate::vertices::VertexPrecisionMode;
 use std::io::{Read, Write};
 #[doc(inline)]
 pub use verify::TMFIntegrityStatus;
@@ -59,8 +59,8 @@ pub struct TMFPrecisionInfo {
     pub vertex_precision: VertexPrecisionMode,
     /// How much can normal angle deviate, as an angle in degrees.
     pub normal_precision: NormalPrecisionMode,
-    /// How much can saved UVs deviate. 
-    pub uv_precision:  UvPrecisionMode,
+    /// How much can saved UVs deviate.
+    pub uv_precision: UvPrecisionMode,
     /// Do additional normal pruning before saving (has considerable performance impact if model has many vertices
     pub prune_normals: bool,
 }
@@ -70,7 +70,7 @@ impl Default for TMFPrecisionInfo {
         TMFPrecisionInfo {
             vertex_precision: VertexPrecisionMode::default(),
             normal_precision: NormalPrecisionMode::default(),
-            uv_precision:UvPrecisionMode::default(),
+            uv_precision: UvPrecisionMode::default(),
             prune_normals: true,
         }
     }
@@ -325,14 +325,14 @@ impl TMFMesh {
     /// // The same number of triangles created by points and triangles created by indices
     /// assert!(vert_buff.len() == vertex_triangles.len());
     ///```
-    pub fn get_vertex_buffer(&self)->Option<Box<[Vector3]>>{
+    pub fn get_vertex_buffer(&self) -> Option<Box<[Vector3]>> {
         let vertices = self.get_vertices()?;
         let triangles = self.get_vertex_triangles()?;
         let mut vertex_buffer = Vec::with_capacity(triangles.len());
-        for index in triangles{
-            match vertices.get(*index as usize){
-                Some(vertex)=>vertex_buffer.push(*vertex),
-                None=>panic!("Invalid TMFMesh: vertex index outside vertex array!"),
+        for index in triangles {
+            match vertices.get(*index as usize) {
+                Some(vertex) => vertex_buffer.push(*vertex),
+                None => panic!("Invalid TMFMesh: vertex index outside vertex array!"),
             }
         }
         Some(vertex_buffer.into())
@@ -351,14 +351,14 @@ impl TMFMesh {
     /// // The same number of triangles created by points and triangles created by indices
     /// assert!(normal_buff.len() == normal_triangles.len());
     ///```
-    pub fn get_normal_buffer(&self)->Option<Box<[Vector3]>>{
+    pub fn get_normal_buffer(&self) -> Option<Box<[Vector3]>> {
         let normals = self.get_normals()?;
         let triangles = self.get_normal_triangles()?;
         let mut normals_buffer = Vec::with_capacity(triangles.len());
-        for index in triangles{
-            match normals.get(*index as usize){
-                Some(normal)=>normals_buffer.push(*normal),
-                None=>panic!("Invalid TMFMesh: normal index outside vertex array!"),
+        for index in triangles {
+            match normals.get(*index as usize) {
+                Some(normal) => normals_buffer.push(*normal),
+                None => panic!("Invalid TMFMesh: normal index outside vertex array!"),
             }
         }
         Some(normals_buffer.into())
@@ -376,14 +376,14 @@ impl TMFMesh {
     /// // The same number of triangles created by points and triangles created by indices
     /// assert!(uv_buff.len() == uv_triangles.len());
     ///```
-    pub fn get_uv_buffer(&self)->Option<Box<[Vector2]>>{
+    pub fn get_uv_buffer(&self) -> Option<Box<[Vector2]>> {
         let uvs = self.get_uvs()?;
         let triangles = self.get_uv_triangles()?;
         let mut uv_buffer = Vec::with_capacity(triangles.len());
-        for index in triangles{
-            match uvs.get(*index as usize){
-                Some(uv)=>uv_buffer.push(*uv),
-                None=>panic!("Invalid TMFMesh: uv index outside vertex array!"),
+        for index in triangles {
+            match uvs.get(*index as usize) {
+                Some(uv) => uv_buffer.push(*uv),
+                None => panic!("Invalid TMFMesh: uv index outside vertex array!"),
             }
         }
         Some(uv_buffer.into())
@@ -641,8 +641,9 @@ mod testing {
         tmf_mesh.verify().unwrap();
         let mut out = std::fs::File::create("target/test_res/susan.tmf").unwrap();
         assert!(name == "Suzanne");
+        let prec = TMFPrecisionInfo::default();
         tmf_mesh
-            .write_tmf_one(&mut out, &TMFPrecisionInfo::default(), name)
+            .write_tmf_one(&mut out, &prec, name)
             .unwrap();
     }
     #[test]
@@ -655,7 +656,7 @@ mod testing {
         let mut out = Vec::new();
         {
             tmf_mesh
-                .write_tmf_one(&mut out, &TMFPrecisionInfo::default(), "")
+                .write_tmf_one(&mut out, &TMFPrecisionInfo::default(), name)
                 .unwrap();
         }
         let (r_mesh, name) = TMFMesh::read_tmf_one(&mut (&out as &[u8])).unwrap();
@@ -710,12 +711,12 @@ mod testing {
     fn rw_60k_sph() {
         init_test_env();
         let mut file = std::fs::File::open("testing/60k.obj").unwrap();
-        let tmf_mesh = TMFMesh::read_from_obj_one(&mut file).unwrap().0;
+        let (tmf_mesh, name) = TMFMesh::read_from_obj_one(&mut file).unwrap();
         tmf_mesh.verify().unwrap();
         let mut out = Vec::new();
         {
             tmf_mesh
-                .write_tmf_one(&mut out, &TMFPrecisionInfo::default(), "")
+                .write_tmf_one(&mut out, &TMFPrecisionInfo::default(), name)
                 .unwrap();
         }
         let (r_mesh, name) = TMFMesh::read_tmf_one(&mut (&out as &[u8])).unwrap();

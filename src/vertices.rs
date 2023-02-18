@@ -152,7 +152,11 @@ pub fn read_tmf_vertices<R: Read>(reader: &mut R) -> Result<Box<[Vector3]>> {
     }
     Ok(vertices.into())
 }
-pub fn save_triangles<W: Write>(triangles: &[IndexType], count: usize, writer: &mut W) -> Result<()> {
+pub fn save_triangles<W: Write>(
+    triangles: &[IndexType],
+    count: usize,
+    writer: &mut W,
+) -> Result<()> {
     let precision = (count as FloatType).log2().ceil() as u8;
     writer.write_all(&precision.to_le_bytes())?;
     writer.write_all(&(triangles.len() as u64).to_le_bytes())?;

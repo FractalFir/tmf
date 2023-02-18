@@ -3,16 +3,16 @@ use crate::{FloatType, Vector2};
 use std::io::{Read, Result, Write};
 /// Setting dictating how precisely the UV coordinates should be saved.
 pub struct UvPrecisionMode(u8);
-impl UvPrecisionMode{
+impl UvPrecisionMode {
     /// Creates a new [`UvPrecisionMode`] form texture resolution and maximal allowed deviation in pixels.
-    pub fn form_texture_resolution(resolution:f32,pixel_dev:f32)->Self{
-        Self((resolution/pixel_dev).log2().ceil() as u8)
+    pub fn form_texture_resolution(resolution: f32, pixel_dev: f32) -> Self {
+        Self((resolution / pixel_dev).log2().ceil() as u8)
     }
 }
-impl Default for UvPrecisionMode{
+impl Default for UvPrecisionMode {
     /// Default UV save precision. Assumes texture size 1024 and no more than .1 pixel deviation
-    fn default()->Self{
-        Self::form_texture_resolution(1024.0,0.1)
+    fn default() -> Self {
+        Self::form_texture_resolution(1024.0, 0.1)
     }
 }
 pub fn save_uvs<W: Write>(uvs: &[Vector2], writer: &mut W, precision: FloatType) -> Result<()> {
