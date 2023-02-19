@@ -642,9 +642,7 @@ mod testing {
         let mut out = std::fs::File::create("target/test_res/susan.tmf").unwrap();
         assert!(name == "Suzanne");
         let prec = TMFPrecisionInfo::default();
-        tmf_mesh
-            .write_tmf_one(&mut out, &prec, name)
-            .unwrap();
+        tmf_mesh.write_tmf_one(&mut out, &prec, name).unwrap();
     }
     #[test]
     fn rw_susan_tmf() {

@@ -170,38 +170,42 @@ fn save_normals_and_normal_triangles<W: Write>(
     use crate::normals::get_predicted_normal_array_size;
     // Calculate size of the normal array
     let normal_arr_size = match normals {
-        Some(ref normals) => get_predicted_normal_array_size(p_info.normal_precision, normals.len()),
+        Some(ref normals) => {
+            get_predicted_normal_array_size(p_info.normal_precision, normals.len())
+        }
         None => {
             if normal_triangles.is_some() {
                 return Err(std::io::Error::new(
                     std::io::ErrorKind::Other,
                     "Normal triangle index array can't be present without the normal array.",
                 ));
-            } else {
-                return Ok(());
             }
+            return Ok(());
         }
     };
     // Calculate size of index array in different compression variants
-    let (index_arr_size,index_norm_size) = match normal_triangles{
-        Some(ref normal_triangles)=>{
+    let (index_arr_size, index_norm_size) = match normal_triangles {
+        Some(ref normal_triangles) => {
             // Unwrap can't fail, or else would have returned previously.
             let normals = normals.as_ref().unwrap();
             let precision = (normals.len() as f64).log2().ceil() as usize;
-            ((normal_triangles.len()*precision + 8 - 1)/8 + 1 +  std::mem::size_of::<u64>() ,get_predicted_normal_array_size(p_info.normal_precision,normal_triangles.len()))
-        },
-        None=>return save_normals(&normals, w, curr_segment_data, p_info),
+            (
+                (normal_triangles.len() * precision + 8 - 1) / 8 + 1 + std::mem::size_of::<u64>(),
+                get_predicted_normal_array_size(p_info.normal_precision, normal_triangles.len()),
+            )
+        }
+        None => return save_normals(&normals, w, curr_segment_data, p_info),
     };
     let no_compression = normal_arr_size + index_arr_size;
     let omitted = index_norm_size;
-    
-    if no_compression > omitted{
+
+    if no_compression > omitted {
         // Unwraps can't fail, or else would have returned previously.
         let normal_triangles = normal_triangles.unwrap();
         let normals = normals.unwrap();
-        
+
         let mut new_normals = Vec::with_capacity(normal_triangles.len());
-        for index in normal_triangles{
+        for index in normal_triangles {
             new_normals.push(normals[index as usize]);
         }
         save_normals(&Some(new_normals), w, curr_segment_data, p_info)?;
@@ -404,7 +408,23 @@ fn read_normal_faces(
     }
     Ok(())
 }
-
+fn read_vertex_faces(
+    mesh: &mut TMFMesh,
+    compression_type: CompressionType,
+    data: &[u8],
+) -> Result<()> {
+    use crate::vertices::read_triangles;
+    if mesh
+        .set_vertex_triangles(&read_triangles(&mut (&data as &[u8]))?)
+        .is_some()
+    {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "Only one vertex index array(triangle array) can be present in a model.",
+        ));
+    }
+    Ok(())
+}
 pub fn read_mesh<R: Read>(reader: &mut R) -> Result<(TMFMesh, String)> {
     let mut res = TMFMesh::empty();
     let name = read_string(reader)?;
@@ -462,7 +482,6 @@ pub fn read_mesh<R: Read>(reader: &mut R) -> Result<(TMFMesh, String)> {
                 }
             }
             SectionType::NormalTriangleSegment => {
-                use crate::vertices::read_triangles;
                 read_normal_faces(&mut res, compression_type, &data)?
             }
             SectionType::UvTriangleSegment => {
