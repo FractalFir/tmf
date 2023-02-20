@@ -1,7 +1,7 @@
 use crate::unaligned_rw::{UnalignedRWMode, UnalignedReader, UnalignedWriter};
 use crate::{FloatType, IndexType, Vector3};
 use std::io::{Read, Result, Write};
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy,PartialEq)]
 /// Setting dictating how much can any normal in a model deviate, expressed as an angle.
 pub struct NormalPrecisionMode(u8);
 pub(crate) fn get_predicted_normal_array_size(prec: NormalPrecisionMode, len: usize) -> usize {
@@ -41,6 +41,13 @@ impl NormalPrecisionMode {
 }
 impl Default for NormalPrecisionMode {
     /// Default precision of saved normals is 1.0 degrees
+    ///```
+    /// # use tmf::NormalPrecisionMode;
+    /// let mode = NormalPrecisionMode::from_deg_dev(1.0);
+    /// let default_mode = NormalPrecisionMode::default();
+    /// // The same
+    /// assert!(mode == default_mode);
+    ///```
     fn default() -> Self {
         Self::from_deg_dev(1.0)
     }

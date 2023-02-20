@@ -2,15 +2,27 @@ use crate::unaligned_rw::{UnalignedRWMode, UnalignedReader, UnalignedWriter};
 use crate::{FloatType, Vector2};
 use std::io::{Read, Result, Write};
 /// Setting dictating how precisely the UV coordinates should be saved.
+#[derive(Clone, Copy,PartialEq)]
 pub struct UvPrecisionMode(u8);
 impl UvPrecisionMode {
     /// Creates a new [`UvPrecisionMode`] form texture resolution and maximal allowed deviation in pixels.
+    /// ```
+    /// # use tmf::UvPrecisionMode;
+    /// let mode = UvPrecisionMode::form_texture_resolution(1024.0,0.1);
+    /// ```
     pub fn form_texture_resolution(resolution: f32, pixel_dev: f32) -> Self {
         Self((resolution / pixel_dev).log2().ceil() as u8)
     }
 }
 impl Default for UvPrecisionMode {
     /// Default UV save precision. Assumes texture size 1024 and no more than .1 pixel deviation
+    /// ```
+    /// # use tmf::UvPrecisionMode;
+    /// let mode = UvPrecisionMode::form_texture_resolution(1024.0,0.1);
+    /// let default_mode = UvPrecisionMode::default();
+    /// // The same
+    /// assert!(mode == default_mode);
+    /// ```
     fn default() -> Self {
         Self::form_texture_resolution(1024.0, 0.1)
     }
