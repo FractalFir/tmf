@@ -5,7 +5,7 @@ First of all,thank you for checking out and deciding to contribute to the tmf pr
 3. Run `cargo fmt` to ensure your code is formatted like the rest of the project
 4. Run `cargo doc` to ensure documentation has not been accidentally broken.
 ## For functionality changes
-1. compare size of `suzan.tmf`, which appears after tests in `target/test_res` with previous version, and include this size.
+1. compare size of `suzan.tmf`, which appears after tests in `target/test_res` with previous version, and include this size in the pull request message.
 2. Import `suzan_ftmf.obj` from `target/test_res` into blender and ensure it sill looks OK.
 # What can you contribute?
 ## Low hanging fruits
