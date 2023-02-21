@@ -435,6 +435,7 @@ impl TMFMesh {
         verify::verify_tmf_mesh(self)
     }
     /// Reads tmf meshes from a .obj file in *reader*
+    /// Does not support not triangulated models ATM
     ///```
     /// # use tmf::TMFMesh;
     /// # fn do_something(_:TMFMesh,_:String){}
@@ -453,6 +454,7 @@ impl TMFMesh {
         obj::read_from_obj(reader)
     }
     /// Reads a *single* named tmf mesh from a .obj file in *reader*, if more than one mesh present an error will be returned.
+    /// Does not support not triangulated models ATM
     ///```
     /// # use tmf::TMFMesh;
     /// # use std::fs::File;
