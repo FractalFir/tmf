@@ -55,15 +55,15 @@ Saving one mesh
 ```rust
 use tmf::TMFMesh;
 use std::fs::File;
-let input = File::create("suzanne.tmf").expect("Could not open .tmf file!");
+let output = File::create("suzanne.tmf").expect("Could not create output file!");
 let settings = TMFPrecisionInfo::default();
-mesh::write_tmf_one(&mut output,&settings,name).expect("Could not read TMF file!");
+mesh.write_tmf_one(&mut output,&settings,name).expect("Could not save TMF mesh!");
 ```
 Saving multiple meshes
 ```rust
 use tmf::TMFMesh;
 use std::fs::File;
-let input = File::open("suzanne.tmf").expect("Could not create .tmf file!");
+let output = File::open("suzanne.tmf").expect("Could not create .tmf file!");
 TMFMesh::write_tmf(meshes,&mut input,&settings).expect("Could not write TMF mesh!");
 ```
 # Features
@@ -94,5 +94,8 @@ So, by taking into consideration those properties of normals, they can be saved 
 
 Analogical approach is taken for each and every element of model data, reducing the size even further,
 ## Bits vs Bytes based savings.
-*TODO: Explaing UBA-s*
-
+A disadvantage of using byte-aligned data types is lack of granularity of precision when saving data. A good example of this may be a UV coordinate that should represent a point on a 1024 pixel texture, with precision of .25 pixels. Doing some quick back of the napkin maths, it can be determined that a precision of log2(1024/.25) = log2(4096) = 12 bits is required. But only available data types are either to small (u8) or way to big(u16, 25% of disk space would go to waste!). The solution is forgoing byte alignment. It comes with a slight performance penalty of having to do bit shifts, and inability to use pre-built compression algorithms(they assume byte-aligment), but come with huge advantage of using data types just wide enough to save what is needed and not any wider. 
+Data is laid out like that in what i call an UBA(Unalgined Binary Array). Datat in an UBA consists of series of data with any binary size, ussualy specified before the UBA itself. For some widths, like 9 bits, savings coming from musing UBAs can reach as much as 44%!
+# Specification
+Along with this project comes a slightly more in-depth technical specification
+in `TMF_SPEC.md`. While not fully finished, it can still prove to useful for anyone who is interested in understanding the project better(If you have any questions feel free to ask me). 
