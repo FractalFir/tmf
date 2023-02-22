@@ -13,6 +13,8 @@ smallvec = "1.10.0"
 bencher = "0.1.5"
 rand = "0.8.5"
 [features]
+## Experimental triangulation in .obj loader. Supports only convex polygons ATM, and has bugs, triangulating your mesh in 3D modelling software before importing highly advised.
+triangulation = []
 ## Changes the sin and cos function used in reading the tmf files for a potentially faster, but less accurate functions.
 fast_trig = []
 ## Changes the precision of read data from single to double point precision.

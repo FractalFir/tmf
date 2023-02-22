@@ -1,7 +1,7 @@
 use crate::unaligned_rw::{UnalignedRWMode, UnalignedReader, UnalignedWriter};
 use crate::{FloatType, IndexType, Vector3};
 use std::io::{Read, Result, Write};
-#[derive(Clone, Copy,PartialEq)]
+#[derive(Clone, Copy, PartialEq)]
 /// Setting dictating how much the length of any edge can change because of vertex precision loss during saving. This is expressed as a fraction of the length of the shortest edge.
 ///```
 /// # use tmf::VertexPrecisionMode;

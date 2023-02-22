@@ -69,7 +69,8 @@ TMFMesh::write_tmf(meshes,&mut input,&settings).expect("Could not write TMF mesh
 # Features
 # 0.1 (Current version)
 - [X] Exporting .obj
-- [X] Importing .obj - *only triangulated models*
+- [X] Importing .obj
+- [X] Importing not-triangulated .obj models - **experimental**, supports only convex polygons
 - [X] Writing/Reading .tmf files
 - [X] Point Positions
 - [X] Point Normals

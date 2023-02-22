@@ -58,3 +58,9 @@ pub(crate) fn distance(a: Vector3, b: Vector3) -> FloatType {
     let dz = a.2 - b.2;
     (dx * dx + dy * dy + dz * dz).sqrt()
 }
+pub(crate) fn dot(a: Vector3, b: Vector3) -> FloatType {
+    let x = a.0 * b.0;
+    let y = a.1 * b.1;
+    let z = a.2 * b.2;
+    return x + y + z;
+}

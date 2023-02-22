@@ -2,7 +2,7 @@ use crate::unaligned_rw::{UnalignedRWMode, UnalignedReader, UnalignedWriter};
 use crate::{FloatType, Vector2};
 use std::io::{Read, Result, Write};
 /// Setting dictating how precisely the UV coordinates should be saved.
-#[derive(Clone, Copy,PartialEq)]
+#[derive(Clone, Copy, PartialEq)]
 pub struct UvPrecisionMode(u8);
 impl UvPrecisionMode {
     /// Creates a new [`UvPrecisionMode`] form texture resolution and maximal allowed deviation in pixels.

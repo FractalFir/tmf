@@ -36,17 +36,41 @@ fn load_indices(split: &mut Split<&[char; 2]>) -> Result<(IndexType, IndexType, 
         parse_index(match_split(split.next())?)? - 1,
     ))
 }
+///IMPORTANT TODO: It seems likey that normals and uvs are spwapped in this function. Investigate and cleanup the confusion and refactor triangulation
 pub fn load_face(
     split: &mut Split<&[char; 2]>,
     vertex_triangles: &mut Vec<IndexType>,
     normal_triangles: &mut Vec<IndexType>,
     uv_triangles: &mut Vec<IndexType>,
+    vertices: &[Vector3],
 ) -> Result<()> {
+    //TODO: rename to 'inidices'
     let mut triangles: SmallVec<[(IndexType, IndexType, IndexType); 6]> = SmallVec::new();
     while let Ok(indices) = load_indices(split) {
         triangles.push(indices);
     }
-    assert!(triangles.len() == 3,"Object loader currently supports only loading triangulated triangles, but encountered a {} sided polygon!",triangles.len());
+    if triangles.len() > 3{
+        #[cfg(not(feature = "triangulation"))]
+        return Err(Error::new(
+                    ErrorKind::Other,
+                    "Face is a polygon with more than 3 points and requires triangulation, but experimental triangulation feature disabled. Triangulate mesh before importing, or try the experimental feature(unadvised, may lead to bugs)",
+       ));
+       #[cfg(feature = "triangulation")]
+crate::triangulation::triangulate(triangles,vertex_triangles,normal_triangles,uv_triangles,vertices);
+    return Ok(());
+    }
+    else if triangles.len() == 0{
+        return Err(Error::new(
+                    ErrorKind::Other,
+                    "Face read error! Could not load point indices, ensure all points in your mesh have positions, uv coordinates and normals!",
+       ));
+    }
+    else if triangles.len() != 3{
+        return Err(Error::new(
+                    ErrorKind::Other,
+                    "Face read error! Could not load all 3 point indices!",
+       ));
+    }
     //TODO: do triangulation
     for triangle in triangles {
         vertex_triangles.push(triangle.0);
@@ -258,6 +282,7 @@ fn load_obj<R: std::io::BufRead>(
                 &mut vertex_triangles,
                 &mut normal_triangles,
                 &mut uv_triangles,
+                &vertices,
             )?,
             "o" => {
                 let name = match_split(split.next())?;

@@ -12,6 +12,7 @@ mod obj;
 /// Module used when saving vertex grups
 mod pile_map;
 mod tmf;
+mod triangulation;
 /// Module used to handle reads of data which is not bit aligned(for example, 3 or 17 bits). This is the module that allows for heavy compression used in this format.
 #[doc(hidden)]
 pub mod unaligned_rw;
@@ -435,7 +436,7 @@ impl TMFMesh {
         verify::verify_tmf_mesh(self)
     }
     /// Reads tmf meshes from a .obj file in *reader*
-    /// Does not support not triangulated models ATM
+    /// In order to enable triangulation while importing .obj files feature triangulation must be used. It is still highly experimental so read documentation before enabling. 
     ///```
     /// # use tmf::TMFMesh;
     /// # fn do_something(_:TMFMesh,_:String){}
@@ -454,7 +455,7 @@ impl TMFMesh {
         obj::read_from_obj(reader)
     }
     /// Reads a *single* named tmf mesh from a .obj file in *reader*, if more than one mesh present an error will be returned.
-    /// Does not support not triangulated models ATM
+    /// In order to enable triangulation while importing .obj files feature triangulation must be used. It is still highly experimental so read documentation before enabling. 
     ///```
     /// # use tmf::TMFMesh;
     /// # use std::fs::File;
@@ -474,7 +475,7 @@ impl TMFMesh {
         } else if meshes.len() > 1 {
             Err(std::io::Error::new(
                 std::io::ErrorKind::Other,
-                "More than one mesh present in .tmf file while only one expected.",
+                "More than one mesh present in .obj file while only one expected.",
             ))
         } else {
             Ok(vec_first(meshes))
@@ -665,14 +666,16 @@ mod testing {
         r_mesh.write_obj_one(&mut out, &name).unwrap();
     }
     #[test]
-    #[should_panic]
+    #[cfg(feature = "triangulation")]
     fn rw_cube_obj_not_triangulated() {
         init_test_env();
         let mut file = std::fs::File::open("testing/cube.obj").unwrap();
-        let (tmf_mesh, name) = TMFMesh::read_from_obj_one(&mut file).unwrap();
-        tmf_mesh.verify().unwrap();
-        let mut out = std::fs::File::create("target/test_res/cube.obj").unwrap();
-        tmf_mesh.write_obj_one(&mut out, &name).unwrap();
+        let meshes = TMFMesh::read_from_obj(&mut file).unwrap();
+        for (mesh,name) in &meshes{
+            mesh.verify().unwrap();
+        }
+        let mut out = std::fs::File::create("target/test_res/cube_ftmf.obj").unwrap();
+        TMFMesh::write_obj(&meshes, &mut out).unwrap();
     }
     #[test]
     fn load_multpile_meshes_obj() {
