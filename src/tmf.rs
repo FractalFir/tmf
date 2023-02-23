@@ -410,7 +410,7 @@ fn read_normal_faces(
 }
 fn read_vertex_faces(
     mesh: &mut TMFMesh,
-    compression_type: CompressionType,
+    _compression_type: CompressionType,
     data: &[u8],
 ) -> Result<()> {
     use crate::vertices::read_triangles;
