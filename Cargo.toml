@@ -3,14 +3,19 @@
 name = "tmf"
 version = "0.1.0"
 edition = "2021"
-
+license-file = "LICENSE"
+description = "TMF is a 3D model compression format achieving compression ratio of between 4.2 and 1.95, while being very fast to read and having no visual difference between compressed and uncompressed models."
+repository = "github.com/FractalFir/tmf"
+authors = ["FractalFir <fractalfirdev@gmail.com>"]
+keywords = ["graphics","3D","compression","lossy","gamedev"]
+categories = ["game-development","rendering::data-formats","compression"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 ##! Test
 [dependencies]
 document-features = "0.2.7"
 smallvec = "1.10.0"
 [dev-dependencies]
-bencher = "0.1.5"
+#bencher = "0.1.5"
 rand = "0.8.5"
 [features]
 ## Experimental triangulation in .obj loader. Supports only convex polygons ATM, and has bugs, triangulating your mesh in 3D modelling software before importing highly advised. Please note that if you see any triangles missing this is likely the result of the triangulation algorithm not working properly. 
@@ -25,11 +30,12 @@ long_indices = []
 short_indices = []
 ## Changes the internal setting of the unaligned reader to use different data size. Can be beneficial for small models on some systems.
 byte_rw = []
-[[bench]]
-name = "unaligned_rw"
-harness = false
-[[bench]]
-name = "read_write_tmf"
-harness = false
+#
+#[[bench]]
+#name = "unaligned_rw"
+#harness = false
+#[[bench]]
+#name = "read_write_tmf"
+#harness = false
 [profile.bench]
-debug = true
+#debug = true
