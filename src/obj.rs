@@ -1,5 +1,134 @@
 use crate::{FloatType, IndexType, TMFMesh, Vector2, Vector3};
 use std::io::{BufReader, BufWriter, Error, ErrorKind, Read, Result, Write};
+struct ObjImporter {
+    vertices: Vec<Vector3>,
+    normals: Vec<Vector3>,
+    uvs: Vec<Vector2>,
+    vertex_triangles: Vec<IndexType>,
+    normal_triangles: Vec<IndexType>,
+    uv_triangles: Vec<IndexType>,
+    name: String,
+}
+impl ObjImporter {
+    fn new() -> Self {
+        Self {
+            vertices: Vec::new(),
+            normals: Vec::new(),
+            uvs: Vec::new(),
+            vertex_triangles: Vec::new(),
+            normal_triangles: Vec::new(),
+            uv_triangles: Vec::new(),
+            name: "".to_owned(),
+        }
+    }
+    fn next_mesh(&mut self,mut name:String)->Option<(TMFMesh,String)>{
+        if self.vertex_triangles.is_empty(){
+            return None;
+        }
+        let mut mesh = TMFMesh::empty();
+        let (mut vertices, mut vertex_triangles) = (self.vertices.clone(),self.vertex_triangles.clone());
+        let (mut normals, mut normal_triangles) = (self.normals.clone(),self.normal_triangles.clone());
+        let (mut uvs, mut uv_triangles) = (self.uvs.clone(),self.uv_triangles.clone());
+         
+        crate::utilis::fast_prune(&mut vertices,&mut vertex_triangles);
+        crate::utilis::fast_prune(&mut normals,&mut normal_triangles);
+        crate::utilis::fast_prune(&mut uvs,&mut uv_triangles);
+        
+        mesh.set_vertices(vertices);
+        mesh.set_normals(normals);
+        mesh.set_uvs(uvs);
+        
+        mesh.set_vertex_triangles(vertex_triangles);
+        mesh.set_normal_triangles(normal_triangles);
+        mesh.set_uv_triangles(uv_triangles);
+        
+        self.vertex_triangles.clear();
+        self.normal_triangles.clear();
+        self.uv_triangles.clear();
+        
+        std::mem::swap(&mut self.name,&mut name);
+        
+        Some((mesh,name))
+    }
+    fn finish(self)->(TMFMesh,String){
+        let mut mesh = TMFMesh::empty();
+        
+        let (mut vertices, mut vertex_triangles) = (self.vertices.clone(),self.vertex_triangles.clone());
+        let (mut normals, mut normal_triangles) = (self.normals.clone(),self.normal_triangles.clone());
+        let (mut uvs, mut uv_triangles) = (self.uvs.clone(),self.uv_triangles.clone());
+         
+        crate::utilis::fast_prune(&mut vertices,&mut vertex_triangles);
+        crate::utilis::fast_prune(&mut normals,&mut normal_triangles);
+        crate::utilis::fast_prune(&mut uvs,&mut uv_triangles);
+        
+        mesh.set_vertices(vertices);
+        mesh.set_normals(normals);
+        mesh.set_uvs(uvs);
+        
+        mesh.set_vertex_triangles(vertex_triangles);
+        mesh.set_normal_triangles(normal_triangles);
+        mesh.set_uv_triangles(uv_triangles);
+        
+        (mesh,self.name)
+    }
+    fn push_vertex(&mut self,vertex:Vector3){
+        self.vertices.push(vertex);
+    }
+    fn push_normal(&mut self,normal:Vector3){
+        self.normals.push(normal);
+    }
+    fn push_uv(&mut self,uv:Vector2){
+        self.uvs.push(uv);
+    }
+    //Pushes into vertex triangles
+    fn push_vertex_index(&mut self,index:IndexType){
+        self.vertex_triangles.push(index);
+    }
+    fn push_normal_index(&mut self,index:IndexType){
+        self.normal_triangles.push(index);
+    }
+    fn push_uv_index(&mut self,index:IndexType){
+        self.uv_triangles.push(index);
+    }
+}
+fn parse_line(line: Result<String>,oi:&mut ObjImporter)->Result<Option<(TMFMesh,String)>>{
+    let line = line?;
+     // Split the line by white spaces and '/' sign used in triangles
+    let mut split = line.split(&[' ', '/']);
+    // Get the beginning of the line
+    let beg = match_split(split.next())?;
+    match beg{
+        "#"=>(),//Ignoring comments
+        "mtllib"=>(),
+        "usemtl"=>(),
+        "s"=>(),//Ignore smoothness info
+        "v"=>oi.push_vertex(load_vec3(&mut split)?),
+        "vn"=>oi.push_normal(load_vec3(&mut split)?),
+        "vt"=>oi.push_uv(load_vec2(&mut split)?),
+        "f"=> load_face(&mut split,oi)?,
+        "o"=>{
+            let name = match_split(split.next())?.to_owned();
+            return Ok(oi.next_mesh(name));
+        },
+        _=>todo!(),
+    }
+    Ok(None)
+}
+pub fn read_from_obj<R: Read>(reader: &mut R) -> Result<Vec<(TMFMesh, String)>> {
+    let reader = BufReader::new(reader);
+    use std::io::BufRead;
+    let mut oi = ObjImporter::new();
+    let mut lines = reader.lines();
+    let mut res = Vec::new();
+    for line in lines{
+        match parse_line(line,&mut oi)?{
+            Some(mesh_and_name)=>res.push(mesh_and_name),
+            None=>(),
+        }
+    }
+    res.push(oi.finish());
+    Ok(res)
+}
 fn parse_float_type(float: &str) -> Result<FloatType> {
     match float.parse::<FloatType>() {
         Ok(float) => Ok(float),
@@ -37,18 +166,17 @@ fn load_indices(split: &mut Split<&[char; 2]>) -> Result<(IndexType, IndexType, 
     ))
 }
 ///IMPORTANT TODO: It seems likey that normals and uvs are spwapped in this function. Investigate and cleanup the confusion and refactor triangulation
-pub fn load_face(
+fn load_face(
     split: &mut Split<&[char; 2]>,
-    vertex_triangles: &mut Vec<IndexType>,
-    normal_triangles: &mut Vec<IndexType>,
-    uv_triangles: &mut Vec<IndexType>,
-    vertices: &[Vector3],
+    oi:&mut ObjImporter,
 ) -> Result<()> {
+    
     //TODO: rename to 'inidices'
-    let mut triangles: SmallVec<[(IndexType, IndexType, IndexType); 6]> = SmallVec::new();
-    while let Ok(indices) = load_indices(split) {
-        triangles.push(indices);
+    let mut indices: SmallVec<[(IndexType, IndexType, IndexType); 6]> = SmallVec::new();
+    while let Ok(face_indices) = load_indices(split) {
+        indices.push(face_indices);
     }
+    /*
     if triangles.len() > 3 {
         #[cfg(not(feature = "triangulation"))]
         let _ = vertices;
@@ -57,7 +185,7 @@ pub fn load_face(
                     ErrorKind::Other,
                     "Face is a polygon with more than 3 points and requires triangulation, but experimental triangulation feature disabled. Triangulate mesh before importing, or try the experimental feature(unadvised, may lead to bugs)",
        ));
-       
+
         #[cfg(feature = "triangulation")]
         crate::triangulation::triangulate(
             triangles,
@@ -79,11 +207,13 @@ pub fn load_face(
             "Face read error! Could not load all 3 point indices!",
         ));
     }
+    */
     //TODO: do triangulation
-    for triangle in triangles {
-        vertex_triangles.push(triangle.0);
-        normal_triangles.push(triangle.2);
-        uv_triangles.push(triangle.1);
+    assert!(indices.len() == 3);
+    for index in indices {
+        //oi.push_vertex_index(index.0);
+        //oi.push_normal_index(index.1);
+        //oi.push_uv_index(index.2);
     }
     Ok(())
 }
@@ -285,13 +415,14 @@ fn load_obj<R: std::io::BufRead>(
             "v" => vertices.push(load_vec3(&mut split)?),
             "vn" => normals.push(load_vec3(&mut split)?),
             "vt" => uvs.push(load_vec2(&mut split)?),
+            /*
             "f" => load_face(
                 &mut split,
                 &mut vertex_triangles,
                 &mut normal_triangles,
                 &mut uv_triangles,
                 &vertices,
-            )?,
+            )?,*/
             "o" => {
                 let name = match_split(split.next())?;
                 if vertices.len() > 0 {
@@ -301,12 +432,12 @@ fn load_obj<R: std::io::BufRead>(
                     let new_uvs = get_fast_pruned_array(&uvs, &mut uv_triangles);
                     let new_normals = get_fast_pruned_array(&normals, &mut normal_triangles);
                     // Set mesh data
-                    res.set_vertices(&new_vertices);
-                    res.set_normals(&new_normals);
-                    res.set_uvs(&new_uvs);
-                    res.set_vertex_triangles(&vertex_triangles);
-                    res.set_normal_triangles(&normal_triangles);
-                    res.set_uv_triangles(&uv_triangles);
+                    res.set_vertices(new_vertices);
+                    res.set_normals(new_normals);
+                    res.set_uvs(new_uvs);
+                    res.set_vertex_triangles(vertex_triangles);
+                    res.set_normal_triangles(normal_triangles);
+                    res.set_uv_triangles(uv_triangles);
                     return Ok((Some(res), Some(name.to_owned())));
                 }
                 return Ok((None, Some(name.to_owned())));
@@ -316,18 +447,18 @@ fn load_obj<R: std::io::BufRead>(
     }
     if vertices.len() > 0 {
         let mut res = TMFMesh::empty();
-        res.set_vertices(&vertices);
-        res.set_normals(&normals);
-        res.set_uvs(&uvs);
-        res.set_vertex_triangles(&vertex_triangles);
-        res.set_normal_triangles(&normal_triangles);
-        res.set_uv_triangles(&uv_triangles);
+        res.set_vertices(vertices.clone());
+        res.set_normals(normals.clone());
+        res.set_uvs(uvs.clone());
+        res.set_vertex_triangles(vertex_triangles);
+        res.set_normal_triangles(normal_triangles);
+        res.set_uv_triangles(uv_triangles);
         Ok((Some(res), None))
     } else {
         Ok((None, None))
     }
 }
-pub fn read_from_obj<R: Read>(reader: &mut R) -> Result<Vec<(TMFMesh, String)>> {
+pub fn read_from_obj_old<R: Read>(reader: &mut R) -> Result<Vec<(TMFMesh, String)>> {
     use std::io::BufRead;
     let reader = BufReader::new(reader);
     let mut vertices = Vec::with_capacity(0x100);

@@ -101,6 +101,7 @@ fn vec_first<T: Sized + Clone>(vec: Vec<T>) -> T {
 fn slice_to_box<T: Sized + std::marker::Copy>(slice: &[T]) -> Box<[T]> {
     slice.into()
 }
+
 impl TMFMesh {
     pub(crate) fn get_segment_count(&self) -> usize {
         let mut count = 0;
@@ -135,22 +136,22 @@ impl TMFMesh {
     /// # let mut mesh = TMFMesh::empty();
     /// # let vertices = Vec::new();
     /// // Set the vertices of the mesh
-    /// mesh.set_vertices(&vertices);
+    /// mesh.set_vertices(vertices);
     ///```
     ///```
     /// # use tmf::FloatType;
     /// # fn do_something(_:&[(FloatType,FloatType,FloatType)]){}
     /// # let new_vertices = Vec::new();
     /// # let mut mesh = TMFMesh::empty();
-    /// # mesh.set_vertices(&new_vertices);
+    /// # mesh.set_vertices(new_vertices.clone());
     /// # use tmf::TMFMesh;
     /// // Change the vertices for some other vertices...
-    /// let old_vertices = mesh.set_vertices(&new_vertices).expect("Mesh had no vertices!");
+    /// let old_vertices = mesh.set_vertices(new_vertices).expect("Mesh had no vertices!");
     /// // ... and the do something with old vertices
     /// do_something(&old_vertices);
     ///```
-    pub fn set_vertices(&mut self, vertices: &[Vector3]) -> Option<Box<[Vector3]>> {
-        let mut vertices = Some(slice_to_box(vertices));
+    pub fn set_vertices<T:Into<Box<[Vector3]>>>(&mut self, vertices: T) -> Option<Box<[Vector3]>> {
+        let mut vertices = Some(vertices.into());
         std::mem::swap(&mut vertices, &mut self.vertices);
         vertices
     }
@@ -160,7 +161,7 @@ impl TMFMesh {
     /// // Set the normals of the mesh
     /// # let normals = Vec::new();
     /// # let mut mesh = TMFMesh::empty();
-    /// mesh.set_normals(&normals);
+    /// mesh.set_normals(normals);
     ///```
     ///```
     /// # fn do_something(_:&[(FloatType,FloatType,FloatType)]){}
@@ -168,14 +169,14 @@ impl TMFMesh {
     /// # use tmf::FloatType;
     /// # let new_normals = Vec::new();
     /// # let mut mesh = TMFMesh::empty();
-    /// # mesh.set_normals(&new_normals);
+    /// # mesh.set_normals(new_normals.clone());
     /// // Change the normals  of this mesh for some other normals...
-    /// let old_normals = mesh.set_normals(&new_normals).expect("Mesh had no normals!");
+    /// let old_normals = mesh.set_normals(new_normals).expect("Mesh had no normals!");
     /// // ... and the do something with old normals
     /// do_something(&old_normals);
     ///```
-    pub fn set_normals(&mut self, normals: &[Vector3]) -> Option<Box<[Vector3]>> {
-        let mut normals = Some(slice_to_box(normals));
+    pub fn set_normals<T:Into<Box<[Vector3]>>>(&mut self, normals: T) -> Option<Box<[Vector3]>> {
+        let mut normals = Some(normals.into());
         std::mem::swap(&mut normals, &mut self.normals);
         normals
     }
@@ -187,7 +188,7 @@ impl TMFMesh {
     /// # let mut mesh = TMFMesh::empty();
     /// # let uvs = Vec::new();
     /// // Set the uvs of the mesh
-    /// mesh.set_uvs(&uvs);
+    /// mesh.set_uvs(uvs);
     ///```
     ///```
     /// # use tmf::FloatType;
@@ -195,14 +196,14 @@ impl TMFMesh {
     /// # fn do_something(_:&[(FloatType,FloatType)]){}
     /// # let new_uvs = Vec::new();
     /// # let mut mesh = TMFMesh::empty();
-    /// # mesh.set_uvs(&new_uvs);
+    /// # mesh.set_uvs(new_uvs.clone());
     /// // Change the uvs  of this mesh for some other normals...
-    /// let old_uvs = mesh.set_uvs(&new_uvs).expect("Mesh had no uvs!");
+    /// let old_uvs = mesh.set_uvs(new_uvs).expect("Mesh had no uvs!");
     /// // ... and the do something with old uvs
     /// do_something(&old_uvs);
     ///```
-    pub fn set_uvs(&mut self, uvs: &[Vector2]) -> Option<Box<[Vector2]>> {
-        let mut uvs = Some(slice_to_box(uvs));
+    pub fn set_uvs<T:Into<Box<[Vector2]>>>(&mut self, uvs: T) -> Option<Box<[Vector2]>> {
+        let mut uvs = Some(uvs.into());
         std::mem::swap(&mut uvs, &mut self.uvs);
         uvs
     }
@@ -211,10 +212,10 @@ impl TMFMesh {
     /// # use tmf::TMFMesh;
     /// # let mut mesh = TMFMesh::empty();
     /// # let triangles = [0,1,2,3,2,1];
-    /// mesh.set_vertex_triangles(&triangles);
+    /// mesh.set_vertex_triangles(triangles);
     ///```
-    pub fn set_vertex_triangles(&mut self, triangles: &[IndexType]) -> Option<Box<[IndexType]>> {
-        let mut triangles = Some(slice_to_box(triangles));
+    pub fn set_vertex_triangles<T:Into<Box<[IndexType]>>>(&mut self, triangles: T) -> Option<Box<[IndexType]>> {
+        let mut triangles = Some(triangles.into());
         std::mem::swap(&mut triangles, &mut self.vertex_triangles);
         triangles
     }
@@ -223,10 +224,10 @@ impl TMFMesh {
     /// # use tmf::TMFMesh;
     /// # let mut mesh = TMFMesh::empty();
     /// # let triangles = [0,1,2,3,2,1];
-    /// mesh.set_normal_triangles(&triangles);
+    /// mesh.set_normal_triangles(triangles);
     ///```
-    pub fn set_normal_triangles(&mut self, triangles: &[IndexType]) -> Option<Box<[IndexType]>> {
-        let mut triangles = Some(slice_to_box(triangles));
+    pub fn set_normal_triangles<T:Into<Box<[IndexType]>>>(&mut self, triangles: T) -> Option<Box<[IndexType]>> {
+        let mut triangles = Some(triangles.into());
         std::mem::swap(&mut triangles, &mut self.normal_triangles);
         triangles
     }
@@ -235,10 +236,10 @@ impl TMFMesh {
     /// # use tmf::TMFMesh;
     /// # let mut mesh = TMFMesh::empty();
     /// # let triangles = [0,1,2,3,2,1];
-    /// mesh.set_uv_triangles(&triangles);
+    /// mesh.set_uv_triangles(triangles);
     ///```
-    pub fn set_uv_triangles(&mut self, triangles: &[IndexType]) -> Option<Box<[IndexType]>> {
-        let mut triangles = Some(slice_to_box(triangles));
+    pub fn set_uv_triangles<T:Into<Box<[IndexType]>>>(&mut self, triangles: T) -> Option<Box<[IndexType]>> {
+        let mut triangles = Some(triangles.into());
         std::mem::swap(&mut triangles, &mut self.uv_triangles);
         triangles
     }
@@ -321,8 +322,8 @@ impl TMFMesh {
     /// # let mut mesh = TMFMesh::empty();
     /// # let vertices = [(0.0,0.0,0.0),(1.0,0.0,0.0),(1.0,1.0,0.0),(0.0,1.0,0.0)];
     /// # let vertex_triangles = [0,1,2,0,2,3];
-    /// # mesh.set_vertices(&vertices);
-    /// # mesh.set_vertex_triangles(&vertex_triangles);
+    /// # mesh.set_vertices(vertices);
+    /// # mesh.set_vertex_triangles(vertex_triangles);
     /// let vert_buff = mesh.get_vertex_buffer().expect("Could not create the array of points creating triangles!");
     /// // The same number of triangles created by points and triangles created by indices
     /// assert!(vert_buff.len() == vertex_triangles.len());
@@ -346,9 +347,9 @@ impl TMFMesh {
     /// # let mut mesh = TMFMesh::empty();
     /// # let normals = [(0.0,0.0,0.0),(1.0,0.0,0.0),(1.0,1.0,0.0),(0.0,1.0,0.0)];
     /// # let normal_triangles = [0,1,2,0,2,3];
-    /// # mesh.set_normals(&normals);
+    /// # mesh.set_normals(normals);
     /// # mesh.normalize();
-    /// # mesh.set_normal_triangles(&normal_triangles);
+    /// # mesh.set_normal_triangles(normal_triangles);
     /// let normal_buff = mesh.get_normal_buffer().expect("Could not create the array of normals creating triangles!");
     /// // The same number of triangles created by points and triangles created by indices
     /// assert!(normal_buff.len() == normal_triangles.len());
@@ -372,8 +373,8 @@ impl TMFMesh {
     /// # let mut mesh = TMFMesh::empty();
     /// # let uvs = [(0.0,0.0),(1.0,0.0),(1.0,1.0),(0.0,1.0)];
     /// # let uv_triangles = [0,1,2,0,2,3];
-    /// # mesh.set_uvs(&uvs);
-    /// # mesh.set_uv_triangles(&uv_triangles);
+    /// # mesh.set_uvs(uvs);
+    /// # mesh.set_uv_triangles(uv_triangles);
     /// let uv_buff = mesh.get_uv_buffer().expect("Could not create the array of uvs creating triangles!");
     /// // The same number of triangles created by points and triangles created by indices
     /// assert!(uv_buff.len() == uv_triangles.len());
@@ -398,7 +399,7 @@ impl TMFMesh {
     /// # pub(crate) fn magnitude(i: Vector3) -> FloatType
     /// # {let xx = i.0 * i.0;let yy = i.1 * i.1;let zz = i.2 * i.2;(xx + yy + zz).sqrt()}
     /// // Some mesh with normals which are not normalzed
-    /// mesh.set_normals(&normals);
+    /// mesh.set_normals(normals);
     /// // Normalize all normals
     /// mesh.normalize();
     /// // All normals are normalised (their magnitude is equal to 1)
