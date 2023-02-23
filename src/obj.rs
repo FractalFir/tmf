@@ -51,10 +51,13 @@ pub fn load_face(
     }
     if triangles.len() > 3 {
         #[cfg(not(feature = "triangulation"))]
+        let _ = vertices;
+        #[cfg(not(feature = "triangulation"))]
         return Err(Error::new(
                     ErrorKind::Other,
                     "Face is a polygon with more than 3 points and requires triangulation, but experimental triangulation feature disabled. Triangulate mesh before importing, or try the experimental feature(unadvised, may lead to bugs)",
        ));
+       
         #[cfg(feature = "triangulation")]
         crate::triangulation::triangulate(
             triangles,
@@ -246,7 +249,7 @@ fn load_obj<R: std::io::BufRead>(
     let mut vertex_triangles = Vec::with_capacity(0x100);
     let mut normal_triangles = Vec::with_capacity(0x100);
     let mut uv_triangles = Vec::with_capacity(0x100);
-    let mut materials: Vec<String> = Vec::new();
+    let materials: Vec<String> = Vec::new();
     let mut last_mtl_triangle_index = 0;
     // Iterate over all lines in input to parse them
     for line in lines {

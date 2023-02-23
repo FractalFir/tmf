@@ -51,7 +51,7 @@ fn read_segment_header<R: Read>(reader: &mut R) -> Result<(SectionType, usize, C
     };
     let compression_type = {
         let mut tmp = [0; 1];
-        reader.read_exact(&mut tmp);
+        reader.read_exact(&mut tmp)?;
         CompressionType::from_u8(tmp[0])
     };
     Ok((seg_type, data_length as usize, compression_type))
@@ -292,7 +292,7 @@ pub(crate) fn write_mesh<W: Write>(
                 SectionType::VertexTriangleSegment,
                 curr_segment_data.len(),
                 CompressionType::None,
-            );
+            )?;
             w.write_all(&curr_segment_data)?;
             curr_segment_data.clear();
         }

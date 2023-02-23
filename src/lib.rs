@@ -1,4 +1,5 @@
 #![warn(missing_docs)]
+#![deny(unused_must_use)]
 #![warn(rustdoc::missing_doc_code_examples)]
 //! **tmf** is a crate used to save and read 3D models saved in *.tmf* format. This format is focused on 2 things:
 //! 1. Reducing size of the saved file as much as possible, without reducing visual quality
@@ -683,7 +684,7 @@ mod testing {
         let meshes = TMFMesh::read_from_obj(&mut file).unwrap();
         for mesh_name in meshes {
             let (mesh, name) = mesh_name;
-            mesh.verify();
+            mesh.verify().unwrap();
             let mut out = std::fs::File::create(&format!("target/test_res/{}.obj", name)).unwrap();
             mesh.write_obj_one(&mut out, &name).unwrap();
         }
