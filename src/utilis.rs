@@ -49,7 +49,9 @@ pub(crate) fn normalize(i: Vector3) -> Vector3 {
     let yy = i.1 * i.1;
     let zz = i.2 * i.2;
     let mag = (xx + yy + zz).sqrt();
-
+    if mag.is_nan() {
+        return (0.0, 0.0, 0.0);
+    }
     (i.0 / mag, i.1 / mag, i.2 / mag)
 }
 pub(crate) fn distance(a: Vector3, b: Vector3) -> FloatType {
@@ -63,4 +65,16 @@ pub(crate) fn dot(a: Vector3, b: Vector3) -> FloatType {
     let y = a.1 * b.1;
     let z = a.2 * b.2;
     return x + y + z;
+}
+pub(crate) fn cross(a: Vector3, b: Vector3) -> Vector3 {
+    let x = a.1 * b.2 - a.2 * b.1;
+    let y = a.2 * b.0 - a.0 * b.2;
+    let z = a.0 * b.1 - a.1 * b.0;
+    (x, y, z)
+}
+pub(crate) fn sub_vec3(a: Vector3, b: Vector3) -> Vector3 {
+    (a.0 - b.0, a.1 - b.1, a.2 - b.2)
+}
+pub(crate) fn add_vec3(a: Vector3, b: Vector3) -> Vector3 {
+    (a.0 + b.0, a.1 + b.1, a.2 + b.2)
 }

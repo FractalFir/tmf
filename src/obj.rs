@@ -49,27 +49,32 @@ pub fn load_face(
     while let Ok(indices) = load_indices(split) {
         triangles.push(indices);
     }
-    if triangles.len() > 3{
+    if triangles.len() > 3 {
         #[cfg(not(feature = "triangulation"))]
         return Err(Error::new(
                     ErrorKind::Other,
                     "Face is a polygon with more than 3 points and requires triangulation, but experimental triangulation feature disabled. Triangulate mesh before importing, or try the experimental feature(unadvised, may lead to bugs)",
        ));
-       #[cfg(feature = "triangulation")]
-crate::triangulation::triangulate(triangles,vertex_triangles,normal_triangles,uv_triangles,vertices);
-    return Ok(());
-    }
-    else if triangles.len() == 0{
+        #[cfg(feature = "triangulation")]
+        crate::triangulation::triangulate(
+            triangles,
+            vertex_triangles,
+            normal_triangles,
+            uv_triangles,
+            vertices,
+        );
+        #[cfg(feature = "triangulation")]
+        return Ok(());
+    } else if triangles.len() == 0 {
         return Err(Error::new(
                     ErrorKind::Other,
                     "Face read error! Could not load point indices, ensure all points in your mesh have positions, uv coordinates and normals!",
        ));
-    }
-    else if triangles.len() != 3{
+    } else if triangles.len() != 3 {
         return Err(Error::new(
-                    ErrorKind::Other,
-                    "Face read error! Could not load all 3 point indices!",
-       ));
+            ErrorKind::Other,
+            "Face read error! Could not load all 3 point indices!",
+        ));
     }
     //TODO: do triangulation
     for triangle in triangles {

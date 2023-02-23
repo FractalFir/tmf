@@ -20,7 +20,7 @@ impl NormalPrecisionMode {
     /// let dev_5_deg = NormalPrecisionMode::from_deg_dev(5.0);
     /// ```
     pub fn from_deg_dev(deg: FloatType) -> Self {
-        let prec = (90.0 / deg).log2().ceil() as u8;
+        let prec = ((90.0 / deg).log2().ceil() as u8).max(1);
         Self(prec)
     }
     /// Creates NormalPrecisionMode from maximal allowed deviation angle in radians, for degrees use [`Self::from_deg_dev`]

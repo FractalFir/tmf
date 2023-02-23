@@ -436,7 +436,7 @@ impl TMFMesh {
         verify::verify_tmf_mesh(self)
     }
     /// Reads tmf meshes from a .obj file in *reader*
-    /// In order to enable triangulation while importing .obj files feature triangulation must be used. It is still highly experimental so read documentation before enabling. 
+    /// In order to enable triangulation while importing .obj files feature triangulation must be used. It is still highly experimental so read documentation before enabling.
     ///```
     /// # use tmf::TMFMesh;
     /// # fn do_something(_:TMFMesh,_:String){}
@@ -455,7 +455,7 @@ impl TMFMesh {
         obj::read_from_obj(reader)
     }
     /// Reads a *single* named tmf mesh from a .obj file in *reader*, if more than one mesh present an error will be returned.
-    /// In order to enable triangulation while importing .obj files feature triangulation must be used. It is still highly experimental so read documentation before enabling. 
+    /// In order to enable triangulation while importing .obj files feature triangulation must be used. It is still highly experimental so read documentation before enabling.
     ///```
     /// # use tmf::TMFMesh;
     /// # use std::fs::File;
@@ -654,11 +654,10 @@ mod testing {
         let (tmf_mesh, name) = TMFMesh::read_from_obj_one(&mut file).unwrap();
         tmf_mesh.verify().unwrap();
         assert!(name == "Suzanne");
+        let prec = TMFPrecisionInfo::default();
         let mut out = Vec::new();
         {
-            tmf_mesh
-                .write_tmf_one(&mut out, &TMFPrecisionInfo::default(), name)
-                .unwrap();
+            tmf_mesh.write_tmf_one(&mut out, &prec, name).unwrap();
         }
         let (r_mesh, name) = TMFMesh::read_tmf_one(&mut (&out as &[u8])).unwrap();
         r_mesh.verify().unwrap();
@@ -671,7 +670,7 @@ mod testing {
         init_test_env();
         let mut file = std::fs::File::open("testing/cube.obj").unwrap();
         let meshes = TMFMesh::read_from_obj(&mut file).unwrap();
-        for (mesh,name) in &meshes{
+        for (mesh, name) in &meshes {
             mesh.verify().unwrap();
         }
         let mut out = std::fs::File::create("target/test_res/cube_ftmf.obj").unwrap();
