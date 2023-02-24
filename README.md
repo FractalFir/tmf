@@ -18,6 +18,23 @@ The model used in test is the blender monkey(Suzzane). TMF files were saved with
 | Uncompressed .obj | Compressed .tmf file(default settings) |
 | ------------------ | ---------------------------------------|
 | <img src="docs/original.png"> | <img src="docs/tmf.png"> |
+## TMF vs. Draco.
+Draco is noticably better at compression than TMF. If all you are looking for is reduced file size, then just use Draco. As a single deveolper there is no way I can manage to create something that even rivals it. **But** if what you are looking for is not only model compression ratio, then TMF still has a lot to offer. 
+### A comparison of some pros and cons
+| Category | Draco | TMF | 
+| Compression Ratio | Draco wipes the floor with TMF in terms of compression ratio reducing the size by over 98% | TMF can compress your file by up to 70% |
+| 3D model(Suzanne) read time | 7-10 ms | ~1ms |
+| Impact of compression on read time | Read time increases with compression level | For most settings read time **decreases** with compression level |
+| 3D model(Suzanne) write time | 10-18 ms | 1-2 ms |
+| Final binary size of the lib | 4 MB | 204.4 kB |
+| Codebase size in lines | 74513 | 3191 |
+| Dependenices | Eigen, tinygltf | Only rust stdlib and `small_vec`|
+| Language | C++ | Rust |
+| Official Rust support | None | Native |
+| Build Dependencies | C++ compiler, cmake, make | only standard rust tollchain |
+| Using in rust porject | Requires manual linking | installs and links automaticaly using cargo |
+### TLDR
+tmf aims to be decnet at its job, lightweight and easy to use with Rust. Draco aims to be best at its job, but is bulkier and has no Rust support.
 ## What can lead to compression of a particular being less efficient?
 Greatly varying LOD: The save system dynamically adjusts to the LOD of the mesh. For example, a low-poly castle mesh may be saved with precision of 10 cm and a strawberry model may be saved with 1 mm precision. Saving those two object in one *mesh*(not file!) will force the castle mesh to be saved with higher precision, wasting space. Because most meshes will naturally have a consistent LOD, and meshes that don't would almost always lead to issues elsewhere, this problem is rarely encountered.
 # Examples
