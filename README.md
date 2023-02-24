@@ -22,7 +22,8 @@ The model used in test is the blender monkey(Suzzane). TMF files were saved with
 Draco is noticably better at compression than TMF. If all you are looking for is reduced file size, then just use Draco. As a single deveolper there is no way I can manage to create something that even rivals it. **But** if what you are looking for is not only model compression ratio, then TMF still has a lot to offer. 
 ### A comparison of some pros and cons
 | Category | Draco | TMF | 
-| Compression Ratio | Draco wipes the floor with TMF in terms of compression ratio reducing the size by over 98% | TMF can compress your file by up to 70% |
+|----------|-------|-----|
+| Compression Ratio | Draco wipes the floor with TMF in terms of compression ratio reducing the size by over 98% | TMF can compress your file by up to 70% 
 | 3D model(Suzanne) read time | 7-10 ms | ~1ms |
 | Impact of compression on read time | Read time increases with compression level | For most settings read time **decreases** with compression level |
 | 3D model(Suzanne) write time | 10-18 ms | 1-2 ms |
