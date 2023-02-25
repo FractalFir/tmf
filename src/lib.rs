@@ -9,7 +9,10 @@
 #![doc = document_features::document_features!()]
 mod material;
 mod normals;
+#[cfg(feature = "obj_import")]
 mod obj;
+#[cfg(feature = "model_importer")]
+mod model_importer;
 /// Module used when saving vertex grups
 mod pile_map;
 mod tmf;
@@ -194,8 +197,8 @@ impl TMFMesh {
     /// # use tmf::FloatType;
     /// # use tmf::TMFMesh;
     /// # fn do_something(_:&[(FloatType,FloatType)]){}
-    /// # let new_uvs = Vec::new();
     /// # let mut mesh = TMFMesh::empty();
+    /// # let new_uvs = Vec::new();
     /// # mesh.set_uvs(new_uvs.clone());
     /// // Change the uvs  of this mesh for some other normals...
     /// let old_uvs = mesh.set_uvs(new_uvs).expect("Mesh had no uvs!");
@@ -453,6 +456,7 @@ impl TMFMesh {
     ///     do_something(mesh,name);
     /// }
     ///```
+    #[cfg(feature = "obj_import")]
     pub fn read_from_obj<R: Read>(reader: &mut R) -> Result<Vec<(Self, String)>> {
         obj::read_from_obj(reader)
     }
@@ -467,6 +471,7 @@ impl TMFMesh {
     /// // And read a mesh from it
     /// let (mesh,name) = TMFMesh::read_from_obj_one(&mut file).expect("Could not parse .obj file!");
     ///```
+    #[cfg(feature = "obj_import")]
     pub fn read_from_obj_one<R: Read>(reader: &mut R) -> Result<(Self, String)> {
         let meshes = obj::read_from_obj(reader)?;
         if meshes.len() < 1 {
@@ -492,6 +497,7 @@ impl TMFMesh {
     /// let mut obj_out = File::create(out_path).expect("Could not create obj out file!");
     /// mesh.write_obj_one(&mut obj_out,"mesh name").expect("Could not write the .obj file!");
     /// ```
+    #[cfg(feature = "obj_import")]
     pub fn write_obj_one<W: Write>(&self, w: &mut W, name: &str) -> Result<()> {
         obj::write_obj(&[(self.clone(), name)], w)
     }
@@ -504,6 +510,7 @@ impl TMFMesh {
     /// let mut output = File::create(path).expect("Could not create file!");
     /// TMFMesh::write_obj(&meshes,&mut output).expect("Could not export to .obj");
     ///```
+    #[cfg(feature = "obj_import")]
     pub fn write_obj<W: Write, S: std::borrow::Borrow<str>>(
         meshes: &[(TMFMesh, S)],
         w: &mut W,
@@ -623,6 +630,7 @@ mod testing {
         std::fs::create_dir_all("target/test_res").unwrap();
     }
     #[test]
+    #[cfg(feature = "obj_import")]
     fn read_susan_obj() {
         init_test_env();
         let mut file = std::fs::File::open("testing/susan.obj").unwrap();
@@ -630,6 +638,7 @@ mod testing {
         tmf_mesh.verify().unwrap();
     }
     #[test]
+    #[cfg(feature = "obj_import")]
     fn rw_susan_obj() {
         init_test_env();
         let mut file = std::fs::File::open("testing/susan.obj").unwrap();
@@ -639,35 +648,38 @@ mod testing {
         tmf_mesh.write_obj_one(&mut out, &name).unwrap();
     }
     #[test]
+    #[cfg(feature = "obj_import")]
     fn save_susan_tmf() {
         init_test_env();
         let mut file = std::fs::File::open("testing/susan.obj").unwrap();
         let (tmf_mesh, name) = TMFMesh::read_from_obj_one(&mut file).unwrap();
         tmf_mesh.verify().unwrap();
         let mut out = std::fs::File::create("target/test_res/susan.tmf").unwrap();
-        assert!(name == "Suzanne");
+        assert!(name == "Suzanne","Name should be Suzanne but is {name}");
         let prec = TMFPrecisionInfo::default();
         tmf_mesh.write_tmf_one(&mut out, &prec, name).unwrap();
     }
     #[test]
+    #[cfg(feature = "obj_import")]
     fn rw_susan_tmf() {
         init_test_env();
         let mut file = std::fs::File::open("testing/susan.obj").unwrap();
         let (tmf_mesh, name) = TMFMesh::read_from_obj_one(&mut file).unwrap();
         tmf_mesh.verify().unwrap();
-        assert!(name == "Suzanne");
+        assert!(name == "Suzanne","Name should be Suzanne but is {name}");
         let prec = TMFPrecisionInfo::default();
         let mut out = Vec::new();
         {
             tmf_mesh.write_tmf_one(&mut out, &prec, name).unwrap();
         }
         let (r_mesh, name) = TMFMesh::read_tmf_one(&mut (&out as &[u8])).unwrap();
+        assert!(name == "Suzanne","Name should be Suzanne but is {name}");
         r_mesh.verify().unwrap();
         let mut out = std::fs::File::create("target/test_res/susan_ftmf.obj").unwrap();
         r_mesh.write_obj_one(&mut out, &name).unwrap();
     }
     #[test]
-    #[cfg(feature = "triangulation")]
+    #[cfg(all(feature = "triangulation",feature = "obj_import"))]
     fn rw_cube_obj_not_triangulated() {
         init_test_env();
         let mut file = std::fs::File::open("testing/cube.obj").unwrap();
@@ -679,6 +691,7 @@ mod testing {
         TMFMesh::write_obj(&meshes, &mut out).unwrap();
     }
     #[test]
+    #[cfg(feature = "obj_import")]
     fn load_multpile_meshes_obj() {
         init_test_env();
         let mut file = std::fs::File::open("testing/multiple.obj").unwrap();
@@ -691,6 +704,7 @@ mod testing {
         }
     }
     #[test]
+    #[cfg(feature = "obj_import")]
     fn rw_multpile_meshes_obj() {
         init_test_env();
         let mut file = std::fs::File::open("testing/multiple.obj").unwrap();
@@ -703,6 +717,7 @@ mod testing {
     }
     #[ignore]
     #[test]
+    #[cfg(feature = "obj_import")]
     fn read_multi_mtl_obj() {
         init_test_env();
         let mut file = std::fs::File::open("testing/multi_mtl.obj").unwrap();
@@ -712,6 +727,7 @@ mod testing {
     }
     #[ignore]
     #[test]
+    #[cfg(feature = "obj_import")]
     fn rw_60k_sph() {
         init_test_env();
         let mut file = std::fs::File::open("testing/60k.obj").unwrap();
@@ -730,6 +746,7 @@ mod testing {
     }
     #[ignore]
     #[test]
+    #[cfg(feature = "obj_import")]
     fn save_60k_sph_tmf() {
         init_test_env();
         let mut file = std::fs::File::open("testing/60k.obj").unwrap();
