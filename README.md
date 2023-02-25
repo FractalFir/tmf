@@ -1,6 +1,8 @@
 # What is Tight Model Format
-The main goal of the tmf project is to provide a way to save 3D game assets compressed in such a way, that there are no noticeable changes to the quality of the model when it is used in a game. This is achieved without sacrificing model read speeds, at the cost of increased model write speed, although in many cases model write speed is still on par or below other formats due to decreased IO usage.
+The main goal of the tmf project is to provide a way to save 3D game assets compressed in such a way, that there are no noticeable changes to the quality of the model when it is used in a game. This is achieved without sacrificing model read speeds, at the cost of increased model write speed, although in many cases model write speed is still on par or below other formats due to decreased IO usage. 
 Currently, TMF provides data compression ratio failing roughly between 4.2 and 1.95, depending on the model.
+## How are high compression speeds achived?
+Currently on default settings TMF uses bitvise operations(bitshift and or) to read data, which makes it able to read data at speed reaching 40 mln vertices / s. Additionaly TMF is thread safe, allowing for decoding of many models at the same time by many cores, increasing speed even further.
 ## How does it work?
 While I mark tmf as a "lossy compression format" in a classical meaning of this word, it really does not *compress* anything (at least for now). The bulk of the space savings come from storing the model data in different data structures that better reflect the data they store, and removing some data *precision* from the model in such a way, that it's **topology does not change** and the difference between more precise original data and less precise saved data is not noticeable by any human, even on close inspection. This is achieved by using some properties of the data itself (Surface vector being always normalized) or the model (usually constant level of detail across the whole model).
 # Comparisions
@@ -12,6 +14,8 @@ The model used in test is the blender monkey(Suzzane). TMF files were saved with
 | zip(deflate) compressed .obj | 367.7 kB |
 | .fbx | 651.0 kB |
 | zip(deflate) compressed .fbx | 600.6 kB |
+| .gltf | 476.5 kB |
+| zip(deflate) compressed .gltf | 302.1 kB |
 | .glb |  356.6 kB|
 | zip(deflate) compressed .glb| 267.5 kB |
 | .tmf |  308.3 kB |
