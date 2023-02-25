@@ -12,6 +12,8 @@ The model used in test is the blender monkey(Suzzane). TMF files were saved with
 | zip(deflate) compressed .obj | 367.7 kB |
 | .fbx | 651.0 kB |
 | zip(deflate) compressed .fbx | 600.6 kB |
+| .glb |  356.6 kB|
+| zip(deflate) compressed .glb| 267.5 kB |
 | .tmf |  308.3 kB |
 | zip(deflate) compressed .tmf | 307.9 kB |
 ## Model render comparison
