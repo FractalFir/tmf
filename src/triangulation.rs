@@ -1,3 +1,5 @@
+#[cfg(not(feature = "model_importer"))]
+compile_error!("Feature \"triangulation\" is only useful when model importer feature is enabled, and is useless, dead code otherwise.");
 use crate::utilis::{self, add_vec3, magnitude, normalize, sub_vec3};
 use crate::{FloatType, IndexType, Vector3};
 // angle inside triangle in radians

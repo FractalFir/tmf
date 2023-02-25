@@ -4,7 +4,7 @@ use crate::{FloatType, IndexType, Vector3};
 pub(crate) fn fast_prune<T: Sized>(data: &mut Vec<T>, indices: &mut [IndexType]) {
     // Smallest index
     let mut min_index = IndexType::MAX;
-    if indices.len() == 0{
+    if indices.len() == 0 {
         min_index = 0;
     }
     for index in indices.iter() {

@@ -8,14 +8,15 @@
 //! ## Feature flags
 #![doc = document_features::document_features!()]
 mod material;
+#[cfg(feature = "model_importer")]
+mod model_importer;
 mod normals;
 #[cfg(feature = "obj_import")]
 mod obj;
-#[cfg(feature = "model_importer")]
-mod model_importer;
 /// Module used when saving vertex grups
 mod pile_map;
 mod tmf;
+#[cfg(feature = "triangulation")]
 mod triangulation;
 /// Module used to handle reads of data which is not bit aligned(for example, 3 or 17 bits). This is the module that allows for heavy compression used in this format.
 #[doc(hidden)]
@@ -153,7 +154,7 @@ impl TMFMesh {
     /// // ... and the do something with old vertices
     /// do_something(&old_vertices);
     ///```
-    pub fn set_vertices<T:Into<Box<[Vector3]>>>(&mut self, vertices: T) -> Option<Box<[Vector3]>> {
+    pub fn set_vertices<T: Into<Box<[Vector3]>>>(&mut self, vertices: T) -> Option<Box<[Vector3]>> {
         let mut vertices = Some(vertices.into());
         std::mem::swap(&mut vertices, &mut self.vertices);
         vertices
@@ -178,7 +179,7 @@ impl TMFMesh {
     /// // ... and the do something with old normals
     /// do_something(&old_normals);
     ///```
-    pub fn set_normals<T:Into<Box<[Vector3]>>>(&mut self, normals: T) -> Option<Box<[Vector3]>> {
+    pub fn set_normals<T: Into<Box<[Vector3]>>>(&mut self, normals: T) -> Option<Box<[Vector3]>> {
         let mut normals = Some(normals.into());
         std::mem::swap(&mut normals, &mut self.normals);
         normals
@@ -205,7 +206,7 @@ impl TMFMesh {
     /// // ... and the do something with old uvs
     /// do_something(&old_uvs);
     ///```
-    pub fn set_uvs<T:Into<Box<[Vector2]>>>(&mut self, uvs: T) -> Option<Box<[Vector2]>> {
+    pub fn set_uvs<T: Into<Box<[Vector2]>>>(&mut self, uvs: T) -> Option<Box<[Vector2]>> {
         let mut uvs = Some(uvs.into());
         std::mem::swap(&mut uvs, &mut self.uvs);
         uvs
@@ -217,7 +218,10 @@ impl TMFMesh {
     /// # let triangles = [0,1,2,3,2,1];
     /// mesh.set_vertex_triangles(triangles);
     ///```
-    pub fn set_vertex_triangles<T:Into<Box<[IndexType]>>>(&mut self, triangles: T) -> Option<Box<[IndexType]>> {
+    pub fn set_vertex_triangles<T: Into<Box<[IndexType]>>>(
+        &mut self,
+        triangles: T,
+    ) -> Option<Box<[IndexType]>> {
         let mut triangles = Some(triangles.into());
         std::mem::swap(&mut triangles, &mut self.vertex_triangles);
         triangles
@@ -229,7 +233,10 @@ impl TMFMesh {
     /// # let triangles = [0,1,2,3,2,1];
     /// mesh.set_normal_triangles(triangles);
     ///```
-    pub fn set_normal_triangles<T:Into<Box<[IndexType]>>>(&mut self, triangles: T) -> Option<Box<[IndexType]>> {
+    pub fn set_normal_triangles<T: Into<Box<[IndexType]>>>(
+        &mut self,
+        triangles: T,
+    ) -> Option<Box<[IndexType]>> {
         let mut triangles = Some(triangles.into());
         std::mem::swap(&mut triangles, &mut self.normal_triangles);
         triangles
@@ -241,7 +248,10 @@ impl TMFMesh {
     /// # let triangles = [0,1,2,3,2,1];
     /// mesh.set_uv_triangles(triangles);
     ///```
-    pub fn set_uv_triangles<T:Into<Box<[IndexType]>>>(&mut self, triangles: T) -> Option<Box<[IndexType]>> {
+    pub fn set_uv_triangles<T: Into<Box<[IndexType]>>>(
+        &mut self,
+        triangles: T,
+    ) -> Option<Box<[IndexType]>> {
         let mut triangles = Some(triangles.into());
         std::mem::swap(&mut triangles, &mut self.uv_triangles);
         triangles
@@ -655,7 +665,7 @@ mod testing {
         let (tmf_mesh, name) = TMFMesh::read_from_obj_one(&mut file).unwrap();
         tmf_mesh.verify().unwrap();
         let mut out = std::fs::File::create("target/test_res/susan.tmf").unwrap();
-        assert!(name == "Suzanne","Name should be Suzanne but is {name}");
+        assert!(name == "Suzanne", "Name should be Suzanne but is {name}");
         let prec = TMFPrecisionInfo::default();
         tmf_mesh.write_tmf_one(&mut out, &prec, name).unwrap();
     }
@@ -666,20 +676,20 @@ mod testing {
         let mut file = std::fs::File::open("testing/susan.obj").unwrap();
         let (tmf_mesh, name) = TMFMesh::read_from_obj_one(&mut file).unwrap();
         tmf_mesh.verify().unwrap();
-        assert!(name == "Suzanne","Name should be Suzanne but is {name}");
+        assert!(name == "Suzanne", "Name should be Suzanne but is {name}");
         let prec = TMFPrecisionInfo::default();
         let mut out = Vec::new();
         {
             tmf_mesh.write_tmf_one(&mut out, &prec, name).unwrap();
         }
         let (r_mesh, name) = TMFMesh::read_tmf_one(&mut (&out as &[u8])).unwrap();
-        assert!(name == "Suzanne","Name should be Suzanne but is {name}");
+        assert!(name == "Suzanne", "Name should be Suzanne but is {name}");
         r_mesh.verify().unwrap();
         let mut out = std::fs::File::create("target/test_res/susan_ftmf.obj").unwrap();
         r_mesh.write_obj_one(&mut out, &name).unwrap();
     }
     #[test]
-    #[cfg(all(feature = "triangulation",feature = "obj_import"))]
+    #[cfg(all(feature = "triangulation", feature = "obj_import"))]
     fn rw_cube_obj_not_triangulated() {
         init_test_env();
         let mut file = std::fs::File::open("testing/cube.obj").unwrap();

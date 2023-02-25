@@ -76,10 +76,10 @@ fn calc_shortest_edge(
 ) -> Result<FloatType> {
     let shortest_edge = match vertex_triangles {
         Some(vertex_triangles) => {
-            if vertex_triangles.len() == 0{
+            if vertex_triangles.len() == 0 {
                 //TODO: handle 0 faced mesh as mesh with no faces!
                 return Ok(1.0);
-            } 
+            }
             use crate::utilis::distance;
             let vertices = match vertices {
                 Some(vertices) => vertices,
@@ -109,7 +109,10 @@ fn calc_shortest_edge(
         // TODO: Calculate distance between closest points for point cloud
         None => 1.0,
     };
-    assert!(shortest_edge.is_finite(),"Shortest edge should be finite but is '{shortest_edge}'!");
+    assert!(
+        shortest_edge.is_finite(),
+        "Shortest edge should be finite but is '{shortest_edge}'!"
+    );
     Ok(shortest_edge)
 }
 fn save_normals<W: Write>(
