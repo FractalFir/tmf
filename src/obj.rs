@@ -1,6 +1,7 @@
 use crate::model_importer::ModelImporter;
 use crate::{FloatType, IndexType, TMFMesh, Vector2, Vector3};
 use std::io::{BufReader, BufWriter, Error, ErrorKind, Read, Result, Write};
+const SMALL_VEC_CAP:usize = 8;
 fn parse_line(line: Result<String>, oi: &mut ModelImporter) -> Result<Option<(TMFMesh, String)>> {
     let line = line?;
     // Split the line by white spaces and '/' sign used in triangles
@@ -74,9 +75,9 @@ fn load_indices(split: &mut Split<&[char; 2]>) -> Result<(IndexType, IndexType, 
 }
 ///IMPORTANT TODO: It seems likey that normals and uvs are spwapped in this function. Investigate and cleanup the confusion and refactor triangulation
 fn load_face(split: &mut Split<&[char; 2]>, oi: &mut ModelImporter) -> Result<()> {
-    let mut vertex_indices: SmallVec<[IndexType; 6]> = SmallVec::new();
-    let mut uv_indices: SmallVec<[IndexType; 6]> = SmallVec::new();
-    let mut normal_indices: SmallVec<[IndexType; 6]> = SmallVec::new();
+    let mut vertex_indices: SmallVec<[IndexType; SMALL_VEC_CAP]> = SmallVec::new();
+    let mut uv_indices: SmallVec<[IndexType; SMALL_VEC_CAP]> = SmallVec::new();
+    let mut normal_indices: SmallVec<[IndexType; SMALL_VEC_CAP]> = SmallVec::new();
     while let Ok((vertex_index, uv_index, normal_index)) = load_indices(split) {
         vertex_indices.push(vertex_index);
         uv_indices.push(uv_index);
