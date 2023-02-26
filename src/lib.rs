@@ -8,12 +8,14 @@
 //! ## Feature flags
 #![doc = document_features::document_features!()]
 mod material;
+#[cfg(feature = "model_importer")]
+mod model_importer;
 mod normals;
+#[cfg(feature = "obj_import")]
 mod obj;
 /// Module used when saving vertex grups
 mod pile_map;
 mod tmf;
-mod triangulation;
 /// Module used to handle reads of data which is not bit aligned(for example, 3 or 17 bits). This is the module that allows for heavy compression used in this format.
 #[doc(hidden)]
 pub mod unaligned_rw;
@@ -101,6 +103,7 @@ fn vec_first<T: Sized + Clone>(vec: Vec<T>) -> T {
 fn slice_to_box<T: Sized + std::marker::Copy>(slice: &[T]) -> Box<[T]> {
     slice.into()
 }
+
 impl TMFMesh {
     pub(crate) fn get_segment_count(&self) -> usize {
         let mut count = 0;
@@ -135,22 +138,22 @@ impl TMFMesh {
     /// # let mut mesh = TMFMesh::empty();
     /// # let vertices = Vec::new();
     /// // Set the vertices of the mesh
-    /// mesh.set_vertices(&vertices);
+    /// mesh.set_vertices(vertices);
     ///```
     ///```
     /// # use tmf::FloatType;
     /// # fn do_something(_:&[(FloatType,FloatType,FloatType)]){}
     /// # let new_vertices = Vec::new();
     /// # let mut mesh = TMFMesh::empty();
-    /// # mesh.set_vertices(&new_vertices);
+    /// # mesh.set_vertices(new_vertices.clone());
     /// # use tmf::TMFMesh;
     /// // Change the vertices for some other vertices...
-    /// let old_vertices = mesh.set_vertices(&new_vertices).expect("Mesh had no vertices!");
+    /// let old_vertices = mesh.set_vertices(new_vertices).expect("Mesh had no vertices!");
     /// // ... and the do something with old vertices
     /// do_something(&old_vertices);
     ///```
-    pub fn set_vertices(&mut self, vertices: &[Vector3]) -> Option<Box<[Vector3]>> {
-        let mut vertices = Some(slice_to_box(vertices));
+    pub fn set_vertices<T: Into<Box<[Vector3]>>>(&mut self, vertices: T) -> Option<Box<[Vector3]>> {
+        let mut vertices = Some(vertices.into());
         std::mem::swap(&mut vertices, &mut self.vertices);
         vertices
     }
@@ -160,7 +163,7 @@ impl TMFMesh {
     /// // Set the normals of the mesh
     /// # let normals = Vec::new();
     /// # let mut mesh = TMFMesh::empty();
-    /// mesh.set_normals(&normals);
+    /// mesh.set_normals(normals);
     ///```
     ///```
     /// # fn do_something(_:&[(FloatType,FloatType,FloatType)]){}
@@ -168,14 +171,14 @@ impl TMFMesh {
     /// # use tmf::FloatType;
     /// # let new_normals = Vec::new();
     /// # let mut mesh = TMFMesh::empty();
-    /// # mesh.set_normals(&new_normals);
+    /// # mesh.set_normals(new_normals.clone());
     /// // Change the normals  of this mesh for some other normals...
-    /// let old_normals = mesh.set_normals(&new_normals).expect("Mesh had no normals!");
+    /// let old_normals = mesh.set_normals(new_normals).expect("Mesh had no normals!");
     /// // ... and the do something with old normals
     /// do_something(&old_normals);
     ///```
-    pub fn set_normals(&mut self, normals: &[Vector3]) -> Option<Box<[Vector3]>> {
-        let mut normals = Some(slice_to_box(normals));
+    pub fn set_normals<T: Into<Box<[Vector3]>>>(&mut self, normals: T) -> Option<Box<[Vector3]>> {
+        let mut normals = Some(normals.into());
         std::mem::swap(&mut normals, &mut self.normals);
         normals
     }
@@ -187,22 +190,22 @@ impl TMFMesh {
     /// # let mut mesh = TMFMesh::empty();
     /// # let uvs = Vec::new();
     /// // Set the uvs of the mesh
-    /// mesh.set_uvs(&uvs);
+    /// mesh.set_uvs(uvs);
     ///```
     ///```
     /// # use tmf::FloatType;
     /// # use tmf::TMFMesh;
     /// # fn do_something(_:&[(FloatType,FloatType)]){}
-    /// # let new_uvs = Vec::new();
     /// # let mut mesh = TMFMesh::empty();
-    /// # mesh.set_uvs(&new_uvs);
+    /// # let new_uvs = Vec::new();
+    /// # mesh.set_uvs(new_uvs.clone());
     /// // Change the uvs  of this mesh for some other normals...
-    /// let old_uvs = mesh.set_uvs(&new_uvs).expect("Mesh had no uvs!");
+    /// let old_uvs = mesh.set_uvs(new_uvs).expect("Mesh had no uvs!");
     /// // ... and the do something with old uvs
     /// do_something(&old_uvs);
     ///```
-    pub fn set_uvs(&mut self, uvs: &[Vector2]) -> Option<Box<[Vector2]>> {
-        let mut uvs = Some(slice_to_box(uvs));
+    pub fn set_uvs<T: Into<Box<[Vector2]>>>(&mut self, uvs: T) -> Option<Box<[Vector2]>> {
+        let mut uvs = Some(uvs.into());
         std::mem::swap(&mut uvs, &mut self.uvs);
         uvs
     }
@@ -211,10 +214,13 @@ impl TMFMesh {
     /// # use tmf::TMFMesh;
     /// # let mut mesh = TMFMesh::empty();
     /// # let triangles = [0,1,2,3,2,1];
-    /// mesh.set_vertex_triangles(&triangles);
+    /// mesh.set_vertex_triangles(triangles);
     ///```
-    pub fn set_vertex_triangles(&mut self, triangles: &[IndexType]) -> Option<Box<[IndexType]>> {
-        let mut triangles = Some(slice_to_box(triangles));
+    pub fn set_vertex_triangles<T: Into<Box<[IndexType]>>>(
+        &mut self,
+        triangles: T,
+    ) -> Option<Box<[IndexType]>> {
+        let mut triangles = Some(triangles.into());
         std::mem::swap(&mut triangles, &mut self.vertex_triangles);
         triangles
     }
@@ -223,10 +229,13 @@ impl TMFMesh {
     /// # use tmf::TMFMesh;
     /// # let mut mesh = TMFMesh::empty();
     /// # let triangles = [0,1,2,3,2,1];
-    /// mesh.set_normal_triangles(&triangles);
+    /// mesh.set_normal_triangles(triangles);
     ///```
-    pub fn set_normal_triangles(&mut self, triangles: &[IndexType]) -> Option<Box<[IndexType]>> {
-        let mut triangles = Some(slice_to_box(triangles));
+    pub fn set_normal_triangles<T: Into<Box<[IndexType]>>>(
+        &mut self,
+        triangles: T,
+    ) -> Option<Box<[IndexType]>> {
+        let mut triangles = Some(triangles.into());
         std::mem::swap(&mut triangles, &mut self.normal_triangles);
         triangles
     }
@@ -235,10 +244,13 @@ impl TMFMesh {
     /// # use tmf::TMFMesh;
     /// # let mut mesh = TMFMesh::empty();
     /// # let triangles = [0,1,2,3,2,1];
-    /// mesh.set_uv_triangles(&triangles);
+    /// mesh.set_uv_triangles(triangles);
     ///```
-    pub fn set_uv_triangles(&mut self, triangles: &[IndexType]) -> Option<Box<[IndexType]>> {
-        let mut triangles = Some(slice_to_box(triangles));
+    pub fn set_uv_triangles<T: Into<Box<[IndexType]>>>(
+        &mut self,
+        triangles: T,
+    ) -> Option<Box<[IndexType]>> {
+        let mut triangles = Some(triangles.into());
         std::mem::swap(&mut triangles, &mut self.uv_triangles);
         triangles
     }
@@ -321,8 +333,8 @@ impl TMFMesh {
     /// # let mut mesh = TMFMesh::empty();
     /// # let vertices = [(0.0,0.0,0.0),(1.0,0.0,0.0),(1.0,1.0,0.0),(0.0,1.0,0.0)];
     /// # let vertex_triangles = [0,1,2,0,2,3];
-    /// # mesh.set_vertices(&vertices);
-    /// # mesh.set_vertex_triangles(&vertex_triangles);
+    /// # mesh.set_vertices(vertices);
+    /// # mesh.set_vertex_triangles(vertex_triangles);
     /// let vert_buff = mesh.get_vertex_buffer().expect("Could not create the array of points creating triangles!");
     /// // The same number of triangles created by points and triangles created by indices
     /// assert!(vert_buff.len() == vertex_triangles.len());
@@ -346,9 +358,9 @@ impl TMFMesh {
     /// # let mut mesh = TMFMesh::empty();
     /// # let normals = [(0.0,0.0,0.0),(1.0,0.0,0.0),(1.0,1.0,0.0),(0.0,1.0,0.0)];
     /// # let normal_triangles = [0,1,2,0,2,3];
-    /// # mesh.set_normals(&normals);
+    /// # mesh.set_normals(normals);
     /// # mesh.normalize();
-    /// # mesh.set_normal_triangles(&normal_triangles);
+    /// # mesh.set_normal_triangles(normal_triangles);
     /// let normal_buff = mesh.get_normal_buffer().expect("Could not create the array of normals creating triangles!");
     /// // The same number of triangles created by points and triangles created by indices
     /// assert!(normal_buff.len() == normal_triangles.len());
@@ -372,8 +384,8 @@ impl TMFMesh {
     /// # let mut mesh = TMFMesh::empty();
     /// # let uvs = [(0.0,0.0),(1.0,0.0),(1.0,1.0),(0.0,1.0)];
     /// # let uv_triangles = [0,1,2,0,2,3];
-    /// # mesh.set_uvs(&uvs);
-    /// # mesh.set_uv_triangles(&uv_triangles);
+    /// # mesh.set_uvs(uvs);
+    /// # mesh.set_uv_triangles(uv_triangles);
     /// let uv_buff = mesh.get_uv_buffer().expect("Could not create the array of uvs creating triangles!");
     /// // The same number of triangles created by points and triangles created by indices
     /// assert!(uv_buff.len() == uv_triangles.len());
@@ -398,7 +410,7 @@ impl TMFMesh {
     /// # pub(crate) fn magnitude(i: Vector3) -> FloatType
     /// # {let xx = i.0 * i.0;let yy = i.1 * i.1;let zz = i.2 * i.2;(xx + yy + zz).sqrt()}
     /// // Some mesh with normals which are not normalzed
-    /// mesh.set_normals(&normals);
+    /// mesh.set_normals(normals);
     /// // Normalize all normals
     /// mesh.normalize();
     /// // All normals are normalised (their magnitude is equal to 1)
@@ -452,6 +464,7 @@ impl TMFMesh {
     ///     do_something(mesh,name);
     /// }
     ///```
+    #[cfg(feature = "obj_import")]
     pub fn read_from_obj<R: Read>(reader: &mut R) -> Result<Vec<(Self, String)>> {
         obj::read_from_obj(reader)
     }
@@ -466,6 +479,7 @@ impl TMFMesh {
     /// // And read a mesh from it
     /// let (mesh,name) = TMFMesh::read_from_obj_one(&mut file).expect("Could not parse .obj file!");
     ///```
+    #[cfg(feature = "obj_import")]
     pub fn read_from_obj_one<R: Read>(reader: &mut R) -> Result<(Self, String)> {
         let meshes = obj::read_from_obj(reader)?;
         if meshes.len() < 1 {
@@ -491,6 +505,7 @@ impl TMFMesh {
     /// let mut obj_out = File::create(out_path).expect("Could not create obj out file!");
     /// mesh.write_obj_one(&mut obj_out,"mesh name").expect("Could not write the .obj file!");
     /// ```
+    #[cfg(feature = "obj_import")]
     pub fn write_obj_one<W: Write>(&self, w: &mut W, name: &str) -> Result<()> {
         obj::write_obj(&[(self.clone(), name)], w)
     }
@@ -503,6 +518,7 @@ impl TMFMesh {
     /// let mut output = File::create(path).expect("Could not create file!");
     /// TMFMesh::write_obj(&meshes,&mut output).expect("Could not export to .obj");
     ///```
+    #[cfg(feature = "obj_import")]
     pub fn write_obj<W: Write, S: std::borrow::Borrow<str>>(
         meshes: &[(TMFMesh, S)],
         w: &mut W,
@@ -622,6 +638,7 @@ mod testing {
         std::fs::create_dir_all("target/test_res").unwrap();
     }
     #[test]
+    #[cfg(feature = "obj_import")]
     fn read_susan_obj() {
         init_test_env();
         let mut file = std::fs::File::open("testing/susan.obj").unwrap();
@@ -629,6 +646,7 @@ mod testing {
         tmf_mesh.verify().unwrap();
     }
     #[test]
+    #[cfg(feature = "obj_import")]
     fn rw_susan_obj() {
         init_test_env();
         let mut file = std::fs::File::open("testing/susan.obj").unwrap();
@@ -638,35 +656,38 @@ mod testing {
         tmf_mesh.write_obj_one(&mut out, &name).unwrap();
     }
     #[test]
+    #[cfg(feature = "obj_import")]
     fn save_susan_tmf() {
         init_test_env();
         let mut file = std::fs::File::open("testing/susan.obj").unwrap();
         let (tmf_mesh, name) = TMFMesh::read_from_obj_one(&mut file).unwrap();
         tmf_mesh.verify().unwrap();
         let mut out = std::fs::File::create("target/test_res/susan.tmf").unwrap();
-        assert!(name == "Suzanne");
+        assert!(name == "Suzanne", "Name should be Suzanne but is {name}");
         let prec = TMFPrecisionInfo::default();
         tmf_mesh.write_tmf_one(&mut out, &prec, name).unwrap();
     }
     #[test]
+    #[cfg(feature = "obj_import")]
     fn rw_susan_tmf() {
         init_test_env();
         let mut file = std::fs::File::open("testing/susan.obj").unwrap();
         let (tmf_mesh, name) = TMFMesh::read_from_obj_one(&mut file).unwrap();
         tmf_mesh.verify().unwrap();
-        assert!(name == "Suzanne");
+        assert!(name == "Suzanne", "Name should be Suzanne but is {name}");
         let prec = TMFPrecisionInfo::default();
         let mut out = Vec::new();
         {
             tmf_mesh.write_tmf_one(&mut out, &prec, name).unwrap();
         }
         let (r_mesh, name) = TMFMesh::read_tmf_one(&mut (&out as &[u8])).unwrap();
+        assert!(name == "Suzanne", "Name should be Suzanne but is {name}");
         r_mesh.verify().unwrap();
         let mut out = std::fs::File::create("target/test_res/susan_ftmf.obj").unwrap();
         r_mesh.write_obj_one(&mut out, &name).unwrap();
     }
     #[test]
-    #[cfg(feature = "triangulation")]
+    #[cfg(all(feature = "triangulation", feature = "obj_import"))]
     fn rw_cube_obj_not_triangulated() {
         init_test_env();
         let mut file = std::fs::File::open("testing/cube.obj").unwrap();
@@ -678,6 +699,7 @@ mod testing {
         TMFMesh::write_obj(&meshes, &mut out).unwrap();
     }
     #[test]
+    #[cfg(feature = "obj_import")]
     fn load_multpile_meshes_obj() {
         init_test_env();
         let mut file = std::fs::File::open("testing/multiple.obj").unwrap();
@@ -690,6 +712,7 @@ mod testing {
         }
     }
     #[test]
+    #[cfg(feature = "obj_import")]
     fn rw_multpile_meshes_obj() {
         init_test_env();
         let mut file = std::fs::File::open("testing/multiple.obj").unwrap();
@@ -702,6 +725,7 @@ mod testing {
     }
     #[ignore]
     #[test]
+    #[cfg(feature = "obj_import")]
     fn read_multi_mtl_obj() {
         init_test_env();
         let mut file = std::fs::File::open("testing/multi_mtl.obj").unwrap();
@@ -711,6 +735,7 @@ mod testing {
     }
     #[ignore]
     #[test]
+    #[cfg(feature = "obj_import")]
     fn rw_60k_sph() {
         init_test_env();
         let mut file = std::fs::File::open("testing/60k.obj").unwrap();
@@ -729,6 +754,7 @@ mod testing {
     }
     #[ignore]
     #[test]
+    #[cfg(feature = "obj_import")]
     fn save_60k_sph_tmf() {
         init_test_env();
         let mut file = std::fs::File::open("testing/60k.obj").unwrap();

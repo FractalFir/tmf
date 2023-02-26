@@ -76,6 +76,10 @@ fn calc_shortest_edge(
 ) -> Result<FloatType> {
     let shortest_edge = match vertex_triangles {
         Some(vertex_triangles) => {
+            if vertex_triangles.len() == 0 {
+                //TODO: handle 0 faced mesh as mesh with no faces!
+                return Ok(1.0);
+            }
             use crate::utilis::distance;
             let vertices = match vertices {
                 Some(vertices) => vertices,
@@ -105,6 +109,10 @@ fn calc_shortest_edge(
         // TODO: Calculate distance between closest points for point cloud
         None => 1.0,
     };
+    assert!(
+        shortest_edge.is_finite(),
+        "Shortest edge should be finite but is '{shortest_edge}'!"
+    );
     Ok(shortest_edge)
 }
 fn save_normals<W: Write>(
@@ -400,7 +408,7 @@ fn read_normal_faces(
     } else {
         read_triangles(&mut (&data as &[u8]))?
     };
-    if mesh.set_normal_triangles(&normal_triangles).is_some() {
+    if mesh.set_normal_triangles(normal_triangles).is_some() {
         return Err(std::io::Error::new(
             std::io::ErrorKind::Other,
             "Only one normal index array(triangle array) can be present in a model.",
@@ -415,7 +423,7 @@ fn read_vertex_faces(
 ) -> Result<()> {
     use crate::vertices::read_triangles;
     if mesh
-        .set_vertex_triangles(&read_triangles(&mut (&data as &[u8]))?)
+        .set_vertex_triangles(read_triangles(&mut (&data as &[u8]))?)
         .is_some()
     {
         return Err(std::io::Error::new(
@@ -439,7 +447,7 @@ pub fn read_mesh<R: Read>(reader: &mut R) -> Result<(TMFMesh, String)> {
             SectionType::VertexSegment => {
                 use crate::vertices::read_tmf_vertices;
                 if res
-                    .set_vertices(&read_tmf_vertices(&mut (&data as &[u8]))?)
+                    .set_vertices(read_tmf_vertices(&mut (&data as &[u8]))?)
                     .is_some()
                 {
                     return Err(std::io::Error::new(
@@ -451,7 +459,7 @@ pub fn read_mesh<R: Read>(reader: &mut R) -> Result<(TMFMesh, String)> {
             SectionType::NormalSegment => {
                 use crate::normals::read_normal_array;
                 if res
-                    .set_normals(&read_normal_array(&mut (&data as &[u8]))?)
+                    .set_normals(read_normal_array(&mut (&data as &[u8]))?)
                     .is_some()
                 {
                     return Err(std::io::Error::new(
@@ -462,7 +470,7 @@ pub fn read_mesh<R: Read>(reader: &mut R) -> Result<(TMFMesh, String)> {
             }
             SectionType::UvSegment => {
                 use crate::uv::read_uvs;
-                if res.set_uvs(&read_uvs(&mut (&data as &[u8]))?).is_some() {
+                if res.set_uvs(read_uvs(&mut (&data as &[u8]))?).is_some() {
                     return Err(std::io::Error::new(
                         std::io::ErrorKind::Other,
                         "Only one uv array can be present in a model.",
@@ -472,7 +480,7 @@ pub fn read_mesh<R: Read>(reader: &mut R) -> Result<(TMFMesh, String)> {
             SectionType::VertexTriangleSegment => {
                 use crate::vertices::read_triangles;
                 if res
-                    .set_vertex_triangles(&read_triangles(&mut (&data as &[u8]))?)
+                    .set_vertex_triangles(read_triangles(&mut (&data as &[u8]))?)
                     .is_some()
                 {
                     return Err(std::io::Error::new(
@@ -487,7 +495,7 @@ pub fn read_mesh<R: Read>(reader: &mut R) -> Result<(TMFMesh, String)> {
             SectionType::UvTriangleSegment => {
                 use crate::vertices::read_triangles;
                 if res
-                    .set_uv_triangles(&read_triangles(&mut (&data as &[u8]))?)
+                    .set_uv_triangles(read_triangles(&mut (&data as &[u8]))?)
                     .is_some()
                 {
                     return Err(std::io::Error::new(

@@ -1,5 +1,4 @@
 [package]
-
 name = "tmf"
 version = "0.1.1"
 edition = "2021"
@@ -14,11 +13,12 @@ categories = ["game-development","rendering::data-formats","compression"]
 ##! Test
 [dependencies]
 document-features = "0.2.7"
-smallvec = "1.10.0"
+smallvec = {version = "1.10.0",optional = true}
 [dev-dependencies]
 #bencher = "0.1.5"
 rand = "0.8.5"
 [features]
+default = ["obj_import"]
 ## Experimental triangulation in .obj loader. Supports only convex polygons ATM, and has bugs, triangulating your mesh in 3D modelling software before importing highly advised. Please note that if you see any triangles missing this is likely the result of the triangulation algorithm not working properly. 
 triangulation = []
 ## Changes the sin and cos function used in reading the tmf files for a potentially faster, but less accurate functions.
@@ -31,6 +31,9 @@ long_indices = []
 short_indices = []
 ## Changes the internal setting of the unaligned reader to use different data size. Can be beneficial for small models on some systems.
 byte_rw = []
+model_importer = ["smallvec"]
+## Adds the ability to import/export .obj files
+obj_import = ["model_importer"]
 #
 #[[bench]]
 #name = "unaligned_rw"

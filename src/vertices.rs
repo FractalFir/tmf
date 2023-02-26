@@ -69,6 +69,10 @@ pub fn save_tmf_vertices<W: Write>(
     let prec_x = (1.0 / inc_x).log2().ceil() as u8;
     let prec_y = (1.0 / inc_y).log2().ceil() as u8;
     let prec_z = (1.0 / inc_z).log2().ceil() as u8;
+    //Ensure precision is never below 1
+    let prec_x = prec_x.max(1);
+    let prec_y = prec_y.max(1);
+    let prec_z = prec_z.max(1);
     // Write precision info
     writer.write_all(&[prec_x])?;
     writer.write_all(&[prec_y])?;
