@@ -24,6 +24,7 @@ mod uv;
 mod verify;
 mod vertices;
 // Unfinished
+mod lz77;
 const TMF_MAJOR: u16 = 0;
 const TMF_MINOR: u16 = 1;
 const MIN_TMF_MAJOR: u16 = 0;
