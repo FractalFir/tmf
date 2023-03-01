@@ -1,7 +1,7 @@
 #[cfg(not(any(feature = "obj_import")))]
 compile_error!("Feature \"model_importer\" is only useful when another feature using it is enabled(e.g. obj importer) and is otherwise useless dead code.");
 use crate::{IndexType, TMFMesh, Vector2, Vector3};
-const SMALL_VEC_CAP:usize = 8;
+const SMALL_VEC_CAP: usize = 8;
 #[cfg(feature = "triangulation")]
 include!("triangulation.rs");
 pub(crate) struct ModelImporter {
@@ -53,7 +53,7 @@ impl ModelImporter {
         self.vertex_triangles.clear();
         self.normal_triangles.clear();
         self.uv_triangles.clear();
-        
+
         Some((mesh, name))
     }
     pub(crate) fn finish(self) -> (TMFMesh, String) {
@@ -134,12 +134,12 @@ impl ModelImporter {
                     let vertex_indices = SmallVec::from_slice(vertex_indices);
                     let normal_indices = SmallVec::from_slice(normal_indices);
                     let uv_indices = SmallVec::from_slice(uv_indices);
-                    triangulate(self,vertex_indices,normal_indices,uv_indices);
+                    triangulate(self, vertex_indices, normal_indices, uv_indices);
                     Ok(())
                 }
                 #[cfg(not(feature = "triangulation"))]
                 Err("Encountered a face that needed triangulation but experimental triangulation feature is disabled".to_owned())
-            },
+            }
         }
     }
 }
