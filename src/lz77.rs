@@ -49,10 +49,10 @@ fn get_best_match_within_window(a:&[u64],b:&[u64],offset:u64,sliding_window:u8)-
     let slide_beg = (offset as i64 - sliding_window as i64).max(0) as u64;
     let mut best_offset = 0;
     let mut best_length = 0;
-    println!("slide_beg:{slide_beg}, offset:{offset}, sliding_window:{sliding_window}");
+    //println!("slide_beg:{slide_beg}, offset:{offset}, sliding_window:{sliding_window}");
     for slide_offset in slide_beg..offset{
         let curr_len = get_seq_match(a,b,offset,slide_offset);
-        println!("curr_len:{curr_len}");
+        //println!("curr_len:{curr_len}");
         if curr_len > best_length{
             best_length = curr_len;
             best_offset = slide_offset;
@@ -60,11 +60,55 @@ fn get_best_match_within_window(a:&[u64],b:&[u64],offset:u64,sliding_window:u8)-
     }
     (best_offset,best_length)
 }
-fn encode(data:&[u64],bits:u64)->Vec<u64>{
+fn eval_match(len:u64,bits_len:u8)->bool{
+    let nocompress_len = (bits_len as u64)*2 + 1;
+    if len >= nocompress_len {
+        return true;
+    }
+    //Additional compression gain coming from smaller segment count.
+    let compress_gain = ((len as f32)/((1<<bits_len) as f32)*(nocompress_len as f32)) as u64;
+    len > compress_gain + nocompress_len
+}
+use crate::unaligned_rw::*;
+const sign_prec:UnalignedRWMode = UnalignedRWMode::precision_bits(1);
+const SEG_UNCOMPRESSED:u64 = 0;
+const SEG_COMPRESSED:u64 = 1;
+fn encode(data:&[u64],bits:u8)->Vec<u64>{
     let sliding_window = 1<<bits;
     let end = (data.len() as u64)*(u64::BITS as u64);
-    for curr_offset in 0..end{
-        //let (o,l) = get_best_match_within_window()
+     
+    let mut curr_offset = 0;
+    let mut unc_seg_len = 0;
+    let mut unc_beg = 0;
+    
+    let mut compressed = Vec::with_capacity(data.len());
+    let mut compression = UnalignedWriter::new(&mut compressed);
+    let offset_prec = UnalignedRWMode::precision_bits(bits);
+    while curr_offset<end{
+        let (o,l) = get_best_match_within_window(data,data,curr_offset,sliding_window);
+        if eval_match(l,bits){
+            println!("Favorable match of length:{l} at offset:{curr_offset}, flowing uncompressed segment of length:{unc_seg_len} starting at:{unc_beg}");
+            
+            compression.write_unaligned(sign_prec,SEG_UNCOMPRESSED).expect("TODO: handle this");
+            compression.write_unaligned(offset_prec,unc_seg_len).expect("TODO: handle this");
+            println!("TODO:write the uncompressed segment!");
+            
+            compression.write_unaligned(sign_prec,SEG_COMPRESSED).expect("TODO: handle this");
+            compression.write_unaligned(offset_prec,l).expect("TODO: handle this");
+            compression.write_unaligned(offset_prec,curr_offset - o).expect("TODO: handle this");
+            
+            curr_offset += l;
+            unc_seg_len = 0;
+            unc_beg = curr_offset;
+        }
+        else{
+            //println!("o:{o},l:{l}");
+            curr_offset += 1;  
+            unc_seg_len += 1;
+        }
+    }
+    if unc_seg_len > 0{
+        println!("TODO:write the last uncompressed segment!");
     }
     todo!();
 }
@@ -157,4 +201,9 @@ fn find_in_sliding_win(){
     let (o,l) = get_best_match_within_window(&a,&b,60,80);
     println!("o:{o},l:{l}");
     todo!();
+}
+#[test]
+fn test_encode(){
+    let data = [2582,8907545,86606,70115397,717606];
+    let compressed = encode(&data,6);
 }
