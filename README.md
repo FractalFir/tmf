@@ -41,7 +41,7 @@ Draco is noticably better at compression than TMF. If all you are looking for is
 | Build Dependencies | C++ compiler, cmake, make | only standard rust tollchain |
 | Using in rust porject | Requires manual linking | installs and links automaticaly using cargo |
 ### TLDR
-tmf aims to be decnet at its job, lightweight and easy to use with Rust. Draco aims to be best at its job, but is bulkier and has no Rust support.
+tmf aims to be good enugh at compression, very lightweight and easy to use with Rust. Draco aims to be the best at compresion, but is bulkier and has no Rust support.
 ## What can lead to compression of a particular being less efficient?
 Greatly varying LOD: The save system dynamically adjusts to the LOD of the mesh. For example, a low-poly castle mesh may be saved with precision of 10 cm and a strawberry model may be saved with 1 mm precision. Saving those two object in one *mesh*(not file!) will force the castle mesh to be saved with higher precision, wasting space. Because most meshes will naturally have a consistent LOD, and meshes that don't would almost always lead to issues elsewhere, this problem is rarely encountered.
 # Examples
