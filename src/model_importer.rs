@@ -129,16 +129,16 @@ impl ModelImporter {
                 Ok(())
             }
             _ => {
-                #[cfg(not(feature = "triangulation"))]
-                Err("Encountered a face that needed triangulation but experimental triangulation feature is disabled");
                 #[cfg(feature = "triangulation")]
                 {
                     let vertex_indices = SmallVec::from_slice(vertex_indices);
                     let normal_indices = SmallVec::from_slice(normal_indices);
                     let uv_indices = SmallVec::from_slice(uv_indices);
-                    triangulate(self,vertex_indices,normal_indices,uv_indices);
-                    Ok(())
+                    triangulate(self, vertex_indices, normal_indices, uv_indices);
+                    return Ok(())
                 }
+                #[cfg(not(feature = "triangulation"))]
+                return Err("Encountered a face that needed triangulation but experimental triangulation feature is disabled".to_owned())
             },
         }
     }
