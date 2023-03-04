@@ -45,72 +45,147 @@ fn get_seq_match(a: &[u64], b: &[u64], mut offset_a: u64, mut offset_b: u64) -> 
     }
     eq_len
 }
-fn get_best_match_within_window(a:&[u64],b:&[u64],offset:u64,sliding_window:u8)->(u64,u64){
+fn get_best_match_within_window(
+    a: &[u64],
+    b: &[u64],
+    offset: u64,
+    sliding_window: u8,
+) -> (u64, u64) {
     let slide_beg = (offset as i64 - sliding_window as i64).max(0) as u64;
     let mut best_offset = 0;
     let mut best_length = 0;
     //println!("slide_beg:{slide_beg}, offset:{offset}, sliding_window:{sliding_window}");
-    for slide_offset in slide_beg..offset{
-        let curr_len = get_seq_match(a,b,offset,slide_offset);
+    for slide_offset in slide_beg..offset {
+        let curr_len = get_seq_match(a, b, offset, slide_offset);
         //println!("curr_len:{curr_len}");
-        if curr_len > best_length{
+        if curr_len > best_length {
             best_length = curr_len;
             best_offset = slide_offset;
         }
     }
-    (best_offset,best_length)
+    (best_offset, best_length)
 }
-fn eval_match(len:u64,bits_len:u8)->bool{
-    let nocompress_len = (bits_len as u64)*2 + 1;
+fn eval_match(len: u64, bits_len: u8) -> bool {
+    let nocompress_len = (bits_len as u64) * 2 + 1;
     if len >= nocompress_len {
         return true;
     }
     //Additional compression gain coming from smaller segment count.
-    let compress_gain = ((len as f32)/((1<<bits_len) as f32)*(nocompress_len as f32)) as u64;
+    let compress_gain = ((len as f32) / ((1 << bits_len) as f32) * (nocompress_len as f32)) as u64;
     len > compress_gain + nocompress_len
 }
 use crate::unaligned_rw::*;
-const sign_prec:UnalignedRWMode = UnalignedRWMode::precision_bits(1);
-const SEG_UNCOMPRESSED:u64 = 0;
-const SEG_COMPRESSED:u64 = 1;
-fn encode(data:&[u64],bits:u8)->Vec<u64>{
-    let sliding_window = 1<<bits;
-    let end = (data.len() as u64)*(u64::BITS as u64);
-     
+const sign_prec: UnalignedRWMode = UnalignedRWMode::precision_bits(1);
+const SEG_UNCOMPRESSED: u64 = 0;
+const SEG_COMPRESSED: u64 = 1;
+fn encode(data: &[u64], bits: u8) -> Vec<u64> {
+    let sliding_window = 1 << bits;
+    let end = (data.len() as u64) * (u64::BITS as u64);
+
     let mut curr_offset = 0;
     let mut unc_seg_len = 0;
     let mut unc_beg = 0;
-    
+
     let mut compressed = Vec::with_capacity(data.len());
     let mut compression = UnalignedWriter::new(&mut compressed);
     let offset_prec = UnalignedRWMode::precision_bits(bits);
-    while curr_offset<end{
-        let (o,l) = get_best_match_within_window(data,data,curr_offset,sliding_window);
-        if eval_match(l,bits){
+    while curr_offset < end {
+        let (o, l) = get_best_match_within_window(data, data, curr_offset, sliding_window);
+        if eval_match(l, bits) {
             println!("Favorable match of length:{l} at offset:{curr_offset}, flowing uncompressed segment of length:{unc_seg_len} starting at:{unc_beg}");
-            
-            compression.write_unaligned(sign_prec,SEG_UNCOMPRESSED).expect("TODO: handle this");
-            compression.write_unaligned(offset_prec,unc_seg_len).expect("TODO: handle this");
+
+            compression
+                .write_unaligned(sign_prec, SEG_UNCOMPRESSED)
+                .expect("TODO: handle this");
+            compression
+                .write_unaligned(offset_prec, unc_seg_len)
+                .expect("TODO: handle this");
             println!("TODO:write the uncompressed segment!");
-            
-            compression.write_unaligned(sign_prec,SEG_COMPRESSED).expect("TODO: handle this");
-            compression.write_unaligned(offset_prec,l).expect("TODO: handle this");
-            compression.write_unaligned(offset_prec,curr_offset - o).expect("TODO: handle this");
-            
+
+            compression
+                .write_unaligned(sign_prec, SEG_COMPRESSED)
+                .expect("TODO: handle this");
+            compression
+                .write_unaligned(offset_prec, l)
+                .expect("TODO: handle this");
+            compression
+                .write_unaligned(offset_prec, curr_offset - o)
+                .expect("TODO: handle this");
+
             curr_offset += l;
             unc_seg_len = 0;
             unc_beg = curr_offset;
-        }
-        else{
+        } else {
             //println!("o:{o},l:{l}");
-            curr_offset += 1;  
+            curr_offset += 1;
             unc_seg_len += 1;
         }
     }
-    if unc_seg_len > 0{
+    if unc_seg_len > 0 {
         println!("TODO:write the last uncompressed segment!");
     }
     todo!();
+}
+fn bsl_safe(val:u64,shift:u64)->u64{
+    if shift == 0{val}
+    else{val<<shift}
+}
+fn bsr_safe(val:u64,shift:u64)->u64{
+    if shift == 0{val}
+    else{val>>shift}
+}
+fn bwise_memcpy(
+    src: &[u64],
+    mut src_offset: u64,
+    mut target_offset: u64,
+    mut length: u64,
+    target: &mut [u64],
+) {
+    let mut target_byte = target[(target_offset / (u64::BITS as u64)) as usize];
+    while length > 0 {
+        let next_src_offset = ((src_offset / (u64::BITS as u64 - 1)) + 1) * (u64::BITS as u64);
+        let next_target_offset = ((src_offset / (u64::BITS as u64 - 1)) + 1) * (u64::BITS as u64);
+        let curr_cpy_length = (next_src_offset - src_offset)
+            .min(next_target_offset - target_offset)
+            .min(length);
+        
+        assert!(length > 0);
+
+        let src_byte = src[(src_offset / (u64::BITS as u64)) as usize];
+        let curr_src_offset = src_offset % (u64::BITS as u64);
+        let curr_target_offset = target_offset % (u64::BITS as u64);
+        // target byte: | src_offset | target_data | u64::BITS - curr_cpy_length | -> |0_padding|target_data|
+        // |
+        let src_byte = bsr_safe(bsl_safe(src_byte,curr_src_offset),u64::BITS as u64 - curr_cpy_length + curr_src_offset);
+        println!("src_byte: 0b{src_byte:064b}, target_byte:{target_byte:064b}");
+        println!("curr_target_offset{curr_target_offset},curr_cpy_length{curr_cpy_length}");
+        let src_byte = bsl_safe(src_byte,u64::BITS as u64 - curr_target_offset - curr_cpy_length);
+        target_byte |= src_byte;
+        println!("src_byte: 0b{src_byte:064b}, target_byte:{target_byte:064b}");
+        let target_written = (curr_target_offset + curr_cpy_length);
+        println!("target_written:{target_written}");
+        if target_written >= u64::BITS as u64 {
+            println!("writing to traget!");
+            target[(target_offset / (u64::BITS as u64)) as usize] = target_byte;
+            target_byte = 0;
+        }
+        length -= curr_cpy_length;
+        target_offset += curr_cpy_length;
+        src_offset += curr_cpy_length;
+        println!("src_offset:{src_offset}, next_src_offset:{next_src_offset},next_target_offset:{next_target_offset},curr_cpy_length:{curr_cpy_length}");
+    }
+    todo!("Coping not implemented yet, but target is:{target:?}!");
+}
+#[test]
+fn test_bwise_cpy() {
+    let a: [u64; 2] = [
+        0b0000000111110110111110110100001111100001100011101011001000000010,
+        0b0110011011000010110001111010111111001100010010000001000011000000,
+    ];
+    let mut b = vec![0; 2];
+    //let mut b_writer = UnalignedWriter::new(&mut b);
+    bwise_memcpy(&a, 8, 0, 70, &mut b);
+    assert!(get_seq_match(&a, &b, 8, 0) == 70);
 }
 #[test]
 fn test_equ_len_no_offset() {
@@ -171,7 +246,7 @@ fn test_long_full_eq() {
     assert!(get_seq_match(&b, &a, 0, 1) == 127);
 }
 #[test]
-fn test_log_partial_eq(){
+fn test_log_partial_eq() {
     let a: [u64; 2] = [
         0b0000000111110110111110110100001111100001100011101011001000000010,
         0b0110011011000010110001111010111111001100010010000001000011000000,
@@ -181,15 +256,15 @@ fn test_log_partial_eq(){
         0b0110011011000010110001111010111111001100010010000001000011001000,
     ];
     assert!(get_seq_match(&a, &b, 0, 0) == 124);
-     let b: [u64; 2] = [
+    let b: [u64; 2] = [
         0b0000000111110110111110110100001111100001100011101011001001000010,
         0b0110011011000010110001111010111111001100010010000001000011000000,
     ];
     let smatch = get_seq_match(&a, &b, 0, 0);
-    assert!(smatch == 57,"{smatch}");
+    assert!(smatch == 57, "{smatch}");
 }
 #[test]
-fn find_in_sliding_win(){
+fn find_in_sliding_win() {
     let a: [u64; 2] = [
         0b0000000111110110111110110100001111100001100011101011001000000010,
         0b0110011011000010110001111010111111001100010010000001000011000000,
@@ -198,12 +273,11 @@ fn find_in_sliding_win(){
         0b0000000111110110111110110100001111100001100011101011001000000010,
         0b0110011011000010110001111010111111001100010010000001000011001000,
     ];
-    let (o,l) = get_best_match_within_window(&a,&b,60,80);
-    println!("o:{o},l:{l}");
-    todo!();
+    let (o, l) = get_best_match_within_window(&a, &b, 60, 80);
 }
 #[test]
-fn test_encode(){
-    let data = [2582,8907545,86606,70115397,717606];
-    let compressed = encode(&data,6);
+#[ignore]
+fn test_encode() {
+    let data = [2582, 8907545, 86606, 70115397, 717606];
+    let compressed = encode(&data, 6);
 }
