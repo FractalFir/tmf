@@ -1,4 +1,6 @@
-/// Kinda like hash map, but is contiguous, uses simple indices and
+// Module not completed yet
+#![allow(dead_code)]
+/// Kinda like hash map, but is contiguous, uses simple indices and can be easily serialised
 struct PileMap<T: PartialEq> {
     pile: Vec<T>,
 }
@@ -23,8 +25,9 @@ impl<T: PartialEq + 'static> PileMap<T> {
         index + 1
     }
 }
-impl<T: PartialEq> Into<Vec<T>> for PileMap<T> {
-    fn into(self) -> Vec<T> {
-        self.pile
+impl<T: PartialEq> From<PileMap<T>> for Vec<T> {
+  fn from(val: PileMap<T>) -> Self {
+         val.pile
+
     }
 }

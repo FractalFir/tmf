@@ -29,13 +29,10 @@ pub fn read_from_obj<R: Read>(reader: &mut R) -> Result<Vec<(TMFMesh, String)>> 
     let reader = BufReader::new(reader);
     use std::io::BufRead;
     let mut oi = ModelImporter::new();
-    let mut lines = reader.lines();
+    let lines = reader.lines();
     let mut res = Vec::new();
     for line in lines {
-        match parse_line(line, &mut oi)? {
-            Some(mesh_and_name) => res.push(mesh_and_name),
-            None => (),
-        }
+        if let Some(mesh_and_name) = parse_line(line, &mut oi)? { res.push(mesh_and_name) };
     }
     res.push(oi.finish());
     Ok(res)
@@ -155,28 +152,23 @@ fn save_obj<W: Write>(
         }
     };
     // Ensure normal triangle array, if present, has the right length.
-    match mesh.get_normal_triangles() {
-        Some(normal_triangles) => {
+    if let Some(normal_triangles) = mesh.get_normal_triangles() {
             if normal_triangles.len() != vert_triangle_len {
                 return Err(Error::new(
                     ErrorKind::Other,
                     "Number of triangles in the vertex triangle and normal triangle array differs.",
                 ));
             }
-        }
-        None => (),
     }
     // Ensure uv triangle array, if present, has the right length.
-    match mesh.get_uv_triangles() {
-        Some(uv_triangles) => {
+    if let Some(uv_triangles) = mesh.get_uv_triangles() {
+
             if uv_triangles.len() != vert_triangle_len {
                 return Err(Error::new(
                     ErrorKind::Other,
                     "Number of triangles in the vertex triangle and uv triangle array differs.",
                 ));
             }
-        }
-        None => (),
     }
     // TODO: this part can be rewritten to be more efficient by checking if arrays are present beforehand.
     for i in 0..vert_triangle_len {
@@ -195,10 +187,7 @@ fn save_obj<W: Write>(
                 }
             }
         }
-        match normals {
-            Some(normals) => write!(w, "/{}", normals[i] + index_offset.2)?,
-            None => (),
-        }
+        if let Some(normals) = normals { write!(w, "/{}", normals[i] + index_offset.2)? };
         if i % 3 == 2 {
             writeln!(w)?
         } else {

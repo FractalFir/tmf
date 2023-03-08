@@ -1,7 +1,7 @@
 #[cfg(not(any(feature = "obj_import")))]
 compile_error!("Feature \"model_importer\" is only useful when another feature using it is enabled(e.g. obj importer) and is otherwise useless dead code.");
 use crate::{IndexType, TMFMesh, Vector2, Vector3};
-const SMALL_VEC_CAP: usize = 8;
+//const SMALL_VEC_CAP: usize = 8;
 #[cfg(feature = "triangulation")]
 include!("triangulation.rs");
 pub(crate) struct ModelImporter {

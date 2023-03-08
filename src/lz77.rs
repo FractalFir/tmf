@@ -1,7 +1,16 @@
+// Module not completed yet
+#![allow(dead_code)]
 type CompressionType = u64;
 // Compares two sequences of bits in (*a*,*b*) with lengths (*length_a*,*length_b*) offset to right by (*offset_a*,*offset_b*)
 // Returns either the amount of bytes in sequence that match, or CompressionType::BITS + 1(65) if entire sequence matches
-fn cmp_seq(a: CompressionType, offset_a: u8, length_a: u8, b: CompressionType, offset_b: u8, length_b: u8) -> u32 {
+fn cmp_seq(
+    a: CompressionType,
+    offset_a: u8,
+    length_a: u8,
+    b: CompressionType,
+    offset_b: u8,
+    length_b: u8,
+) -> u32 {
     //println!("a: {a:064b}\nb: {a:064b}");
     let min_len = length_a.min(length_b);
     let a_bshift = CompressionType::BITS as u8 - min_len - offset_a;
@@ -16,7 +25,12 @@ fn cmp_seq(a: CompressionType, offset_a: u8, length_a: u8, b: CompressionType, o
     }
 }
 // compares sequences of bits starting at arbitrary location within the array.
-fn get_seq_match(a: &[CompressionType], b: &[CompressionType], mut offset_a: CompressionType, mut offset_b: CompressionType) -> CompressionType {
+fn get_seq_match(
+    a: &[CompressionType],
+    b: &[CompressionType],
+    mut offset_a: CompressionType,
+    mut offset_b: CompressionType,
+) -> CompressionType {
     let mut eq_len = 0;
     while (offset_a / (CompressionType::BITS as CompressionType) < a.len() as CompressionType)
         && (offset_b / (CompressionType::BITS as CompressionType) < b.len() as CompressionType)
@@ -25,8 +39,8 @@ fn get_seq_match(a: &[CompressionType], b: &[CompressionType], mut offset_a: Com
         let index_b = (offset_b / (CompressionType::BITS as CompressionType)) as usize;
         let loc_offset_a = (offset_a % (CompressionType::BITS as CompressionType)) as u8;
         let loc_offset_b = (offset_b % (CompressionType::BITS as CompressionType)) as u8;
-        let loc_len_a = (CompressionType::BITS as u8 - loc_offset_a) as u8;
-        let loc_len_b = (CompressionType::BITS as u8 - loc_offset_b) as u8;
+        let loc_len_a = CompressionType::BITS as u8 - loc_offset_a;
+        let loc_len_b = CompressionType::BITS as u8 - loc_offset_b;
         let l = cmp_seq(
             a[index_a],
             loc_offset_a,
@@ -72,11 +86,12 @@ fn eval_match(len: CompressionType, bits_len: u8) -> bool {
         return true;
     }
     //Additional compression gain coming from smaller segment count.
-    let compress_gain = ((len as f32) / ((1 << bits_len) as f32) * (nocompress_len as f32)) as CompressionType;
+    let compress_gain =
+        ((len as f32) / ((1 << bits_len) as f32) * (nocompress_len as f32)) as CompressionType;
     len > compress_gain + nocompress_len
 }
 use crate::unaligned_rw::*;
-const sign_prec: UnalignedRWMode = UnalignedRWMode::precision_bits(1);
+const SEG_TYPE_PREC: UnalignedRWMode = UnalignedRWMode::precision_bits(1);
 const SEG_UNCOMPRESSED: u8 = 0;
 const SEG_COMPRESSED: u8 = 1;
 fn encode(data: &[CompressionType], bits: u8) -> Vec<CompressionType> {
@@ -92,11 +107,12 @@ fn encode(data: &[CompressionType], bits: u8) -> Vec<CompressionType> {
     let offset_prec = UnalignedRWMode::precision_bits(bits);
     while curr_offset < end {
         let (o, l) = get_best_match_within_window(data, data, curr_offset, sliding_window);
+        #[allow(clippy::unnecessary_cast)]
         if eval_match(l, bits) {
             println!("Favorable match of length:{l} at offset:{curr_offset}, flowing uncompressed segment of length:{unc_seg_len} starting at:{unc_beg}");
 
             compression
-                .write_unaligned(sign_prec, SEG_UNCOMPRESSED as u64)
+                .write_unaligned(SEG_TYPE_PREC, SEG_UNCOMPRESSED as u64)
                 .expect("TODO: handle this");
             compression
                 .write_unaligned(offset_prec, unc_seg_len as u64)
@@ -104,7 +120,7 @@ fn encode(data: &[CompressionType], bits: u8) -> Vec<CompressionType> {
             println!("TODO:write the uncompressed segment!");
 
             compression
-                .write_unaligned(sign_prec, SEG_COMPRESSED as u64)
+                .write_unaligned(SEG_TYPE_PREC, SEG_COMPRESSED as u64)
                 .expect("TODO: handle this");
             compression
                 .write_unaligned(offset_prec, l as u64)
@@ -127,20 +143,32 @@ fn encode(data: &[CompressionType], bits: u8) -> Vec<CompressionType> {
     }
     todo!();
 }
-fn bsl_safe(val:CompressionType,shift:CompressionType)->CompressionType{
-    if shift == 0{val}
-    else{val<<shift}
+fn bsl_safe(val: CompressionType, shift: CompressionType) -> CompressionType {
+    if shift == 0 {
+        val
+    } else {
+        val << shift
+    }
 }
-fn bsr_safe(val:CompressionType,shift:CompressionType)->CompressionType{
-    if shift == 0{val}
-    else{val>>shift}
+fn bsr_safe(val: CompressionType, shift: CompressionType) -> CompressionType {
+    if shift == 0 {
+        val
+    } else {
+        val >> shift
+    }
 }
-fn copy_bits_in_byte(src:CompressionType,target:CompressionType,src_offset:CompressionType,target_offset:CompressionType,cpy_len:CompressionType)->CompressionType{
+// Probably needs a complete rewrite
+fn copy_bits_in_byte(
+    src: CompressionType,
+    target: CompressionType,
+    src_offset: CompressionType,
+    target_offset: CompressionType,
+    cpy_len: CompressionType,
+) -> CompressionType {
     debug_assert!(cpy_len != 0);
-    let src = src<<src_offset;
-    let src = src>>(CompressionType::BITS as CompressionType - cpy_len);
-    let tagret = target|src<<(CompressionType::BITS as CompressionType - target_offset);
-    target
+    let src = src << src_offset;
+    let src = src >> (CompressionType::BITS as CompressionType - cpy_len);
+    target | src << (CompressionType::BITS as CompressionType - target_offset)
 }
 fn bwise_memcpy(
     src: &[CompressionType],
@@ -149,14 +177,18 @@ fn bwise_memcpy(
     mut length: CompressionType,
     target: &mut [CompressionType],
 ) {
-    let mut target_byte = target[(target_offset / (CompressionType::BITS as CompressionType)) as usize];
+    let mut target_byte =
+        target[(target_offset / (CompressionType::BITS as CompressionType)) as usize];
     while length > 0 {
-        let next_src_offset = ((src_offset / (CompressionType::BITS as CompressionType - 1)) + 1) * (CompressionType::BITS as CompressionType);
-        let next_target_offset = ((src_offset / (CompressionType::BITS as CompressionType - 1)) + 1) * (CompressionType::BITS as CompressionType);
+        let next_src_offset = ((src_offset / (CompressionType::BITS as CompressionType - 1)) + 1)
+            * (CompressionType::BITS as CompressionType);
+        let next_target_offset = ((src_offset / (CompressionType::BITS as CompressionType - 1))
+            + 1)
+            * (CompressionType::BITS as CompressionType);
         let curr_cpy_length = (next_src_offset - src_offset)
             .min(next_target_offset - target_offset)
             .min(length);
-        
+
         assert!(length > 0);
 
         let src_byte = src[(src_offset / (CompressionType::BITS as CompressionType)) as usize];
@@ -164,17 +196,24 @@ fn bwise_memcpy(
         let curr_target_offset = target_offset % (CompressionType::BITS as CompressionType);
         // target byte: | src_offset | target_data | CompressionType::BITS - curr_cpy_length | -> |0_padding|target_data|
         // |
-        let src_byte = bsr_safe(bsl_safe(src_byte,curr_src_offset),CompressionType::BITS as CompressionType - curr_cpy_length + curr_src_offset);
+        let src_byte = bsr_safe(
+            bsl_safe(src_byte, curr_src_offset),
+            CompressionType::BITS as CompressionType - curr_cpy_length + curr_src_offset,
+        );
         println!("src_byte: 0b{src_byte:064b}, target_byte:{target_byte:064b}");
         println!("curr_target_offset{curr_target_offset},curr_cpy_length{curr_cpy_length}");
-        let src_byte = bsl_safe(src_byte,CompressionType::BITS as CompressionType - curr_target_offset - curr_cpy_length);
+        let src_byte = bsl_safe(
+            src_byte,
+            CompressionType::BITS as CompressionType - curr_target_offset - curr_cpy_length,
+        );
         target_byte |= src_byte;
         println!("src_byte: 0b{src_byte:064b}, target_byte:{target_byte:064b}");
-        let target_written = (curr_target_offset + curr_cpy_length);
+        let target_written = curr_target_offset + curr_cpy_length;
         println!("target_written:{target_written}");
         if target_written >= CompressionType::BITS as CompressionType {
             println!("writing to traget!");
-            target[(target_offset / (CompressionType::BITS as CompressionType)) as usize] = target_byte;
+            target[(target_offset / (CompressionType::BITS as CompressionType)) as usize] =
+                target_byte;
             target_byte = 0;
         }
         length -= curr_cpy_length;
@@ -184,7 +223,8 @@ fn bwise_memcpy(
     }
     todo!("Coping not implemented yet, but target is:{target:?}!");
 }
-#[test]
+//Not finished yet!
+#[test]#[ignore]
 fn test_bwise_cpy() {
     let a: [CompressionType; 2] = [
         0b0000000111110110111110110100001111100001100011101011001000000010,
