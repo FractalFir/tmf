@@ -1,10 +1,12 @@
+// Support functions may be used in the future for triangulation, when triangulating fully works, remove this allow.
+#![allow(dead_code)]
 use crate::{FloatType, IndexType, Vector3};
 /// Fast method for pruning unused vertices. Finds the lowest used vertex and removes it. O(n), does **not** remove all unused vertices. Used mostly
 /// in .obj loading. Fast because if not needed exits quickly.
 pub(crate) fn fast_prune<T: Sized>(data: &mut Vec<T>, indices: &mut [IndexType]) {
     // Smallest index
     let mut min_index = IndexType::MAX;
-    if indices.len() == 0 {
+    if indices.is_empty() {
         min_index = 0;
     }
     for index in indices.iter() {
@@ -39,7 +41,7 @@ pub(crate) fn fsin(mut x: fprec) -> fprec {
     let mut k = k & 1;
     k += k;
     let z = (k as fprec) * x;
-    return x - z;
+    x - z
 }
 pub(crate) fn magnitude(i: Vector3) -> FloatType {
     let xx = i.0 * i.0;
@@ -53,9 +55,10 @@ pub(crate) fn normalize(i: Vector3) -> Vector3 {
     let zz = i.2 * i.2;
     let mag = (xx + yy + zz).sqrt();
     if mag.is_nan() {
-        return (0.0, 0.0, 0.0);
+        (0.0, 0.0, 0.0)
+    } else {
+        (i.0 / mag, i.1 / mag, i.2 / mag)
     }
-    (i.0 / mag, i.1 / mag, i.2 / mag)
 }
 pub(crate) fn distance(a: Vector3, b: Vector3) -> FloatType {
     let dx = a.0 - b.0;
@@ -67,7 +70,7 @@ pub(crate) fn dot(a: Vector3, b: Vector3) -> FloatType {
     let x = a.0 * b.0;
     let y = a.1 * b.1;
     let z = a.2 * b.2;
-    return x + y + z;
+    x + y + z
 }
 pub(crate) fn cross(a: Vector3, b: Vector3) -> Vector3 {
     let x = a.1 * b.2 - a.2 * b.1;

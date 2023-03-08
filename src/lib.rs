@@ -24,6 +24,7 @@ mod uv;
 mod verify;
 mod vertices;
 // Unfinished
+mod lz77;
 const TMF_MAJOR: u16 = 0;
 const TMF_MINOR: u16 = 1;
 const MIN_TMF_MAJOR: u16 = 0;
@@ -100,10 +101,6 @@ impl Default for TMFMesh {
 fn vec_first<T: Sized + Clone>(vec: Vec<T>) -> T {
     vec[0].clone()
 }
-fn slice_to_box<T: Sized + std::marker::Copy>(slice: &[T]) -> Box<[T]> {
-    slice.into()
-}
-
 impl TMFMesh {
     pub(crate) fn get_segment_count(&self) -> usize {
         let mut count = 0;
@@ -433,10 +430,9 @@ impl TMFMesh {
     pub fn normalize(&mut self) {
         use crate::normals::normalize_arr;
         let normals = self.normals.as_mut();
-        match normals {
-            Some(normals) => normalize_arr(normals),
-            None => (),
-        }
+        if let Some(normals) = normals {
+            normalize_arr(normals)
+        };
     }
     /// Checks if mesh is valid and can be saved.
     /// ```
@@ -482,7 +478,7 @@ impl TMFMesh {
     #[cfg(feature = "obj_import")]
     pub fn read_from_obj_one<R: Read>(reader: &mut R) -> Result<(Self, String)> {
         let meshes = obj::read_from_obj(reader)?;
-        if meshes.len() < 1 {
+        if meshes.is_empty() {
             Err(std::io::Error::new(
                 std::io::ErrorKind::Other,
                 "No meshes present in .obj file",
@@ -596,7 +592,7 @@ impl TMFMesh {
     /// }
     /// ```
     pub fn read_tmf<R: Read>(reader: &mut R) -> Result<Vec<(Self, String)>> {
-        Ok(tmf::read(reader)?)
+        tmf::read(reader)
     }
     /// Reads a single mesh from a .tmf file. Returns [`Err`] if no meshes present or more than one mesh present.
     /// ```
@@ -610,7 +606,7 @@ impl TMFMesh {
     /// ```
     pub fn read_tmf_one<R: Read>(reader: &mut R) -> Result<(Self, String)> {
         let meshes = Self::read_tmf(reader)?;
-        if meshes.len() < 1 {
+        if meshes.is_empty() {
             Err(std::io::Error::new(
                 std::io::ErrorKind::Other,
                 "No meshes present in .tmf file",

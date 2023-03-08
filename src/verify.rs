@@ -151,21 +151,18 @@ pub(crate) fn verify_tmf_mesh(mesh: &TMFMesh) -> Result<(), TMFIntegrityStatus> 
     let mut errors = Vec::new();
     // Verify vertices
     let vertices_status = verify_vertices(mesh);
-    match vertices_status {
-        Err(err) => errors.push(err),
-        Ok(_) => (),
+    if let Err(err) = vertices_status {
+        errors.push(err)
     };
     //Verify normals
     let normals_status = verify_normals(mesh);
-    match normals_status {
-        Err(err) => errors.push(err),
-        Ok(_) => (),
+    if let Err(err) = normals_status {
+        errors.push(err)
     };
     //Verify uvs
     let uvs_status = verify_uvs(mesh);
-    match uvs_status {
-        Err(err) => errors.push(err),
-        Ok(_) => (),
+    if let Err(err) = uvs_status {
+        errors.push(err)
     };
     let len = errors.len();
     match len {
