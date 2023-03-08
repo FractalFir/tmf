@@ -135,6 +135,7 @@ impl ModelImporter {
                     let normal_indices = SmallVec::from_slice(normal_indices);
                     let uv_indices = SmallVec::from_slice(uv_indices);
                     triangulate(self, vertex_indices, normal_indices, uv_indices);
+
                     Ok(())
                 }
                 #[cfg(not(feature = "triangulation"))]
