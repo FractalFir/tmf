@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 #[repr(u16)]
 #[derive(Debug)]
 pub(crate) enum SectionType {
@@ -41,6 +42,9 @@ impl CompressionType {
         }
     }
 }
+=======
+use crate::tmf_segment::*;
+>>>>>>> 17bad1f (Bugfixes + laid some basic groundwork for tmf segment lader/unloader)
 fn read_segment_header<R: Read>(reader: &mut R) -> Result<(SectionType, usize, CompressionType)> {
     let seg_type = read_u16(reader)?;
     let seg_type = SectionType::from_u16(seg_type);

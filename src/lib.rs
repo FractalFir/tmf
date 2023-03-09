@@ -19,6 +19,7 @@ mod tmf;
 /// Module used to handle reads of data which is not bit aligned(for example, 3 or 17 bits). This is the module that allows for heavy compression used in this format.
 #[doc(hidden)]
 pub mod unaligned_rw;
+mod tmf_segment;
 mod utilis;
 mod uv;
 mod verify;
