@@ -23,7 +23,7 @@ pub(crate) fn fast_prune<T: Sized>(data: &mut Vec<T>, indices: &mut [IndexType])
 }
 #[allow(non_camel_case_types)]
 #[cfg(feature = "fast_trig")]
-type fprec = f64;
+pub(crate) type fprec = f64;
 #[cfg(feature = "fast_trig")]
 #[cfg(feature = "fast_trig")]
 const F_PI: fprec = std::f64::consts::PI;
