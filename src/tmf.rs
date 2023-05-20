@@ -500,12 +500,12 @@ pub fn read_mesh<R: Read>(reader: &mut R) -> Result<(TMFMesh, String)> {
                     ));
                 }
             }
-            SectionType::CustomIndexSegment =>{
-               println!("data:{data:?}");
-               let cd = crate::custom_data::CustomDataSegment::read(&*data,seg_type)?;
-               res.add_custom_data(cd);
+            SectionType::CustomIndexSegment => {
+                println!("data:{data:?}");
+                let cd = crate::custom_data::CustomDataSegment::read(&*data, seg_type)?;
+                res.add_custom_data(cd);
             }
-            _ =>(), //Unknown header, ignoring
+            _ => (), //Unknown header, ignoring
         }
     }
     //todo!();

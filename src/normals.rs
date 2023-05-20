@@ -63,7 +63,7 @@ pub fn normalize_arr(normals: &mut [Vector3]) {
         *normal = normalize(*normal);
     }
 }
-fn normal_to_encoding(
+pub(crate) fn normal_to_encoding(
     normal: Vector3,
     precision: &NormalPrecisionMode,
 ) -> (u64, u64, bool, bool, bool) {
@@ -83,7 +83,7 @@ fn normal_to_encoding(
     let sz = normal.2 < 0.0;
     (asine, z, sx, sy, sz)
 }
-fn normal_from_encoding(
+pub(crate) fn normal_from_encoding(
     asine: u64,
     z: u64,
     sx: bool,
@@ -225,7 +225,7 @@ mod test_normal {
     fn random_axis_rw() {
         use rand::{thread_rng, Rng};
         let mut rng = thread_rng();
-        for _ in 0..100000 {
+        for _ in 0..100_000 {
             let norm = (
                 rng.gen::<FloatType>() * 2.0 - 1.0,
                 rng.gen::<FloatType>() * 2.0 - 1.0,
@@ -266,7 +266,7 @@ mod test_normal {
     #[test]
     #[cfg(feature = "fast_trig")]
     fn test_fast_sin() {
-        for i in 1..100000 {
+        for i in 1..100_000 {
             let x: fprec = (100000.0 / (i as fprec)) * std::f64::consts::PI;
             let sin = x.sin();
             let fsin = fsin(x);

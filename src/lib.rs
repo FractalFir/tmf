@@ -16,6 +16,7 @@ mod normals;
 mod obj;
 /// Module used when saving vertex grups
 mod pile_map;
+pub mod tangents;
 mod tmf;
 mod tmf_segment;
 /// Module used to handle reads of data which is not bit aligned(for example, 3 or 17 bits). This is the module that allows for heavy compression used in this format.
@@ -635,14 +636,16 @@ impl TMFMesh {
     pub fn add_custom_data(&mut self, custom_data: CustomDataSegment) {
         self.custom_data.push(custom_data);
     }
-    pub fn lookup_custom_data(&self,name:&str)->Option<&CustomData>{
+    pub fn lookup_custom_data(&self, name: &str) -> Option<&CustomData> {
         let bytes = name.as_bytes();
-        if bytes.len() > u8::MAX as usize{
-            return None; 
+        if bytes.len() > u8::MAX as usize {
+            return None;
         }
         let bytes_len = bytes.len() as u8;
-        for data in &self.custom_data{
-            if data.name_len() == bytes_len && bytes == &data.name_bytes()[..(data.name_len() as usize)]{
+        for data in &self.custom_data {
+            if data.name_len() == bytes_len
+                && bytes == &data.name_bytes()[..(data.name_len() as usize)]
+            {
                 return Some(data.custom_data());
             }
         }
