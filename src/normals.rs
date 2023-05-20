@@ -1,10 +1,10 @@
 use crate::unaligned_rw::{UnalignedRWMode, UnalignedReader, UnalignedWriter};
 use crate::{FloatType, IndexType, Vector3};
-use std::io::{Read, Result, Write};
-#[cfg(feature = "double_precision")]
-use std::f64::consts::FRAC_PI_2;
 #[cfg(not(feature = "double_precision"))]
 use std::f32::consts::FRAC_PI_2;
+#[cfg(feature = "double_precision")]
+use std::f64::consts::FRAC_PI_2;
+use std::io::{Read, Result, Write};
 #[derive(Clone, Copy, PartialEq)]
 /// Setting dictating how much can any normal in a model deviate, expressed as an angle.
 pub struct NormalPrecisionMode(u8);
@@ -279,7 +279,7 @@ mod test_normal {
 fn map_size(prec: &NormalPrecisionMode) -> u128 {
     let asine_bits = prec.bits();
     let z_bits = prec.bits();
-    let sign_bits = 3;//3 signs 1 bit each
+    let sign_bits = 3; //3 signs 1 bit each
     let toatal_bits = asine_bits + z_bits + sign_bits;
     1 << toatal_bits
 }
@@ -317,7 +317,8 @@ pub(crate) fn map_prune(
         }
     }
     for index in normal_faces {
-        *index = map[normal_to_map_index(normals[*index as usize], &prec.normal_precision) as usize];
+        *index =
+            map[normal_to_map_index(normals[*index as usize], &prec.normal_precision) as usize];
         //assert!(((*index) as usize) < new_normals.len());
     }
     *normals = new_normals;

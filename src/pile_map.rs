@@ -26,8 +26,7 @@ impl<T: PartialEq + 'static> PileMap<T> {
     }
 }
 impl<T: PartialEq> From<PileMap<T>> for Vec<T> {
-  fn from(val: PileMap<T>) -> Self {
-         val.pile
-
+    fn from(val: PileMap<T>) -> Self {
+        val.pile
     }
 }

@@ -7,6 +7,7 @@
 //! This means that while saving a model may take a slightly longer time (2-4x loading), models can be loaded at considerable speed(loading a model with around 40 000 points takes 1.6 ms)
 //! ## Feature flags
 #![doc = document_features::document_features!()]
+mod custom_data;
 mod material;
 #[cfg(feature = "model_importer")]
 mod model_importer;
@@ -16,10 +17,10 @@ mod obj;
 /// Module used when saving vertex grups
 mod pile_map;
 mod tmf;
+mod tmf_segment;
 /// Module used to handle reads of data which is not bit aligned(for example, 3 or 17 bits). This is the module that allows for heavy compression used in this format.
 #[doc(hidden)]
 pub mod unaligned_rw;
-mod tmf_segment;
 mod utilis;
 mod uv;
 mod verify;
@@ -48,6 +49,8 @@ pub type FloatType = f64;
 pub type Vector3 = (FloatType, FloatType, FloatType);
 /// Type used for representing 2d floating-point vectors
 pub type Vector2 = (FloatType, FloatType);
+use crate::custom_data::CustomData;
+use crate::custom_data::CustomDataSegment;
 #[doc(inline)]
 use crate::material::MaterialInfo;
 #[doc(inline)]
@@ -92,6 +95,7 @@ pub struct TMFMesh {
     uvs: Option<Box<[Vector2]>>,
     uv_triangles: Option<Box<[IndexType]>>,
     materials: Option<MaterialInfo>,
+    custom_data: Vec<CustomDataSegment>,
 }
 impl Default for TMFMesh {
     /// Creates default, empty [`TMFMesh`]. Equivalent to [`TMFMesh::empty`] call.
@@ -575,6 +579,7 @@ impl TMFMesh {
             vertex_triangles: None,
             vertices: None,
             materials: None,
+            custom_data: Vec::new(),
         }
     }
     /// Reads all meshes from a .tmf file.
@@ -626,6 +631,9 @@ impl TMFMesh {
             // incorrectly, so the clone call stays for now.
             Ok(vec_first(meshes))
         }
+    }
+    pub fn add_custom_data(&mut self, custom_data: CustomDataSegment) {
+        self.custom_data.push(custom_data);
     }
 }
 #[cfg(test)]

@@ -1,4 +1,4 @@
-use crate::{Vector3,TMFMesh};
+use crate::{TMFMesh, Vector3};
 #[repr(u16)]
 #[derive(Debug)]
 pub(crate) enum SectionType {
@@ -42,21 +42,21 @@ impl CompressionType {
         }
     }
 }
-struct EncodedSegment{
-    seg_type:SectionType,
-    compresion_type:CompressionType,
-    seg_data:Vec<u8>,
+struct EncodedSegment {
+    seg_type: SectionType,
+    compresion_type: CompressionType,
+    seg_data: Vec<u8>,
 }
-enum DecodedSegement{
+enum DecodedSegement {
     VertexSegment(Vec<Vector3>),
 }
-impl DecodedSegement{
-    fn encode(self)->EncodedSegment{
+impl DecodedSegement {
+    fn encode(self) -> EncodedSegment {
         todo!("Not working yet!");
     }
-    fn apply(self,mesh:&mut TMFMesh){
-        match self{
-            DecodedSegement::VertexSegment(vertices)=>{
+    fn apply(self, mesh: &mut TMFMesh) {
+        match self {
+            DecodedSegement::VertexSegment(vertices) => {
                 /*match mesh.get_vertices(){
                     Some(vertices)=>
                 }*/

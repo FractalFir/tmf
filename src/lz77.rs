@@ -224,7 +224,8 @@ fn bwise_memcpy(
     todo!("Coping not implemented yet, but target is:{target:?}!");
 }
 //Not finished yet!
-#[test]#[ignore]
+#[test]
+#[ignore]
 fn test_bwise_cpy() {
     let a: [CompressionType; 2] = [
         0b0000000111110110111110110100001111100001100011101011001000000010,

@@ -8,8 +8,20 @@ pub(crate) enum SectionType {
     NormalTriangleSegment = 4,
     UvSegment = 5,
     UvTriangleSegment = 6,
-    // MaterialInfo = 7,
-    // Materialtriangles = 8,
+    ColorSegment = 7,
+    ColorTriangleSegment = 8,
+    TangentSegment = 9,
+    TangentTriangleSegment = 10,
+    MaterialInfo = 11,
+    MaterialTriangleRanges = 12,
+    GroupInfo = 13,
+    GroupTriangleRanges = 14,
+    CustomIndexSegment = 15,
+    CustomFloatSegment = 16,
+    CustomUnit2Segment = 17,
+    CustomUnit3Segment = 18,
+    CustomVector2Segment = 19,
+    CustomVector3Segment = 20,
 }
 impl SectionType {
     pub fn from_u16(input: u16) -> Self {
@@ -77,7 +89,7 @@ fn calc_shortest_edge(
 ) -> Result<FloatType> {
     let shortest_edge = match vertex_triangles {
         Some(vertex_triangles) => {
-            if vertex_triangles.is_empty(){
+            if vertex_triangles.is_empty() {
                 //TODO: handle 0 faced mesh as mesh with no faces!
                 return Ok(1.0);
             }
@@ -148,21 +160,21 @@ fn save_vertices<W: Write>(
     shortest_edge: FloatType,
 ) -> Result<()> {
     if let Some(vertices) = vertices {
-            use crate::vertices::save_tmf_vertices;
-            save_tmf_vertices(
-                vertices,
-                p_info.vertex_precision,
-                curr_segment_data,
-                shortest_edge,
-            )?;
-            write_segment_header(
-                w,
-                SectionType::VertexSegment,
-                curr_segment_data.len(),
-                CompressionType::None,
-            )?;
-            w.write_all(curr_segment_data)?;
-            curr_segment_data.clear();
+        use crate::vertices::save_tmf_vertices;
+        save_tmf_vertices(
+            vertices,
+            p_info.vertex_precision,
+            curr_segment_data,
+            shortest_edge,
+        )?;
+        write_segment_header(
+            w,
+            SectionType::VertexSegment,
+            curr_segment_data.len(),
+            CompressionType::None,
+        )?;
+        w.write_all(curr_segment_data)?;
+        curr_segment_data.clear();
     }
     Ok(())
 }
@@ -338,6 +350,11 @@ pub(crate) fn write_mesh<W: Write>(
         }
         None => (),
     };
+    for data in &mesh.custom_data{
+        data.write(&mut curr_segment_data)?;
+        w.write_all(&curr_segment_data)?;
+        curr_segment_data.clear();
+    }
     Ok(())
 }
 pub(crate) fn write_string<W: Write>(w: &mut W, s: &str) -> Result<()> {
