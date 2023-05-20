@@ -7,7 +7,7 @@
 //! This means that while saving a model may take a slightly longer time (2-4x loading), models can be loaded at considerable speed(loading a model with around 40 000 points takes 1.6 ms)
 //! ## Feature flags
 #![doc = document_features::document_features!()]
-mod custom_data;
+pub mod custom_data;
 mod material;
 #[cfg(feature = "model_importer")]
 mod model_importer;
@@ -131,7 +131,7 @@ impl TMFMesh {
         if self.materials.is_some() {
             count += 1
         };
-        count
+        count + self.custom_data.len()
     }
     /// Sets mesh vertex array and returns old vertex array if present. New mesh data is **not** checked during this function call, so to ensure mesh is valid call [`Self::verify`] before saving.
     ///```
@@ -634,6 +634,19 @@ impl TMFMesh {
     }
     pub fn add_custom_data(&mut self, custom_data: CustomDataSegment) {
         self.custom_data.push(custom_data);
+    }
+    pub fn lookup_custom_data(&self,name:&str)->Option<&CustomData>{
+        let bytes = name.as_bytes();
+        if bytes.len() > u8::MAX as usize{
+            return None; 
+        }
+        let bytes_len = bytes.len() as u8;
+        for data in &self.custom_data{
+            if data.name_len() == bytes_len && bytes == &data.name_bytes()[..(data.name_len() as usize)]{
+                return Some(data.custom_data());
+            }
+        }
+        None
     }
 }
 #[cfg(test)]

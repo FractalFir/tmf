@@ -164,10 +164,10 @@ pub fn read_tmf_vertices<R: Read>(reader: &mut R) -> Result<Box<[Vector3]>> {
 }
 pub fn save_triangles<W: Write>(
     triangles: &[IndexType],
-    count: usize,
+    max_index: usize,
     writer: &mut W,
 ) -> Result<()> {
-    let precision = (count as FloatType).log2().ceil() as u8;
+    let precision = (max_index as FloatType).log2().ceil() as u8;
     writer.write_all(&precision.to_le_bytes())?;
     writer.write_all(&(triangles.len() as u64).to_le_bytes())?;
     let precision = UnalignedRWMode::precision_bits(precision);
@@ -183,15 +183,15 @@ pub fn read_triangles<R: Read>(reader: &mut R) -> Result<Box<[IndexType]>> {
         reader.read_exact(&mut tmp)?;
         tmp[0]
     };
-    let count = {
+    let max_index = {
         let mut tmp = [0; std::mem::size_of::<u64>()];
         reader.read_exact(&mut tmp)?;
         u64::from_le_bytes(tmp)
     };
     let precision = UnalignedRWMode::precision_bits(precision);
     let mut reader = UnalignedReader::new(reader);
-    let mut res = Vec::with_capacity(count as usize);
-    for _ in 0..count {
+    let mut res = Vec::with_capacity(max_index as usize);
+    for _ in 0..max_index {
         res.push(reader.read_unaligned(precision)? as IndexType);
     }
     Ok(res.into())

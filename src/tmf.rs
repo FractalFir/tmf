@@ -22,6 +22,8 @@ pub(crate) enum SectionType {
     CustomUnit3Segment = 18,
     CustomVector2Segment = 19,
     CustomVector3Segment = 20,
+    CustomVector4Segment = 21,
+    CustomColorSegment = 23,
 }
 impl SectionType {
     pub fn from_u16(input: u16) -> Self {
@@ -32,13 +34,14 @@ impl SectionType {
             4 => Self::NormalTriangleSegment,
             5 => Self::UvSegment,
             6 => Self::UvTriangleSegment,
+            15 => Self::CustomIndexSegment,
             _ => Self::Invalid,
         }
     }
 }
 #[repr(u8)]
 #[derive(PartialEq)]
-enum CompressionType {
+pub(crate) enum CompressionType {
     None = 0,
     Ommited = 1,
     UnalignedLZZ = 2,
@@ -350,7 +353,7 @@ pub(crate) fn write_mesh<W: Write>(
         }
         None => (),
     };
-    for data in &mesh.custom_data{
+    for data in &mesh.custom_data {
         data.write(&mut curr_segment_data)?;
         w.write_all(&curr_segment_data)?;
         curr_segment_data.clear();
@@ -497,7 +500,12 @@ pub fn read_mesh<R: Read>(reader: &mut R) -> Result<(TMFMesh, String)> {
                     ));
                 }
             }
-            _ => (), //Unknown header, ignoring
+            SectionType::CustomIndexSegment =>{
+               println!("data:{data:?}");
+               let cd = crate::custom_data::CustomDataSegment::read(&*data,seg_type)?;
+               res.add_custom_data(cd);
+            }
+            _ =>(), //Unknown header, ignoring
         }
     }
     //todo!();
