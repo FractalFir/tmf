@@ -501,8 +501,14 @@ pub fn read_mesh<R: Read>(reader: &mut R) -> Result<(TMFMesh, String)> {
                     ));
                 }
             }
-            SectionType::CustomIndexSegment | SectionType::CustomFloatSegment => {
-                println!("data:{data:?}");
+            SectionType::CustomIndexSegment
+            | SectionType::CustomFloatSegment
+            | SectionType::CustomUnit2Segment
+            | SectionType::CustomUnit3Segment
+            | SectionType::CustomVector2Segment
+            | SectionType::CustomVector3Segment
+            | SectionType::CustomVector4Segment
+            | SectionType::CustomColorSegment => {
                 let cd = crate::custom_data::CustomDataSegment::read(&*data, seg_type)?;
                 res.add_custom_data(cd);
             }
