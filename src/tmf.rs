@@ -1,3 +1,4 @@
+use crate::TMFImportError;
 #[repr(u16)]
 #[derive(Debug)]
 pub(crate) enum SectionType {
@@ -25,6 +26,7 @@ pub(crate) enum SectionType {
     CustomVector4Segment = 21,
     CustomColorSegment = 23,
 }
+use crate::{MAX_MESH_COUNT, MAX_SEG_SIZE};
 impl SectionType {
     pub fn from_u16(input: u16) -> Self {
         match input {
@@ -48,17 +50,19 @@ pub(crate) enum CompressionType {
     UnalignedLZZ = 2,
 }
 impl CompressionType {
-    fn from_u8(input: u8) -> Self {
+    fn from_u8(input: u8) -> Result<Self, TMFImportError> {
         match input {
-            0 => Self::None,
-            1 => Self::Ommited,
-            2 => Self::UnalignedLZZ,
-            _ => panic!("Unknow CompressionType {input}"),
+            0 => Ok(Self::None),
+            1 => Ok(Self::Ommited),
+            2 => Ok(Self::UnalignedLZZ),
+            _ => Err(TMFImportError::CompressionTypeUnknown(input)),
         }
     }
 }
 use crate::tmf_segment::*;
-fn read_segment_header<R: Read>(reader: &mut R) -> Result<(SectionType, usize, CompressionType)> {
+fn read_segment_header<R: Read>(
+    reader: &mut R,
+) -> Result<(SectionType, usize, CompressionType), TMFImportError> {
     let seg_type = read_u16(reader)?;
     let seg_type = SectionType::from_u16(seg_type);
     let data_length = {
@@ -69,7 +73,7 @@ fn read_segment_header<R: Read>(reader: &mut R) -> Result<(SectionType, usize, C
     let compression_type = {
         let mut tmp = [0; 1];
         reader.read_exact(&mut tmp)?;
-        CompressionType::from_u8(tmp[0])
+        CompressionType::from_u8(tmp[0])?
     };
     Ok((seg_type, data_length as usize, compression_type))
 }
@@ -78,7 +82,7 @@ fn write_segment_header<W: Write>(
     seg_type: SectionType,
     data_length: usize,
     comperssion_type: CompressionType,
-) -> Result<()> {
+) -> std::io::Result<()> {
     w.write_all(&(seg_type as u16).to_le_bytes())?;
     w.write_all(&(data_length as u64).to_le_bytes())?;
     w.write_all(&[comperssion_type as u8])
@@ -90,7 +94,7 @@ use crate::{
 fn calc_shortest_edge(
     vertex_triangles: Option<&[IndexType]>,
     vertices: Option<&[Vector3]>,
-) -> Result<FloatType> {
+) -> std::io::Result<FloatType> {
     let shortest_edge = match vertex_triangles {
         Some(vertex_triangles) => {
             if vertex_triangles.is_empty() {
@@ -137,7 +141,7 @@ fn save_normals<W: Write>(
     w: &mut W,
     curr_segment_data: &mut Vec<u8>,
     p_info: &TMFPrecisionInfo,
-) -> Result<()> {
+) -> std::io::Result<()> {
     // Save Normals
     match normals {
         Some(normals) => {
@@ -162,7 +166,7 @@ fn save_vertices<W: Write>(
     curr_segment_data: &mut Vec<u8>,
     p_info: &TMFPrecisionInfo,
     shortest_edge: FloatType,
-) -> Result<()> {
+) -> std::io::Result<()> {
     if let Some(vertices) = vertices {
         use crate::vertices::save_tmf_vertices;
         save_tmf_vertices(
@@ -188,7 +192,7 @@ fn save_normals_and_normal_triangles<W: Write>(
     normal_triangles: Option<Vec<IndexType>>,
     curr_segment_data: &mut Vec<u8>,
     p_info: &TMFPrecisionInfo,
-) -> Result<()> {
+) -> std::io::Result<()> {
     use crate::normals::get_predicted_normal_array_size;
     // Calculate size of the normal array
     let normal_arr_size = match normals {
@@ -259,13 +263,13 @@ fn save_normals_and_normal_triangles<W: Write>(
     Ok(())
 }
 use crate::normals::map_prune;
-use std::io::{Read, Result, Write};
+use std::io::{Read, Write};
 pub(crate) fn write_mesh<W: Write>(
     mesh: &TMFMesh,
     w: &mut W,
     p_info: &TMFPrecisionInfo,
     name: &str,
-) -> Result<()> {
+) -> std::io::Result<()> {
     write_string(w, name)?;
     w.write_all(&(mesh.get_segment_count() as u16).to_le_bytes())?;
     // If needed, prune redundant normal data.
@@ -361,26 +365,29 @@ pub(crate) fn write_mesh<W: Write>(
     }
     Ok(())
 }
-pub(crate) fn write_string<W: Write>(w: &mut W, s: &str) -> Result<()> {
+pub(crate) fn write_string<W: Write>(w: &mut W, s: &str) -> std::io::Result<()> {
     let bytes = s.as_bytes();
     w.write_all(&(bytes.len() as u16).to_le_bytes())?;
     w.write_all(bytes)
 }
-pub(crate) fn read_u16<R: Read>(r: &mut R) -> Result<u16> {
+pub(crate) fn read_u16<R: Read>(r: &mut R) -> std::io::Result<u16> {
     let mut tmp = [0; std::mem::size_of::<u16>()];
     r.read_exact(&mut tmp)?;
     Ok(u16::from_le_bytes(tmp))
 }
-pub(crate) fn read_string<R: Read>(r: &mut R) -> Result<String> {
+pub(crate) fn read_string<R: Read>(r: &mut R) -> std::io::Result<String> {
     let byte_len = read_u16(r)?;
     let mut bytes = vec![0; byte_len as usize];
     r.read_exact(&mut bytes)?;
     match std::str::from_utf8(&bytes) {
         Ok(string) => Ok(string.to_owned()),
-        Err(_) => todo!(),
+        Err(_) => Err(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "Mesh name not valid UTF-8",
+        )),
     }
 }
-pub(crate) fn write_tmf_header<W: Write>(w: &mut W, mesh_count: u32) -> Result<()> {
+pub(crate) fn write_tmf_header<W: Write>(w: &mut W, mesh_count: u32) -> std::io::Result<()> {
     w.write_all(b"TMF")?;
     w.write_all(&TMF_MAJOR.to_le_bytes())?;
     w.write_all(&TMF_MINOR.to_le_bytes())?;
@@ -392,7 +399,7 @@ pub(crate) fn write<W: Write, S: std::borrow::Borrow<str>>(
     meshes_names: &[(TMFMesh, S)],
     w: &mut W,
     p_info: &TMFPrecisionInfo,
-) -> Result<()> {
+) -> std::io::Result<()> {
     write_tmf_header(w, meshes_names.len() as u32)?;
     for (mesh, name) in meshes_names {
         write_mesh(mesh, w, p_info, name.borrow())?;
@@ -403,17 +410,14 @@ fn read_normal_faces(
     mesh: &mut TMFMesh,
     compression_type: CompressionType,
     data: &[u8],
-) -> Result<()> {
+) -> Result<(), TMFImportError> {
     use crate::vertices::read_triangles;
     // If normal triangle indices are omitted, assume that normal array is already laid out in triangles.
     let normal_triangles = if compression_type == CompressionType::Ommited {
-        let normals_len = match mesh.get_normals(){
-                        Some(normals)=>normals.len(),
-                        None=>return Err(std::io::Error::new(
-                            std::io::ErrorKind::Other,
-                            "If normal index array is saved as omitted, the normal array must be present before it."
-                        )),
-                    };
+        let normals_len = match mesh.get_normals() {
+            Some(normals) => normals.len(),
+            None => return Err(TMFImportError::NoDataBeforeOmmitedSegment),
+        };
         let mut normal_triangles = Vec::with_capacity(normals_len);
         for index in 0..normals_len {
             normal_triangles.push(index as IndexType);
@@ -423,19 +427,23 @@ fn read_normal_faces(
         read_triangles(&mut (data as &[u8]))?
     };
     if mesh.set_normal_triangles(normal_triangles).is_some() {
-        return Err(std::io::Error::new(
+        //TODO:Support multiple arrays inside one mesh!
+        return Err(TMFImportError::IO(std::io::Error::new(
             std::io::ErrorKind::Other,
             "Only one normal index array(triangle array) can be present in a model.",
-        ));
+        )));
     }
     Ok(())
 }
-pub fn read_mesh<R: Read>(reader: &mut R) -> Result<(TMFMesh, String)> {
+pub fn read_mesh<R: Read>(reader: &mut R) -> Result<(TMFMesh, String), TMFImportError> {
     let mut res = TMFMesh::empty();
     let name = read_string(reader)?;
     let seg_count = read_u16(reader)?;
     for _ in 0..seg_count {
         let (seg_type, data_length, compression_type) = read_segment_header(reader)?;
+        if data_length > MAX_SEG_SIZE {
+            return Err(TMFImportError::SegmentTooLong);
+        }
         let mut data = vec![0; data_length];
         reader.read_exact(&mut data)?;
         //DEBUG: Temporary segment sizes in bytes
@@ -447,10 +455,11 @@ pub fn read_mesh<R: Read>(reader: &mut R) -> Result<(TMFMesh, String)> {
                     .set_vertices(read_tmf_vertices(&mut (&data as &[u8]))?)
                     .is_some()
                 {
-                    return Err(std::io::Error::new(
+                    //TODO: Append instead of returning error
+                    return Err(TMFImportError::IO(std::io::Error::new(
                         std::io::ErrorKind::Other,
                         "Only one vertex array can be present in a model.",
-                    ));
+                    )));
                 }
             }
             SectionType::NormalSegment => {
@@ -459,19 +468,21 @@ pub fn read_mesh<R: Read>(reader: &mut R) -> Result<(TMFMesh, String)> {
                     .set_normals(read_normal_array(&mut (&data as &[u8]))?)
                     .is_some()
                 {
-                    return Err(std::io::Error::new(
+                    //TODO: Append instead of returning error
+                    return Err(TMFImportError::IO(std::io::Error::new(
                         std::io::ErrorKind::Other,
                         "Only one normal array can be present in a model.",
-                    ));
+                    )));
                 }
             }
             SectionType::UvSegment => {
                 use crate::uv::read_uvs;
                 if res.set_uvs(read_uvs(&mut (&data as &[u8]))?).is_some() {
-                    return Err(std::io::Error::new(
+                    //TODO: Append instead of returning error
+                    return Err(TMFImportError::IO(std::io::Error::new(
                         std::io::ErrorKind::Other,
                         "Only one uv array can be present in a model.",
-                    ));
+                    )));
                 }
             }
             SectionType::VertexTriangleSegment => {
@@ -480,10 +491,11 @@ pub fn read_mesh<R: Read>(reader: &mut R) -> Result<(TMFMesh, String)> {
                     .set_vertex_triangles(read_triangles(&mut (&data as &[u8]))?)
                     .is_some()
                 {
-                    return Err(std::io::Error::new(
+                    //TODO: Append instead of returning error
+                    return Err(TMFImportError::IO(std::io::Error::new(
                         std::io::ErrorKind::Other,
                         "Only one vertex index array(triangle array) can be present in a model.",
-                    ));
+                    )));
                 }
             }
             SectionType::NormalTriangleSegment => {
@@ -495,10 +507,10 @@ pub fn read_mesh<R: Read>(reader: &mut R) -> Result<(TMFMesh, String)> {
                     .set_uv_triangles(read_triangles(&mut (&data as &[u8]))?)
                     .is_some()
                 {
-                    return Err(std::io::Error::new(
+                    return Err(TMFImportError::IO(std::io::Error::new(
                         std::io::ErrorKind::Other,
                         "Only one uv index array(triangle array) can be present in a model.",
-                    ));
+                    )));
                 }
             }
             SectionType::CustomIndexSegment
@@ -518,14 +530,11 @@ pub fn read_mesh<R: Read>(reader: &mut R) -> Result<(TMFMesh, String)> {
     //todo!();
     Ok((res, name))
 }
-pub fn read<R: Read>(reader: &mut R) -> Result<Vec<(TMFMesh, String)>> {
+pub fn read<R: Read>(reader: &mut R) -> Result<Vec<(TMFMesh, String)>, TMFImportError> {
     let mut magic = [0; 3];
     reader.read_exact(&mut magic)?;
     if magic != *b"TMF" {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            "Not a TMF file",
-        ));
+        return Err(TMFImportError::NotTMFFile);
     }
     // Not used ATM, but can be used for compatiblity in the future.
     let _major = read_u16(reader)?;
@@ -535,16 +544,16 @@ pub fn read<R: Read>(reader: &mut R) -> Result<Vec<(TMFMesh, String)>> {
     let min_major = read_u16(reader)?;
     let min_minor = read_u16(reader)?;
     if min_major > TMF_MAJOR || (min_major == TMF_MAJOR && min_minor > TMF_MINOR) {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            "TMF file requires newer version of TMF reader",
-        ));
+        return Err(TMFImportError::NewerVersionRequired);
     }
     let mesh_count = {
         let mut tmp = [0; std::mem::size_of::<u32>()];
         reader.read_exact(&mut tmp)?;
         u32::from_le_bytes(tmp)
     };
+    if mesh_count > MAX_MESH_COUNT as u32 {
+        return Err(TMFImportError::TooManyMeshes);
+    }
     let mut meshes = Vec::with_capacity(mesh_count as usize);
     for _ in 0..mesh_count {
         meshes.push(read_mesh(reader)?);

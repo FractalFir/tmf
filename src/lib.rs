@@ -6,6 +6,7 @@
 //! 2. Loading models as fast as possible(without sacrificing model size reduction)
 //! This means that while saving a model may take a slightly longer time (2-4x loading), models can be loaded at considerable speed(loading a model with around 40 000 points takes 1.6 ms)
 //! ## Feature flags
+//pub(crate) MAX_SEG_COUNT:usize = 0xFFFF;
 #![doc = document_features::document_features!()]
 pub mod custom_data;
 mod material;
@@ -32,6 +33,8 @@ const TMF_MAJOR: u16 = 0;
 const TMF_MINOR: u16 = 1;
 const MIN_TMF_MAJOR: u16 = 0;
 const MIN_TMF_MINOR: u16 = 1;
+pub(crate) const MAX_SEG_SIZE: usize = 0x20_00_00_00; // 2_00_00 for fuzzing!
+pub(crate) const MAX_MESH_COUNT: usize = 0x10000;
 /// Index type used for representing triangle indices.
 #[cfg(not(any(feature = "long_indices", feature = "short_indices")))]
 pub type IndexType = u32;
@@ -85,7 +88,6 @@ impl Default for TMFPrecisionInfo {
         }
     }
 }
-use std::io::Result;
 /// Representation of a TMF mesh. Can be loaded from disk, imported from diffrent format, saved to disk, and exported to a diffrent format, or created using special functions. Any mesh created at run time *should* but does not *have to* be checked before saving with [`Self::verify`] call. If the mesh is known to be OK before saving this step can be skipped(even tough it is still advised).
 #[derive(Clone)]
 pub struct TMFMesh {
@@ -467,7 +469,7 @@ impl TMFMesh {
     /// }
     ///```
     #[cfg(feature = "obj_import")]
-    pub fn read_from_obj<R: Read>(reader: &mut R) -> Result<Vec<(Self, String)>> {
+    pub fn read_from_obj<R: Read>(reader: &mut R) -> std::io::Result<Vec<(Self, String)>> {
         obj::read_from_obj(reader)
     }
     /// Reads a *single* named tmf mesh from a .obj file in *reader*, if more than one mesh present an error will be returned.
@@ -482,7 +484,7 @@ impl TMFMesh {
     /// let (mesh,name) = TMFMesh::read_from_obj_one(&mut file).expect("Could not parse .obj file!");
     ///```
     #[cfg(feature = "obj_import")]
-    pub fn read_from_obj_one<R: Read>(reader: &mut R) -> Result<(Self, String)> {
+    pub fn read_from_obj_one<R: Read>(reader: &mut R) -> std::io::Result<(Self, String)> {
         let meshes = obj::read_from_obj(reader)?;
         if meshes.is_empty() {
             Err(std::io::Error::new(
@@ -508,7 +510,7 @@ impl TMFMesh {
     /// mesh.write_obj_one(&mut obj_out,"mesh name").expect("Could not write the .obj file!");
     /// ```
     #[cfg(feature = "obj_import")]
-    pub fn write_obj_one<W: Write>(&self, w: &mut W, name: &str) -> Result<()> {
+    pub fn write_obj_one<W: Write>(&self, w: &mut W, name: &str) -> std::io::Result<()> {
         obj::write_obj(&[(self.clone(), name)], w)
     }
     /// Writes multiple TMF meshes to a .obj file.
@@ -524,7 +526,7 @@ impl TMFMesh {
     pub fn write_obj<W: Write, S: std::borrow::Borrow<str>>(
         meshes: &[(TMFMesh, S)],
         w: &mut W,
-    ) -> Result<()> {
+    ) -> std::io::Result<()> {
         obj::write_obj(meshes, w)
     }
     /// Writes this TMF Mesh to *w*.
@@ -543,7 +545,7 @@ impl TMFMesh {
         w: &mut W,
         p_info: &TMFPrecisionInfo,
         name: S,
-    ) -> Result<()> {
+    ) -> std::io::Result<()> {
         tmf::write_tmf_header(w, 1)?;
         tmf::write_mesh(self, w, p_info, name.borrow())
     }
@@ -562,7 +564,7 @@ impl TMFMesh {
         meshes_names: &[(Self, S)],
         w: &mut W,
         p_info: &TMFPrecisionInfo,
-    ) -> Result<()> {
+    ) -> std::io::Result<()> {
         tmf::write(meshes_names, w, p_info)
     }
     /// Creates an empty TMF Mesh(mesh with no data). Equivalent to [`TMFMesh::default`].
@@ -598,7 +600,7 @@ impl TMFMesh {
     ///     do_something(mesh,name);
     /// }
     /// ```
-    pub fn read_tmf<R: Read>(reader: &mut R) -> Result<Vec<(Self, String)>> {
+    pub fn read_tmf<R: Read>(reader: &mut R) -> Result<Vec<(Self, String)>, TMFImportError> {
         tmf::read(reader)
     }
     /// Reads a single mesh from a .tmf file. Returns [`Err`] if no meshes present or more than one mesh present.
@@ -611,18 +613,12 @@ impl TMFMesh {
     /// // Read mesh and mesh name form file
     /// let (mesh,name) = TMFMesh::read_tmf_one(&mut file).expect("Could not load .tmf mesh!");
     /// ```
-    pub fn read_tmf_one<R: Read>(reader: &mut R) -> Result<(Self, String)> {
+    pub fn read_tmf_one<R: Read>(reader: &mut R) -> Result<(Self, String), TMFImportError> {
         let meshes = Self::read_tmf(reader)?;
         if meshes.is_empty() {
-            Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "No meshes present in .tmf file",
-            ))
+            Err(TMFImportError::NoMeshes)
         } else if meshes.len() > 1 {
-            Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "More than one mesh present in .tmf file while only one expected.",
-            ))
+            Err(TMFImportError::TooManyMeshes)
         } else {
             // TODO: find a way to remove this redundant clone call
             // This is a very stupid little "bug". Because 'meshes' must contain exactly 1 element(previous checks), the first element should just be returned.
@@ -785,5 +781,22 @@ mod testing {
         let mut prec = TMFPrecisionInfo::default();
         prec.prune_normals = false;
         tmf_mesh.write_tmf_one(&mut out, &prec, "").unwrap();
+    }
+}
+#[derive(Debug)]
+pub enum TMFImportError {
+    IO(std::io::Error),
+    CompressionTypeUnknown(u8),
+    NoMeshes,
+    TooManyMeshes,
+    NotTMFFile,
+    NewerVersionRequired,
+    SegmentTooLong,
+    NoDataBeforeOmmitedSegment,
+    InvalidPrecision(u8),
+}
+impl From<std::io::Error> for TMFImportError {
+    fn from(err: std::io::Error) -> Self {
+        Self::IO(err)
     }
 }

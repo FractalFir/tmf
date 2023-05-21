@@ -21,7 +21,7 @@ fn parse_line(line: Result<String>, oi: &mut ModelImporter) -> Result<Option<(TM
             let name = match_split(split.next())?.to_owned();
             return Ok(oi.next_mesh(name));
         }
-        _ => todo!(),
+        _ => (), //Ignore invalid/unsuported lines.
     }
     Ok(None)
 }
@@ -36,7 +36,7 @@ pub fn read_from_obj<R: Read>(reader: &mut R) -> Result<Vec<(TMFMesh, String)>> 
             res.push(mesh_and_name)
         };
     }
-    res.push(oi.finish());
+    res.push(oi.finish()?);
     Ok(res)
 }
 fn parse_float_type(float: &str) -> Result<FloatType> {
@@ -66,11 +66,19 @@ fn match_split(split: Option<&str>) -> Result<&str> {
 use smallvec::SmallVec;
 use std::str::Split;
 fn load_indices(split: &mut Split<&[char; 2]>) -> Result<(IndexType, IndexType, IndexType)> {
-    Ok((
-        parse_index(match_split(split.next())?)? - 1,
-        parse_index(match_split(split.next())?)? - 1,
-        parse_index(match_split(split.next())?)? - 1,
-    ))
+    let (i0, i1, i2) = (
+        parse_index(match_split(split.next())?)?,
+        parse_index(match_split(split.next())?)?,
+        parse_index(match_split(split.next())?)?,
+    );
+    if i0 < 1 || i1 < 1 || i2 < 1 {
+        Err(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "Invalid index!",
+        ))
+    } else {
+        Ok((i0 - 1, i1 - 1, i2 - 1))
+    }
 }
 ///IMPORTANT TODO: It seems likey that normals and uvs are spwapped in this function. Investigate and cleanup the confusion and refactor triangulation
 fn load_face(split: &mut Split<&[char; 2]>, oi: &mut ModelImporter) -> Result<()> {

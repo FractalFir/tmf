@@ -1,6 +1,8 @@
 use crate::unaligned_rw::{UnalignedRWMode, UnalignedReader, UnalignedWriter};
+use crate::TMFImportError;
+use crate::MAX_SEG_SIZE;
 use crate::{FloatType, IndexType, Vector3};
-use std::io::{Read, Result, Write};
+use std::io::{Read, Write};
 #[derive(Clone, Copy, PartialEq)]
 /// Setting dictating how much the length of any edge can change because of vertex precision loss during saving. This is expressed as a fraction of the length of the shortest edge.
 ///```
@@ -30,7 +32,7 @@ pub fn save_tmf_vertices<W: Write>(
     precision: VertexPrecisionMode,
     writer: &mut W,
     shortest_edge: FloatType,
-) -> Result<()> {
+) -> std::io::Result<()> {
     let mut min_x = vertices[0].0;
     let mut max_x = vertices[0].0;
     let mut min_y = vertices[0].1;
@@ -99,12 +101,12 @@ pub fn save_tmf_vertices<W: Write>(
     writer.flush()?;
     Ok(())
 }
-fn read_f64<R: Read>(reader: &mut R) -> Result<f64> {
+fn read_f64<R: Read>(reader: &mut R) -> std::io::Result<f64> {
     let mut tmp = [0; std::mem::size_of::<f64>()];
     reader.read_exact(&mut tmp)?;
     Ok(f64::from_le_bytes(tmp))
 }
-pub fn read_tmf_vertices<R: Read>(reader: &mut R) -> Result<Box<[Vector3]>> {
+pub fn read_tmf_vertices<R: Read>(reader: &mut R) -> Result<Box<[Vector3]>, TMFImportError> {
     let vertex_count = {
         let mut tmp = [0; std::mem::size_of::<u64>()];
         reader.read_exact(&mut tmp)?;
@@ -123,20 +125,29 @@ pub fn read_tmf_vertices<R: Read>(reader: &mut R) -> Result<Box<[Vector3]>> {
         reader.read_exact(&mut tmp)?;
         tmp[0]
     };
+    if prec_x >= u64::BITS as u8 {
+        return Err(TMFImportError::InvalidPrecision(prec_x));
+    }
     let prec_y = {
         let mut tmp = [0];
         reader.read_exact(&mut tmp)?;
         tmp[0]
     };
+    if prec_y >= u64::BITS as u8 {
+        return Err(TMFImportError::InvalidPrecision(prec_y));
+    }
     let prec_z = {
         let mut tmp = [0];
         reader.read_exact(&mut tmp)?;
         tmp[0]
     };
+    if prec_z >= u64::BITS as u8 {
+        return Err(TMFImportError::InvalidPrecision(prec_z));
+    }
     // Calculate float read divisor
-    let div_x = ((1 << prec_x) - 1) as FloatType;
-    let div_y = ((1 << prec_y) - 1) as FloatType;
-    let div_z = ((1 << prec_z) - 1) as FloatType;
+    let div_x = ((1_u64 << prec_x) - 1) as FloatType;
+    let div_y = ((1_u64 << prec_y) - 1) as FloatType;
+    let div_z = ((1_u64 << prec_z) - 1) as FloatType;
     // Create unaligned rw modes
     let prec_x = UnalignedRWMode::precision_bits(prec_x);
     let prec_y = UnalignedRWMode::precision_bits(prec_y);
@@ -145,7 +156,10 @@ pub fn read_tmf_vertices<R: Read>(reader: &mut R) -> Result<Box<[Vector3]>> {
     let sx = max_x - min_x;
     let sy = max_y - min_y;
     let sz = max_z - min_z;
-    //Create arars to write data into
+    //Create arrays to write data into
+    if vertex_count > MAX_SEG_SIZE {
+        return Err(TMFImportError::SegmentTooLong);
+    }
     let mut vertices = Vec::with_capacity(vertex_count);
     let mut reader = UnalignedReader::new(reader);
     for _ in 0..vertex_count {
@@ -166,7 +180,7 @@ pub fn save_triangles<W: Write>(
     triangles: &[IndexType],
     max_index: usize,
     writer: &mut W,
-) -> Result<()> {
+) -> std::io::Result<()> {
     let precision = (max_index as FloatType).log2().ceil() as u8;
     writer.write_all(&precision.to_le_bytes())?;
     writer.write_all(&(triangles.len() as u64).to_le_bytes())?;
@@ -177,7 +191,7 @@ pub fn save_triangles<W: Write>(
     }
     writer.flush()
 }
-pub fn read_triangles<R: Read>(reader: &mut R) -> Result<Box<[IndexType]>> {
+pub fn read_triangles<R: Read>(reader: &mut R) -> Result<Box<[IndexType]>, TMFImportError> {
     let precision = {
         let mut tmp = [0];
         reader.read_exact(&mut tmp)?;
@@ -188,9 +202,12 @@ pub fn read_triangles<R: Read>(reader: &mut R) -> Result<Box<[IndexType]>> {
         reader.read_exact(&mut tmp)?;
         u64::from_le_bytes(tmp)
     };
+    if max_index > MAX_SEG_SIZE as u64 {
+        return Err(TMFImportError::SegmentTooLong);
+    }
+    let mut res = Vec::with_capacity(max_index as usize);
     let precision = UnalignedRWMode::precision_bits(precision);
     let mut reader = UnalignedReader::new(reader);
-    let mut res = Vec::with_capacity(max_index as usize);
     for _ in 0..max_index {
         res.push(reader.read_unaligned(precision)? as IndexType);
     }

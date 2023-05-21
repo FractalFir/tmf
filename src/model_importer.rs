@@ -56,7 +56,7 @@ impl ModelImporter {
 
         Some((mesh, name))
     }
-    pub(crate) fn finish(self) -> (TMFMesh, String) {
+    pub(crate) fn finish(self) -> std::io::Result<(TMFMesh, String)> {
         let mut mesh = TMFMesh::empty();
 
         let (mut vertices, mut vertex_triangles) =
@@ -77,7 +77,7 @@ impl ModelImporter {
         mesh.set_normal_triangles(normal_triangles);
         mesh.set_uv_triangles(uv_triangles);
 
-        (mesh, self.name)
+        Ok((mesh, self.name))
     }
     pub(crate) fn push_vertex(&mut self, vertex: Vector3) {
         self.vertices.push(vertex);

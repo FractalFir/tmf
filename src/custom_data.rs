@@ -1,6 +1,8 @@
 use crate::tmf::SectionType;
 use crate::FloatType;
 use crate::IndexType;
+use crate::TMFImportError;
+use crate::MAX_SEG_SIZE;
 #[derive(Clone, Debug)]
 pub struct CustomDataSegment {
     name: [u8; u8::MAX as usize],
@@ -138,7 +140,10 @@ impl CustomDataSegment {
         target.write_all(&out_bytes)
     }
     //return Err(std::io::Error::new(std::io::ErrorKind::Other,format!("Invalid custom se"),)),
-    pub(crate) fn read<R: std::io::Read>(mut src: R, kind: SectionType) -> std::io::Result<Self> {
+    pub(crate) fn read<R: std::io::Read>(
+        mut src: R,
+        kind: SectionType,
+    ) -> Result<Self, TMFImportError> {
         let mut name_len = [0];
         src.read_exact(&mut name_len)?;
         let name_len = name_len[0];
@@ -160,6 +165,9 @@ impl CustomDataSegment {
                     src.read_exact(&mut tmp)?;
                     u64::from_le_bytes(tmp)
                 };
+                if len > MAX_SEG_SIZE as u64 {
+                    return Err(TMFImportError::SegmentTooLong);
+                }
                 let min = {
                     let mut tmp = [0; std::mem::size_of::<f64>()];
                     src.read_exact(&mut tmp)?;
@@ -173,17 +181,20 @@ impl CustomDataSegment {
                 let mut prec = [0];
                 src.read_exact(&mut prec)?;
                 let prec = prec[0];
+                if prec >= u64::BITS as u8 {
+                    return Err(TMFImportError::InvalidPrecision(prec));
+                }
                 let prec_bits = prec;
-                let div = ((1 << prec_bits) - 1) as f64;
+                let div = ((1_u64 << prec_bits) - 1) as f64;
                 let span = max - min;
                 let prec = UnalignedRWMode::precision_bits(prec);
                 let mut reader = UnalignedReader::new(src);
                 let mut res = vec![0.0; len as usize];
                 for mut float in &mut res {
                     let val = reader.read_unaligned(prec)?;
-                    *float = (((val as f64) / div)*span + min) as FloatType;
+                    *float = (((val as f64) / div) * span + min) as FloatType;
                 }
-                let prec = (((max - min) / ((1 << prec_bits) as f64)) as FloatType) * 0.99999;
+                let prec = (((max - min) / ((1_u64 << prec_bits) as f64)) as FloatType) * 0.99999;
                 Ok(Self::new_raw(
                     CustomData::new_float(&res, prec),
                     name,
@@ -252,7 +263,13 @@ fn float_data() {
 
     let (read_floats, _) = read_floats.is_float().unwrap();
 
-    for index in 0..read_floats.len(){
-        assert!((read_floats[index] - float_data[index]).abs() <= 0.01,"{} diff {} {} > 0.01!",index,read_floats[index],float_data[index]);
+    for index in 0..read_floats.len() {
+        assert!(
+            (read_floats[index] - float_data[index]).abs() <= 0.01,
+            "{} diff {} {} > 0.01!",
+            index,
+            read_floats[index],
+            float_data[index]
+        );
     }
 }

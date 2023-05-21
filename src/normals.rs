@@ -1,10 +1,12 @@
 use crate::unaligned_rw::{UnalignedRWMode, UnalignedReader, UnalignedWriter};
+use crate::TMFImportError;
+use crate::MAX_SEG_SIZE;
 use crate::{FloatType, IndexType, Vector3};
 #[cfg(not(feature = "double_precision"))]
 use std::f32::consts::FRAC_PI_2;
 #[cfg(feature = "double_precision")]
 use std::f64::consts::FRAC_PI_2;
-use std::io::{Read, Result, Write};
+use std::io::{Read, Write};
 #[derive(Clone, Copy, PartialEq)]
 /// Setting dictating how much can any normal in a model deviate, expressed as an angle.
 pub struct NormalPrecisionMode(u8);
@@ -91,7 +93,7 @@ pub(crate) fn normal_from_encoding(
     sz: bool,
     precision: NormalPrecisionMode,
 ) -> Vector3 {
-    let divisor = ((1 << precision.0) - 1) as FloatType;
+    let divisor = ((1_u64 << precision.0) - 1) as FloatType;
     //Read raw asine
     let asine = (asine as FloatType) / divisor;
     //Convert asine form 0-1 to 0-tau
@@ -121,7 +123,7 @@ fn save_normal<W: Write>(
     normal: Vector3,
     precision: NormalPrecisionMode,
     writer: &mut UnalignedWriter<W>,
-) -> Result<()> {
+) -> std::io::Result<()> {
     let (asine, z, sx, sy, sz) = normal_to_encoding(normal, &precision);
     let main_prec = UnalignedRWMode::precision_bits(precision.0);
 
@@ -137,7 +139,7 @@ fn save_normal<W: Write>(
 fn read_normal<R: Read>(
     precision: NormalPrecisionMode,
     reader: &mut UnalignedReader<R>,
-) -> Result<Vector3> {
+) -> std::io::Result<Vector3> {
     let main_prec = UnalignedRWMode::precision_bits(precision.0);
     // Get signs of x y z component
     let sx = reader.read_unaligned(SIGN_PREC)? != 0;
@@ -152,7 +154,7 @@ pub(crate) fn save_normal_array<W: Write>(
     normals: &[Vector3],
     writer: &mut W,
     precision: NormalPrecisionMode,
-) -> Result<()> {
+) -> std::io::Result<()> {
     let count = (normals.len() as u64).to_le_bytes();
     writer.write_all(&count)?;
     writer.write_all(&[precision.0])?;
@@ -163,17 +165,27 @@ pub(crate) fn save_normal_array<W: Write>(
     writer.flush()?;
     Ok(())
 }
-pub(crate) fn read_normal_array<R: Read>(reader: &mut R) -> Result<Box<[Vector3]>> {
+pub(crate) fn read_normal_array<R: Read>(reader: &mut R) -> Result<Box<[Vector3]>, TMFImportError> {
     let count = {
         let mut tmp = [0; std::mem::size_of::<u64>()];
         reader.read_exact(&mut tmp)?;
         u64::from_le_bytes(tmp)
     } as usize;
-    let precision = NormalPrecisionMode({
+    if count > MAX_SEG_SIZE {
+        return Err(TMFImportError::SegmentTooLong);
+    }
+    let precision = {
         let mut tmp: [u8; 1] = [0; 1];
         reader.read_exact(&mut tmp)?;
         tmp[0]
-    });
+    };
+    if precision == 0 {
+        return Ok(vec![(0.0, 0.0, 1.0); count as usize].into());
+    }
+    if precision >= u64::BITS as u8 {
+        return Err(TMFImportError::InvalidPrecision(precision));
+    }
+    let precision = NormalPrecisionMode(precision);
     let mut reader = UnalignedReader::new(reader);
     let mut normals = Vec::with_capacity(count);
     for _ in 0..count {

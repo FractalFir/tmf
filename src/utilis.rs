@@ -5,7 +5,7 @@ use crate::{FloatType, IndexType, Vector3};
 /// in .obj loading. Fast because if not needed exits quickly.
 pub(crate) fn fast_prune<T: Sized>(data: &mut Vec<T>, indices: &mut [IndexType]) {
     // Smallest index
-    let mut min_index = IndexType::MAX;
+    let mut min_index = data.len() as IndexType;
     if indices.is_empty() {
         min_index = 0;
     }

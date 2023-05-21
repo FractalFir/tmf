@@ -1,6 +1,8 @@
 use crate::unaligned_rw::{UnalignedRWMode, UnalignedReader, UnalignedWriter};
+use crate::TMFImportError;
+use crate::MAX_SEG_SIZE;
 use crate::{FloatType, Vector2};
-use std::io::{Read, Result, Write};
+use std::io::{Read, Write};
 /// Setting dictating how precisely the UV coordinates should be saved.
 #[derive(Clone, Copy, PartialEq)]
 pub struct UvPrecisionMode(u8);
@@ -27,7 +29,11 @@ impl Default for UvPrecisionMode {
         Self::form_texture_resolution(1024.0, 0.1)
     }
 }
-pub fn save_uvs<W: Write>(uvs: &[Vector2], writer: &mut W, precision: FloatType) -> Result<()> {
+pub fn save_uvs<W: Write>(
+    uvs: &[Vector2],
+    writer: &mut W,
+    precision: FloatType,
+) -> std::io::Result<()> {
     let precision = (1.0 / precision).log2().ceil() as u8;
     let multpiler = ((1 << precision) - 1) as FloatType;
     writer.write_all(&[precision])?;
@@ -43,7 +49,7 @@ pub fn save_uvs<W: Write>(uvs: &[Vector2], writer: &mut W, precision: FloatType)
     writer.flush()?;
     Ok(())
 }
-pub fn read_uvs<R: Read>(reader: &mut R) -> Result<Box<[Vector2]>> {
+pub fn read_uvs<R: Read>(reader: &mut R) -> Result<Box<[Vector2]>, TMFImportError> {
     let precision = {
         let mut tmp = [0];
         reader.read_exact(&mut tmp)?;
@@ -54,10 +60,19 @@ pub fn read_uvs<R: Read>(reader: &mut R) -> Result<Box<[Vector2]>> {
         reader.read_exact(&mut tmp)?;
         u64::from_le_bytes(tmp)
     };
-    let divisor = ((1 << precision) - 1) as FloatType;
+    if count > MAX_SEG_SIZE as u64 {
+        return Err(TMFImportError::SegmentTooLong);
+    }
+    if precision == 0 {
+        return Ok(vec![(0.0, 0.0); count as usize].into());
+    }
+    if precision >= u64::BITS as u8 {
+        return Err(TMFImportError::InvalidPrecision(precision));
+    }
+    let mut uvs = Vec::with_capacity(count as usize);
+    let divisor = ((1_u64 << precision) - 1) as FloatType;
     let precision = UnalignedRWMode::precision_bits(precision);
     let mut reader = UnalignedReader::new(reader);
-    let mut uvs = Vec::with_capacity(count as usize);
     for _ in 0..count {
         let x = (reader.read_unaligned(precision)? as FloatType) / divisor;
         let y = (reader.read_unaligned(precision)? as FloatType) / divisor;

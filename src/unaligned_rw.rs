@@ -24,14 +24,20 @@ impl<R: Read> UnalignedReader<R> {
         } else {
             let mut tmp: [u8; std::mem::size_of::<UnalignedStorage>()] =
                 [0; std::mem::size_of::<UnalignedStorage>()];
-            self.bits_read = (8 * std::mem::size_of::<UnalignedStorage>()
-                - self.reader.read(&mut tmp)? * 8) as u8;
+            let bits_read = self.reader.read(&mut tmp)? * 8;
+            if bits_read == 0 {
+                return Err(std::io::Error::new(std::io::ErrorKind::UnexpectedEof, ""));
+            }
+            self.bits_read = (8 * std::mem::size_of::<UnalignedStorage>() - bits_read) as u8;
             self.current_byte = UnalignedStorage::from_be_bytes(tmp);
         }
         Ok(())
     }
     /// Reads *mode.0* bits from self, keeping internal alignment
     pub fn read_unaligned(&mut self, mode: UnalignedRWMode) -> Result<u64> {
+        if mode.0 == 0 || mode.0 >= u64::BITS as u8 {
+            return Ok(0);
+        };
         // Prepare result integer, in which read result is stored.
         let mut res: u64 = 0;
         // Total bits remaining to read
@@ -105,7 +111,9 @@ impl<W: Write> UnalignedWriter<W> {
     }
     #[inline(always)]
     pub fn write_unaligned(&mut self, mode: UnalignedRWMode, mut data: u64) -> Result<()> {
-        debug_assert!(mode.0>0,"Writng 0-sized data using unaligned writer is an error, which will can lead to crashes and/or freezes");
+        if mode.0 == 0 {
+            return Ok(());
+        };
         let mut total_write = mode.0;
         // Move all the bits to write to left, so the first bit to write is the leftmost bit.
         data <<= 64 - total_write;
@@ -149,10 +157,6 @@ impl<W: Write> UnalignedWriter<W> {
 pub struct UnalignedRWMode(u8);
 impl UnalignedRWMode {
     pub const fn precision_bits(bits: u8) -> Self {
-        assert!(
-            bits > 0,
-            "Writing with 0 bit precision(0 sized data) is not valid!"
-        );
         Self(bits)
     }
 }
