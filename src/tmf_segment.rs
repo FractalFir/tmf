@@ -54,9 +54,9 @@ impl DecodedSegement {
     fn encode(self) -> EncodedSegment {
         todo!("Not working yet!");
     }
-    fn apply(self, mesh: &mut TMFMesh) {
+    fn apply(self, _mesh: &mut TMFMesh) {
         match self {
-            DecodedSegement::VertexSegment(vertices) => {
+            DecodedSegement::VertexSegment(_vertices) => {
                 /*match mesh.get_vertices(){
                     Some(vertices)=>
                 }*/

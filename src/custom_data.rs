@@ -4,7 +4,7 @@ use crate::IndexType;
 use crate::TMFImportError;
 use crate::MAX_SEG_SIZE;
 #[derive(Clone, Debug)]
-pub struct CustomDataSegment {
+pub(crate) struct CustomDataSegment {
     name: [u8; u8::MAX as usize],
     name_len: u8,
     data: CustomData,
@@ -22,7 +22,7 @@ impl CustomDataSegment {
             data,
         }
     }
-    pub fn custom_data(&self) -> &CustomData {
+    pub(crate) fn custom_data(&self) -> &CustomData {
         &self.data
     }
     pub(crate) fn name_len(&self) -> u8 {
@@ -41,12 +41,11 @@ impl CustomDataSegment {
         }
         let name_len = len as u8;
         let mut name = [0; u8::MAX as usize];
-        for index in 0..bytes.len() {
-            name[index] = bytes[index];
-        }
+        name[..bytes.len()].copy_from_slice(bytes);
         Ok(Self::new_raw(data, name, name_len))
     }
 }
+/// Custom mesh data.
 #[derive(Clone, Debug)]
 pub enum CustomData {
     CustomIndex(Box<[IndexType]>, usize),
@@ -56,13 +55,13 @@ impl CustomData {
     /// Returns the index data if custom segment is an index segment. Returns the index array and max index.
     pub fn is_index(&self) -> Option<(&[IndexType], usize)> {
         match self {
-            Self::CustomIndex(array, max_index) => Some((&array, *max_index)),
+            Self::CustomIndex(array, max_index) => Some((array, *max_index)),
             _ => None,
         }
     }
     pub fn is_float(&self) -> Option<(&[FloatType], FloatType)> {
         match self {
-            Self::CustomFloat(array, prec) => Some((&array, *prec)),
+            Self::CustomFloat(array, prec) => Some((array, *prec)),
             _ => None,
         }
     }
@@ -190,7 +189,7 @@ impl CustomDataSegment {
                 let prec = UnalignedRWMode::precision_bits(prec);
                 let mut reader = UnalignedReader::new(src);
                 let mut res = vec![0.0; len as usize];
-                for mut float in &mut res {
+                for float in &mut res {
                     let val = reader.read_unaligned(prec)?;
                     *float = (((val as f64) / div) * span + min) as FloatType;
                 }
@@ -217,8 +216,7 @@ fn index_data() {
     let mut file = std::fs::File::open("testing/susan.obj").unwrap();
     let (mut tmf_mesh, name) = TMFMesh::read_from_obj_one(&mut file).unwrap();
     let index_data: [IndexType; 10] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
-    let index_data_seg = CustomDataSegment::new(index_data[..].into(), "custom_index").unwrap();
-    tmf_mesh.add_custom_data(index_data_seg);
+    tmf_mesh.add_custom_data(index_data[..].into(), "custom_index").unwrap();
     tmf_mesh.verify().unwrap();
     assert!(name == "Suzanne", "Name should be Suzanne but is {name}");
     let prec = TMFPrecisionInfo::default();
@@ -245,8 +243,7 @@ fn float_data() {
     let float_data: [FloatType; 10] = [
         -7.0, 1.9, -2.0, 3.7867, 4.31224, 5.34345, 6.4336, 7.76565, 8.7575, 9.54,
     ];
-    let float_data_seg = CustomDataSegment::new(float_data[..].into(), "custom_float").unwrap();
-    tmf_mesh.add_custom_data(float_data_seg);
+    tmf_mesh.add_custom_data(float_data[..].into(), "custom_float").unwrap();
     tmf_mesh.verify().unwrap();
     assert!(name == "Suzanne", "Name should be Suzanne but is {name}");
     let prec = TMFPrecisionInfo::default();

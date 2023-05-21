@@ -1,10 +1,28 @@
 use crate::FloatType;
 #[derive(Clone, Copy, Debug)]
+/// A value describing handedness of tangent.
 pub struct HandenesType(bool);
-pub type TangentPrecisionMode = crate::NormalPrecisionMode;
+#[derive(Clone, Copy)]
+/// A value specifying how precise saved (x,y,z) values must be.
+pub struct TangentPrecisionMode(crate::NormalPrecisionMode);
 impl TangentPrecisionMode {
     fn normal_precision(&self) -> crate::NormalPrecisionMode {
-        *self
+        self.0
+    }
+}
+impl TangentPrecisionMode{
+    ///Creates a tangent precision mode with maximal deviation of (x,y,z) part being *deg* degrees. 
+    fn from_deg_dev(deg: FloatType) -> Self{
+        Self(crate::NormalPrecisionMode::from_deg_dev(deg))
+    }
+    ///Creates a tangent precision mode with maximal deviation of (x,y,z) part being *rad* radians. 
+    fn from_rad_dev(rad: FloatType) -> Self{
+        Self(crate::NormalPrecisionMode::from_rad_dev(rad))
+    }
+}
+impl Default for TangentPrecisionMode{
+    fn default()->Self{
+        Self::from_deg_dev(1.0)
     }
 }
 impl HandenesType {
@@ -15,6 +33,7 @@ impl HandenesType {
         Self(src)
     }
 }
+/// A representation of a Tangent.
 pub type Tangent = (crate::Vector3, HandenesType);
 fn tangent_to_encoding(
     tangent: Tangent,
@@ -63,10 +82,11 @@ fn rand_tangent() -> Tangent {
 #[cfg(test)]
 #[test]
 fn tangent_rw() {
-    let prec = crate::NormalPrecisionMode::default();
+    let prec = TangentPrecisionMode::default();
     for _ in 0..100_000 {
         let tangent = rand_tangent();
         let degree = test_tangent(tangent, prec);
         assert!(degree < 5.0);
     }
 }
+

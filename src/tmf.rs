@@ -59,7 +59,7 @@ impl CompressionType {
         }
     }
 }
-use crate::tmf_segment::*;
+
 fn read_segment_header<R: Read>(
     reader: &mut R,
 ) -> Result<(SectionType, usize, CompressionType), TMFImportError> {
@@ -522,7 +522,7 @@ pub fn read_mesh<R: Read>(reader: &mut R) -> Result<(TMFMesh, String), TMFImport
             | SectionType::CustomVector4Segment
             | SectionType::CustomColorSegment => {
                 let cd = crate::custom_data::CustomDataSegment::read(&*data, seg_type)?;
-                res.add_custom_data(cd);
+                res.add_custom_data_seg(cd);
             }
             _ => (), //Unknown header, ignoring
         }

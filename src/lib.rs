@@ -8,6 +8,7 @@
 //! ## Feature flags
 //pub(crate) MAX_SEG_COUNT:usize = 0xFFFF;
 #![doc = document_features::document_features!()]
+#[doc(hidden)]
 pub mod custom_data;
 mod material;
 #[cfg(feature = "model_importer")]
@@ -17,6 +18,7 @@ mod normals;
 mod obj;
 /// Module used when saving vertex grups
 mod pile_map;
+#[doc(hidden)]
 pub mod tangents;
 mod tmf;
 mod tmf_segment;
@@ -33,7 +35,7 @@ const TMF_MAJOR: u16 = 0;
 const TMF_MINOR: u16 = 1;
 const MIN_TMF_MAJOR: u16 = 0;
 const MIN_TMF_MINOR: u16 = 1;
-pub(crate) const MAX_SEG_SIZE: usize = 0x20_00_00_00; // 2_00_00 for fuzzing!
+pub(crate) const MAX_SEG_SIZE: usize = 0x80_00_00_00; // 2_00_00 for fuzzing!
 pub(crate) const MAX_MESH_COUNT: usize = 0x10000;
 /// Index type used for representing triangle indices.
 #[cfg(not(any(feature = "long_indices", feature = "short_indices")))]
@@ -53,7 +55,8 @@ pub type FloatType = f64;
 pub type Vector3 = (FloatType, FloatType, FloatType);
 /// Type used for representing 2d floating-point vectors
 pub type Vector2 = (FloatType, FloatType);
-use crate::custom_data::CustomData;
+#[doc(inline)]
+pub use crate::custom_data::{CustomData,DataSegmentError};
 use crate::custom_data::CustomDataSegment;
 #[doc(inline)]
 use crate::material::MaterialInfo;
@@ -63,6 +66,8 @@ pub use crate::normals::NormalPrecisionMode;
 pub use crate::uv::UvPrecisionMode;
 #[doc(inline)]
 pub use crate::vertices::VertexPrecisionMode;
+#[doc(inline)]
+pub use crate::tangents::*;
 use std::io::{Read, Write};
 #[doc(inline)]
 pub use verify::TMFIntegrityStatus;
@@ -629,9 +634,15 @@ impl TMFMesh {
             Ok(vec_first(meshes))
         }
     }
-    pub fn add_custom_data(&mut self, custom_data: CustomDataSegment) {
+    /// Adds custom data array.
+    pub fn add_custom_data(&mut self, custom_data: CustomData,name:&str)->Result<(), DataSegmentError>{
+        self.add_custom_data_seg(CustomDataSegment::new(custom_data,name)?);
+        Ok(())
+    }
+    pub(crate) fn add_custom_data_seg(&mut self, custom_data: CustomDataSegment) {
         self.custom_data.push(custom_data);
     }
+    /// Gets a custom data array with name *name*.
     pub fn lookup_custom_data(&self, name: &str) -> Option<&CustomData> {
         let bytes = name.as_bytes();
         if bytes.len() > u8::MAX as usize {
@@ -783,16 +794,26 @@ mod testing {
         tmf_mesh.write_tmf_one(&mut out, &prec, "").unwrap();
     }
 }
+/// An enum describing an error that occurred during loading a TMF mesh.  
 #[derive(Debug)]
 pub enum TMFImportError {
+    /// An IO error which prevented data from being read.
     IO(std::io::Error),
+    /// A segment uses an unknown compression type, invalid for the minimum TMF version specified by file header. 
     CompressionTypeUnknown(u8),
+    /// A method which should return one mesh was called, but TMF file had no meshes present.
     NoMeshes,
+    /// A method which should return one mesh was called, but more than one mesh was present.
     TooManyMeshes,
+    /// Provides source was not a TMF file.
     NotTMFFile,
+    /// File was created with a TMF version newer than this, and can't be read properly. 
     NewerVersionRequired,
+    /// A file segment exceeded the maximum length(2GB) was encountered. This segments length is highly unusual, and the segment unlikely to be valid. The segment was not read to prevent memory issues.
     SegmentTooLong,
+    /// A segments compression type requires that it must be preceded by another segment, from which some of the data is deduced.   
     NoDataBeforeOmmitedSegment,
+    /// Byte precision is too high(over 64 bits) and is invalid.
     InvalidPrecision(u8),
 }
 impl From<std::io::Error> for TMFImportError {
