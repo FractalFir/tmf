@@ -1,7 +1,7 @@
 use crate::tmf::SectionType;
 use crate::FloatType;
 use crate::IndexType;
-#[derive(Clone)]
+#[derive(Clone,Debug)]
 pub struct CustomDataSegment {
     name: [u8; u8::MAX as usize],
     name_len: u8,
@@ -45,10 +45,10 @@ impl CustomDataSegment {
         Ok(Self::new_raw(data, name, name_len))
     }
 }
-#[derive(Clone)]
+#[derive(Clone,Debug)]
 pub enum CustomData {
     CustomIndex(Box<[IndexType]>, usize),
-    //CustomFloat(Box<[FloatType]>),
+    CustomFloat(Box<[FloatType]>,FloatType),
 }
 impl CustomData {
     /// Returns the index data if custom segment is an index segment. Returns the index array and max index.
@@ -63,13 +63,42 @@ impl CustomData {
             Self::CustomIndex(data, max_index) => {
                 crate::vertices::save_triangles(data, *max_index, target)
             }
+            CustomData::CustomFloat(data,prec) =>{
+                use crate::unaligned_rw::{UnalignedRWMode,UnalignedWriter};
+                let mut max = FloatType::MIN;
+                let mut min = FloatType::MAX;
+                for entry in data.iter(){
+                    max = max.max(*entry);
+                    min = min.min(*entry);
+                }
+                let span = max - min;
+                let prec = (span / prec).log2().ceil() as u8;
+                //Ensure precision is never 0(messes up the reader/writer);
+                let prec = prec.max(1);
+                let mul = ((1 << prec) - 1) as FloatType;
+                target.write_all(&(data.len() as u64).to_le_bytes())?;
+                target.write_all(&(min as f64).to_le_bytes())?;
+                target.write_all(&(max as f64).to_le_bytes())?;
+                target.write_all(&[prec])?;
+                let prec = UnalignedRWMode::precision_bits(prec);
+                let mut writer = UnalignedWriter::new(target);
+                for entry in data.iter(){
+                    let entry = (((entry - min) / span) * mul) as u64;
+                    writer.write_unaligned(prec, entry)?;
+                }
+                Ok(())
+            },
         }?;
         Ok(())
     }
     fn section_type(&self) -> SectionType {
         match self {
             Self::CustomIndex(_, _) => SectionType::CustomIndexSegment,
+            Self::CustomFloat(_, _) => SectionType::CustomFloatSegment,
         }
+    }
+    fn new_float(floats: &[FloatType], prec:FloatType) -> Self {
+        Self::CustomFloat(floats.into(), prec)
     }
     fn new_index(indices: &[IndexType], max_index: Option<usize>) -> Self {
         let max_index = match max_index {
@@ -81,7 +110,12 @@ impl CustomData {
 }
 impl From<&[IndexType]> for CustomData {
     fn from(indices: &[IndexType]) -> Self {
-        Self::new_index(indices.into(), None)
+        Self::new_index(indices, None)
+    }
+}
+impl From<&[FloatType]> for CustomData {
+    fn from(floats: &[FloatType]) -> Self {
+        Self::new_float(floats, 0.01)
     }
 }
 impl CustomDataSegment {
@@ -113,6 +147,15 @@ impl CustomDataSegment {
                     name_len,
                 ))
             }
+            SectionType:: CustomFloatSegment=>{
+                let len = {
+                    let mut tmp = [0;std::mem::size_of::<u64>()];
+                    src.read_exact(&mut tmp)?;
+                    u64::from_le_bytes(tmp)  
+                };
+                println!("len:{len}");
+                todo!("Finish reading custom float segment!");
+            },
             _ => panic!("InternalError: Invalid custom section type, must be custom!"),
         }
     }
@@ -130,7 +173,7 @@ fn index_data() {
     let (mut tmf_mesh, name) = TMFMesh::read_from_obj_one(&mut file).unwrap();
     let index_data: [IndexType; 10] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
     let index_data_seg =
-        CustomDataSegment::new(CustomData::from(&index_data[..]), "custom_index").unwrap();
+        CustomDataSegment::new(index_data[..].into(), "custom_index").unwrap();
     tmf_mesh.add_custom_data(index_data_seg);
     tmf_mesh.verify().unwrap();
     assert!(name == "Suzanne", "Name should be Suzanne but is {name}");
@@ -142,9 +185,42 @@ fn index_data() {
     let (r_mesh, name) = TMFMesh::read_tmf_one(&mut (&out as &[u8])).unwrap();
     assert!(name == "Suzanne", "Name should be Suzanne but is {name}");
     r_mesh.verify().unwrap();
-    let read_indices = tmf_mesh
+    let read_indices = r_mesh
         .lookup_custom_data("custom_index")
         .expect("Could not find the custom index array!");
     let (read_indices, _) = read_indices.is_index().unwrap();
     assert_eq!(index_data, read_indices);
 }
+#[test]
+#[cfg(all(feature = "obj_import", test))]
+fn float_data() {
+    use crate::{TMFMesh, TMFPrecisionInfo};
+    init_test_env();
+    let mut file = std::fs::File::open("testing/susan.obj").unwrap();
+    let (mut tmf_mesh, name) = TMFMesh::read_from_obj_one(&mut file).unwrap();
+    let float_data: [FloatType; 10] = [-7.0, 1.9, -2.0, 3.7867, 4.31224, 5.34345, 6.4336, 7.76565, 8.7575, 9.54];
+    let float_data_seg =
+        CustomDataSegment::new(float_data[..].into(), "custom_float").unwrap();
+    println!("fds:{float_data_seg:?}");
+    tmf_mesh.add_custom_data(float_data_seg);
+    tmf_mesh.verify().unwrap();
+    assert!(name == "Suzanne", "Name should be Suzanne but is {name}");
+    let prec = TMFPrecisionInfo::default();
+    let mut out = Vec::new();
+    {
+        tmf_mesh.write_tmf_one(&mut out, &prec, name).unwrap();
+    }
+    let (r_mesh, name) = TMFMesh::read_tmf_one(&mut (&out as &[u8])).unwrap();
+    assert!(name == "Suzanne", "Name should be Suzanne but is {name}");
+    r_mesh.verify().unwrap();
+    let read_floats = r_mesh
+        .lookup_custom_data("custom_float")
+        .expect("Could not find the custom float array!");
+    println!("rf:{read_floats:?}");
+    todo!();
+    /*
+    let (read_indices, _) = read_indices.is_index().unwrap();
+    assert_eq!(index_data, read_indices);
+    */
+}
+

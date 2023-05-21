@@ -35,6 +35,7 @@ impl SectionType {
             5 => Self::UvSegment,
             6 => Self::UvTriangleSegment,
             15 => Self::CustomIndexSegment,
+            16 => Self::CustomFloatSegment,
             _ => Self::Invalid,
         }
     }
@@ -500,7 +501,7 @@ pub fn read_mesh<R: Read>(reader: &mut R) -> Result<(TMFMesh, String)> {
                     ));
                 }
             }
-            SectionType::CustomIndexSegment => {
+            SectionType::CustomIndexSegment | SectionType::CustomFloatSegment => {
                 println!("data:{data:?}");
                 let cd = crate::custom_data::CustomDataSegment::read(&*data, seg_type)?;
                 res.add_custom_data(cd);
