@@ -1,7 +1,8 @@
 use crate::tmf::{CompressionType, SectionType};
+use crate::unaligned_rw::{UnalignedReader,UnalignedRWMode};
 use crate::{
-    IndexType, TMFImportError, TMFMesh, TMFPrecisionInfo, Vector2, Vector3, TMF_MAJOR, TMF_MINOR,
-};
+    IndexType, TMFImportError, TMFMesh, TMFPrecisionInfo, Vector2, Vector3, TMF_MAJOR, TMF_MINOR,MAX_SEG_SIZE
+}; 
 use futures::executor::block_on;
 use futures::future::join_all;
 enum SegLenWidth {
@@ -105,12 +106,91 @@ async fn decode_vertex_seg(mut seg: EncodedSegment) -> Result<DecodedSegment, TM
         panic!("Unreachable condition reached!");
     }
 }
+async fn decode_uv_seg(mut seg: EncodedSegment) -> Result<DecodedSegment, TMFImportError> {
+    if SectionType::UvSegment == seg.seg_type {
+        let mut data: &[u8] = &seg.data[..];
+        Ok(DecodedSegment::AppendUV(
+            crate::uv:: read_uvs(&mut data)?,
+        ))
+    } else {
+        panic!("Unreachable condition reached!");
+    }
+}
+async fn decode_normal_seg(mut seg: EncodedSegment) -> Result<DecodedSegment, TMFImportError> {
+    if SectionType::NormalSegment == seg.seg_type {
+        let mut data: &[u8] = &seg.data[..];
+        Ok(DecodedSegment::AppendNormal(
+            crate::normals::read_normal_array(&mut data)?,
+        ))
+    } else {
+        panic!("Unreachable condition reached!");
+    }
+}
+fn read_default_triangles<R: std::io::Read>(mut src: R,data:&mut Vec<IndexType>) -> Result<(), TMFImportError> {
+    let precision = {
+        let mut tmp = [0];
+        src.read_exact(&mut tmp)?;
+        tmp[0]
+    };
+    let max_index = {
+        let mut tmp = [0; std::mem::size_of::<u64>()];
+        src.read_exact(&mut tmp)?;
+        u64::from_le_bytes(tmp)
+    };
+    if max_index > MAX_SEG_SIZE as u64 {
+        return Err(TMFImportError::SegmentTooLong);
+    }
+    *data = Vec::with_capacity(max_index as usize);
+    let precision = UnalignedRWMode::precision_bits(precision);
+    let mut reader = UnalignedReader::new(src);
+    for _ in 0..max_index {
+        data.push(reader.read_unaligned(precision)? as IndexType);
+    }
+    Ok(())
+}
+async fn decode_triangle_seg(mut seg: EncodedSegment) -> Result<DecodedSegment, TMFImportError> {
+    if seg.seg_type.is_triangle() {
+        let mut data: &[u8] = &seg.data[..];
+        let mut indices = Vec::new();
+        match seg.compresion_type {
+            CompressionType::None => read_default_triangles(data,&mut indices)?,
+            CompressionType::Ommited => panic!("New decoder does not support ommited segment!"),
+            CompressionType::UnalignedLZZ => panic!("Unaligned lzz not supported yet!"),
+        };
+        Ok(match seg.seg_type{
+            SectionType::VertexTriangleSegment=>DecodedSegment::AppendTriangleVertex(indices.into()),
+            SectionType::NormalTriangleSegment=>DecodedSegment::AppendTriangleNormal(indices.into()),
+            SectionType::UvTriangleSegment=>DecodedSegment::AppendTriangleUV(indices.into()),
+            _=>panic!("Unsupported section type {:?}",seg.seg_type),
+        })
+    } else {
+        panic!("Unreachable condition reached!");
+    }
+}
 impl DecodedSegment {
     async fn decode(seg: EncodedSegment) -> Result<Self, TMFImportError> {
         match seg.seg_type {
             SectionType::Invalid => Ok(Self::Nothing),
             SectionType::VertexSegment => decode_vertex_seg(seg).await,
-            _ => todo!("Unhandled sgement type {:?}", seg.seg_type),
+            SectionType::NormalSegment => decode_normal_seg(seg).await,
+            SectionType::UvSegment => decode_uv_seg(seg).await,
+            SectionType::VertexTriangleSegment
+            | SectionType::NormalTriangleSegment
+            | SectionType::UvTriangleSegment
+            | SectionType::ColorTriangleSegment
+            | SectionType::TangentTriangleSegment => decode_triangle_seg(seg).await,
+            _ => todo!("Unhandled segement type {:?}", seg.seg_type),
+        }
+    }
+    fn apply(&self,mesh:&mut TMFMesh){
+        match self{
+            DecodedSegment::AppendVertex(verts)=>mesh.append_vertices(verts),
+            DecodedSegment::AppendNormal(norms)=>mesh.append_normals(norms),
+            DecodedSegment::AppendUV(uvs)=>mesh.append_uvs(uvs),
+            DecodedSegment::AppendTriangleVertex(vert_triangles)=>mesh.append_vertex_triangles(vert_triangles),
+            DecodedSegment::AppendTriangleNormal(norm_triangles)=>mesh.append_normal_triangles(norm_triangles),
+            DecodedSegment::AppendTriangleUV(uv_triangles)=>mesh.append_uv_triangles(uv_triangles),
+            _=>todo!("Can't apply decoded segment {self:?}"),
         }
     }
 }
@@ -189,7 +269,7 @@ impl TMFImportContext {
             meshes: Vec::new(),
         }
     }
-    async fn import_mesh<R: std::io::Read>(&self, mut src: R) -> Result<TMFMesh, TMFImportError> {
+    async fn import_mesh<R: std::io::Read>(&self, mut src: R) -> Result<(TMFMesh,String), TMFImportError> {
         let mut res = TMFMesh::empty();
         let name = read_string(&mut src)?;
         let segment_count = {
@@ -202,10 +282,13 @@ impl TMFImportContext {
             let encoded = EncodedSegment::read(self, &mut src)?;
             decoded_segs.push(DecodedSegment::decode(encoded));
         }
-        let decoded_segs = join_all(decoded_segs).await;
-        todo!("{name} {segment_count} {decoded_segs:?}");
+        let mut res = TMFMesh::empty();
+        join_all(decoded_segs).await.into_iter().collect::<Result<Vec<_>,_>>()?.iter().for_each(|seg|{
+            seg.apply(&mut res);
+        });
+        Ok((res,name))
     }
-    async fn import<R: std::io::Read>(mut src: R) -> Result<TMFImportContext, TMFImportError> {
+    pub(crate) async fn import<R: std::io::Read>(mut src: R) -> Result<Vec<(TMFMesh,String)>, TMFImportError> {
         let header = read_tmf_header(&mut src).await?;
         let res = Self::init_header(header);
         let mesh_count = {
@@ -214,12 +297,14 @@ impl TMFImportContext {
             u32::from_le_bytes(tmp)
         };
         let mut meshes = Vec::with_capacity((u16::MAX as usize).min(mesh_count as usize));
-        println!("{mesh_count}");
         for _ in 0..mesh_count {
             meshes.push(res.import_mesh(&mut src).await?);
         }
-        todo!();
+        Ok(meshes)
     }
+}
+pub(crate) fn import_sync<R:std::io::Read>(mut src:R)->Result<Vec<(TMFMesh,String)>, TMFImportError>{
+        futures::executor::block_on(TMFImportContext::import(src))
 }
 #[cfg(test)]
 fn init_test_env() {

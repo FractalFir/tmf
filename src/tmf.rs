@@ -28,6 +28,16 @@ pub(crate) enum SectionType {
 }
 use crate::{MAX_MESH_COUNT, MAX_SEG_SIZE};
 impl SectionType {
+    pub fn is_triangle(&self) -> bool {
+        matches!(
+            self,
+            Self::VertexTriangleSegment
+                | Self::NormalTriangleSegment
+                | Self::UvTriangleSegment
+                | Self::ColorTriangleSegment
+                | Self::TangentTriangleSegment
+        )
+    }
     pub fn from_u16(input: u16) -> Self {
         if input > u8::MAX as u16 {
             Self::Invalid

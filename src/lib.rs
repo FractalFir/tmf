@@ -607,7 +607,8 @@ impl TMFMesh {
     /// }
     /// ```
     pub fn read_tmf<R: Read>(reader: &mut R) -> Result<Vec<(Self, String)>, TMFImportError> {
-        tmf::read(reader)
+        //tmf::read(reader)
+        crate::tmf_importer::import_sync(reader)
     }
     /// Reads a single mesh from a .tmf file. Returns [`Err`] if no meshes present or more than one mesh present.
     /// ```
@@ -662,6 +663,42 @@ impl TMFMesh {
             }
         }
         None
+    }
+    pub fn append_vertices(&mut self, vertices:&[Vector3]){
+        match &mut self.vertices{
+            Some(ref mut self_v)=>self_v.extend(vertices),
+            None=>{self.set_vertices(vertices);},
+        };
+    }
+    pub fn append_normals(&mut self, normals:&[Vector3]){
+        match &mut self.normals{
+            Some(ref mut self_n)=>self_n.extend(normals),
+            None=>{self.set_normals(normals);},
+        };
+    }
+    pub fn append_uvs(&mut self, uvs:&[Vector2]){
+        match &mut self.uvs{
+            Some(ref mut self_uv)=>self_uv.extend(uvs),
+            None=>{self.set_uvs(uvs);},
+        };
+    }
+    pub fn append_vertex_triangles(&mut self, triangles:&[IndexType]){
+        match &mut self.vertex_triangles{
+            Some(ref mut self_vt)=>self_vt.extend(triangles),
+            None=>{self.set_vertex_triangles(triangles);},
+        };
+    }
+    pub fn append_normal_triangles(&mut self, triangles:&[IndexType]){
+        match &mut self.normal_triangles{
+            Some(ref mut self_nt)=>self_nt.extend(triangles),
+            None=>{self.set_normal_triangles(triangles);},
+        };
+    }
+    pub fn append_uv_triangles(&mut self, triangles:&[IndexType]){
+        match &mut self.uv_triangles{
+            Some(ref mut self_uvt)=>self_uvt.extend(triangles),
+            None=>{self.set_uv_triangles(triangles);},
+        };
     }
 }
 #[cfg(test)]

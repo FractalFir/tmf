@@ -180,7 +180,6 @@ pub(crate) fn read_normal_array<R: Read>(reader: &mut R) -> Result<Box<[Vector3]
         tmp[0]
     };
     if precision == 0 {
-        return Ok(vec![(0.0, 0.0, 1.0); count].into());
     }
     if precision >= u64::BITS as u8 {
         return Err(TMFImportError::InvalidPrecision(precision));
