@@ -216,7 +216,9 @@ fn index_data() {
     let mut file = std::fs::File::open("testing/susan.obj").unwrap();
     let (mut tmf_mesh, name) = TMFMesh::read_from_obj_one(&mut file).unwrap();
     let index_data: [IndexType; 10] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
-    tmf_mesh.add_custom_data(index_data[..].into(), "custom_index").unwrap();
+    tmf_mesh
+        .add_custom_data(index_data[..].into(), "custom_index")
+        .unwrap();
     tmf_mesh.verify().unwrap();
     assert!(name == "Suzanne", "Name should be Suzanne but is {name}");
     let prec = TMFPrecisionInfo::default();
@@ -243,7 +245,9 @@ fn float_data() {
     let float_data: [FloatType; 10] = [
         -7.0, 1.9, -2.0, 3.7867, 4.31224, 5.34345, 6.4336, 7.76565, 8.7575, 9.54,
     ];
-    tmf_mesh.add_custom_data(float_data[..].into(), "custom_float").unwrap();
+    tmf_mesh
+        .add_custom_data(float_data[..].into(), "custom_float")
+        .unwrap();
     tmf_mesh.verify().unwrap();
     assert!(name == "Suzanne", "Name should be Suzanne but is {name}");
     let prec = TMFPrecisionInfo::default();

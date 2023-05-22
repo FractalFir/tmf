@@ -21,6 +21,7 @@ mod pile_map;
 #[doc(hidden)]
 pub mod tangents;
 mod tmf;
+mod tmf_importer;
 mod tmf_segment;
 /// Module used to handle reads of data which is not bit aligned(for example, 3 or 17 bits). This is the module that allows for heavy compression used in this format.
 #[doc(hidden)]
@@ -55,19 +56,19 @@ pub type FloatType = f64;
 pub type Vector3 = (FloatType, FloatType, FloatType);
 /// Type used for representing 2d floating-point vectors
 pub type Vector2 = (FloatType, FloatType);
-#[doc(inline)]
-pub use crate::custom_data::{CustomData,DataSegmentError};
 use crate::custom_data::CustomDataSegment;
+#[doc(inline)]
+pub use crate::custom_data::{CustomData, DataSegmentError};
 #[doc(inline)]
 use crate::material::MaterialInfo;
 #[doc(inline)]
 pub use crate::normals::NormalPrecisionMode;
 #[doc(inline)]
+pub use crate::tangents::*;
+#[doc(inline)]
 pub use crate::uv::UvPrecisionMode;
 #[doc(inline)]
 pub use crate::vertices::VertexPrecisionMode;
-#[doc(inline)]
-pub use crate::tangents::*;
 use std::io::{Read, Write};
 #[doc(inline)]
 pub use verify::TMFIntegrityStatus;
@@ -96,12 +97,12 @@ impl Default for TMFPrecisionInfo {
 /// Representation of a TMF mesh. Can be loaded from disk, imported from diffrent format, saved to disk, and exported to a diffrent format, or created using special functions. Any mesh created at run time *should* but does not *have to* be checked before saving with [`Self::verify`] call. If the mesh is known to be OK before saving this step can be skipped(even tough it is still advised).
 #[derive(Clone)]
 pub struct TMFMesh {
-    normals: Option<Box<[Vector3]>>,
-    normal_triangles: Option<Box<[IndexType]>>,
-    vertices: Option<Box<[Vector3]>>,
-    vertex_triangles: Option<Box<[IndexType]>>,
-    uvs: Option<Box<[Vector2]>>,
-    uv_triangles: Option<Box<[IndexType]>>,
+    normals: Option<Vec<Vector3>>,
+    normal_triangles: Option<Vec<IndexType>>,
+    vertices: Option<Vec<Vector3>>,
+    vertex_triangles: Option<Vec<IndexType>>,
+    uvs: Option<Vec<Vector2>>,
+    uv_triangles: Option<Vec<IndexType>>,
     materials: Option<MaterialInfo>,
     custom_data: Vec<CustomDataSegment>,
 }
@@ -162,7 +163,7 @@ impl TMFMesh {
     /// // ... and the do something with old vertices
     /// do_something(&old_vertices);
     ///```
-    pub fn set_vertices<T: Into<Box<[Vector3]>>>(&mut self, vertices: T) -> Option<Box<[Vector3]>> {
+    pub fn set_vertices<T: Into<Vec<Vector3>>>(&mut self, vertices: T) -> Option<Vec<Vector3>> {
         let mut vertices = Some(vertices.into());
         std::mem::swap(&mut vertices, &mut self.vertices);
         vertices
@@ -187,7 +188,7 @@ impl TMFMesh {
     /// // ... and the do something with old normals
     /// do_something(&old_normals);
     ///```
-    pub fn set_normals<T: Into<Box<[Vector3]>>>(&mut self, normals: T) -> Option<Box<[Vector3]>> {
+    pub fn set_normals<T: Into<Vec<Vector3>>>(&mut self, normals: T) -> Option<Vec<Vector3>> {
         let mut normals = Some(normals.into());
         std::mem::swap(&mut normals, &mut self.normals);
         normals
@@ -214,7 +215,7 @@ impl TMFMesh {
     /// // ... and the do something with old uvs
     /// do_something(&old_uvs);
     ///```
-    pub fn set_uvs<T: Into<Box<[Vector2]>>>(&mut self, uvs: T) -> Option<Box<[Vector2]>> {
+    pub fn set_uvs<T: Into<Vec<Vector2>>>(&mut self, uvs: T) -> Option<Vec<Vector2>> {
         let mut uvs = Some(uvs.into());
         std::mem::swap(&mut uvs, &mut self.uvs);
         uvs
@@ -226,10 +227,10 @@ impl TMFMesh {
     /// # let triangles = [0,1,2,3,2,1];
     /// mesh.set_vertex_triangles(triangles);
     ///```
-    pub fn set_vertex_triangles<T: Into<Box<[IndexType]>>>(
+    pub fn set_vertex_triangles<T: Into<Vec<IndexType>>>(
         &mut self,
         triangles: T,
-    ) -> Option<Box<[IndexType]>> {
+    ) -> Option<Vec<IndexType>> {
         let mut triangles = Some(triangles.into());
         std::mem::swap(&mut triangles, &mut self.vertex_triangles);
         triangles
@@ -241,10 +242,10 @@ impl TMFMesh {
     /// # let triangles = [0,1,2,3,2,1];
     /// mesh.set_normal_triangles(triangles);
     ///```
-    pub fn set_normal_triangles<T: Into<Box<[IndexType]>>>(
+    pub fn set_normal_triangles<T: Into<Vec<IndexType>>>(
         &mut self,
         triangles: T,
-    ) -> Option<Box<[IndexType]>> {
+    ) -> Option<Vec<IndexType>> {
         let mut triangles = Some(triangles.into());
         std::mem::swap(&mut triangles, &mut self.normal_triangles);
         triangles
@@ -256,10 +257,10 @@ impl TMFMesh {
     /// # let triangles = [0,1,2,3,2,1];
     /// mesh.set_uv_triangles(triangles);
     ///```
-    pub fn set_uv_triangles<T: Into<Box<[IndexType]>>>(
+    pub fn set_uv_triangles<T: Into<Vec<IndexType>>>(
         &mut self,
         triangles: T,
-    ) -> Option<Box<[IndexType]>> {
+    ) -> Option<Vec<IndexType>> {
         let mut triangles = Some(triangles.into());
         std::mem::swap(&mut triangles, &mut self.uv_triangles);
         triangles
@@ -635,8 +636,12 @@ impl TMFMesh {
         }
     }
     /// Adds custom data array.
-    pub fn add_custom_data(&mut self, custom_data: CustomData,name:&str)->Result<(), DataSegmentError>{
-        self.add_custom_data_seg(CustomDataSegment::new(custom_data,name)?);
+    pub fn add_custom_data(
+        &mut self,
+        custom_data: CustomData,
+        name: &str,
+    ) -> Result<(), DataSegmentError> {
+        self.add_custom_data_seg(CustomDataSegment::new(custom_data, name)?);
         Ok(())
     }
     pub(crate) fn add_custom_data_seg(&mut self, custom_data: CustomDataSegment) {
@@ -799,7 +804,7 @@ mod testing {
 pub enum TMFImportError {
     /// An IO error which prevented data from being read.
     IO(std::io::Error),
-    /// A segment uses an unknown compression type, invalid for the minimum TMF version specified by file header. 
+    /// A segment uses an unknown compression type, invalid for the minimum TMF version specified by file header.
     CompressionTypeUnknown(u8),
     /// A method which should return one mesh was called, but TMF file had no meshes present.
     NoMeshes,
@@ -807,7 +812,7 @@ pub enum TMFImportError {
     TooManyMeshes,
     /// Provides source was not a TMF file.
     NotTMFFile,
-    /// File was created with a TMF version newer than this, and can't be read properly. 
+    /// File was created with a TMF version newer than this, and can't be read properly.
     NewerVersionRequired,
     /// A file segment exceeded the maximum length(2GB) was encountered. This segments length is highly unusual, and the segment unlikely to be valid. The segment was not read to prevent memory issues.
     SegmentTooLong,

@@ -10,18 +10,18 @@ impl TangentPrecisionMode {
         self.0
     }
 }
-impl TangentPrecisionMode{
-    ///Creates a tangent precision mode with maximal deviation of (x,y,z) part being *deg* degrees. 
-    fn from_deg_dev(deg: FloatType) -> Self{
+impl TangentPrecisionMode {
+    ///Creates a tangent precision mode with maximal deviation of (x,y,z) part being *deg* degrees.
+    fn from_deg_dev(deg: FloatType) -> Self {
         Self(crate::NormalPrecisionMode::from_deg_dev(deg))
     }
-    ///Creates a tangent precision mode with maximal deviation of (x,y,z) part being *rad* radians. 
-    fn from_rad_dev(rad: FloatType) -> Self{
+    ///Creates a tangent precision mode with maximal deviation of (x,y,z) part being *rad* radians.
+    fn from_rad_dev(rad: FloatType) -> Self {
         Self(crate::NormalPrecisionMode::from_rad_dev(rad))
     }
 }
-impl Default for TangentPrecisionMode{
-    fn default()->Self{
+impl Default for TangentPrecisionMode {
+    fn default() -> Self {
         Self::from_deg_dev(1.0)
     }
 }
@@ -89,4 +89,3 @@ fn tangent_rw() {
         assert!(degree < 5.0);
     }
 }
-

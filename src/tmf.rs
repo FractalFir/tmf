@@ -1,6 +1,6 @@
 use crate::TMFImportError;
 #[repr(u16)]
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub(crate) enum SectionType {
     Invalid = 0,
     VertexSegment = 1,
@@ -29,6 +29,13 @@ pub(crate) enum SectionType {
 use crate::{MAX_MESH_COUNT, MAX_SEG_SIZE};
 impl SectionType {
     pub fn from_u16(input: u16) -> Self {
+        if input > u8::MAX as u16 {
+            Self::Invalid
+        } else {
+            Self::from_u8(input as u8)
+        }
+    }
+    pub fn from_u8(input: u8) -> Self {
         match input {
             1 => Self::VertexSegment,
             2 => Self::VertexTriangleSegment,
@@ -50,7 +57,7 @@ pub(crate) enum CompressionType {
     UnalignedLZZ = 2,
 }
 impl CompressionType {
-    fn from_u8(input: u8) -> Result<Self, TMFImportError> {
+    pub fn from_u8(input: u8) -> Result<Self, TMFImportError> {
         match input {
             0 => Ok(Self::None),
             1 => Ok(Self::Ommited),
