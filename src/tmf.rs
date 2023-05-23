@@ -1,6 +1,6 @@
 use crate::TMFImportError;
 #[repr(u16)]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq,Clone,Copy)]
 pub(crate) enum SectionType {
     Invalid = 0,
     VertexSegment = 1,
@@ -60,7 +60,7 @@ impl SectionType {
     }
 }
 #[repr(u8)]
-#[derive(PartialEq)]
+#[derive(Debug, PartialEq,Clone,Copy)]
 pub(crate) enum CompressionType {
     None = 0,
     Ommited = 1,
@@ -372,9 +372,9 @@ pub(crate) fn write_string<W: Write>(w: &mut W, s: &str) -> std::io::Result<()> 
 pub(crate) fn write_tmf_header<W: Write>(w: &mut W, mesh_count: u32) -> std::io::Result<()> {
     w.write_all(b"TMF")?;
     w.write_all(&TMF_MAJOR.to_le_bytes())?;
-    w.write_all(&TMF_MINOR.to_le_bytes())?;
+    w.write_all(&(1_u32).to_le_bytes())?;
     w.write_all(&MIN_TMF_MAJOR.to_le_bytes())?;
-    w.write_all(&MIN_TMF_MINOR.to_le_bytes())?;
+    w.write_all(&(1_u32).to_le_bytes())?;
     w.write_all(&mesh_count.to_le_bytes())
 }
 pub(crate) fn write<W: Write, S: std::borrow::Borrow<str>>(

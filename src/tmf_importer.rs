@@ -1,6 +1,7 @@
 use crate::tmf::{CompressionType, SectionType};
 use crate::unaligned_rw::{UnalignedRWMode, UnalignedReader};
 use crate::CustomDataSegment;
+use smallvec::{SmallVec,smallvec};
 use crate::{
     IndexType, TMFImportError, TMFMesh, TMFPrecisionInfo, Vector2, Vector3, MAX_SEG_SIZE,
     TMF_MAJOR, TMF_MINOR,
@@ -61,7 +62,7 @@ impl SegTypeWidth {
     }
 }
 #[derive(Debug)]
-enum DecodedSegment {
+pub(crate) enum DecodedSegment {
     Nothing,
     AppendVertex(Box<[Vector3]>),
     AppendNormal(Box<[Vector3]>),
@@ -71,12 +72,21 @@ enum DecodedSegment {
     AppendTriangleUV(Box<[IndexType]>),
     AppendCustom(CustomDataSegment),
 }
-struct EncodedSegment {
+pub(crate) struct EncodedSegment {
     seg_type: SectionType,
     compresion_type: CompressionType,
     data: Box<[u8]>,
 }
 impl EncodedSegment {
+    pub(crate) fn write<W: std::io::Write>(
+    &self,
+    w: &mut W,
+) -> std::io::Result<()> {
+    w.write_all(&(self.seg_type as u16 as u8).to_le_bytes())?;
+    w.write_all(&(self.data.len() as u32).to_le_bytes())?;
+    w.write_all(&[self.compresion_type as u8])?;
+    w.write_all(&self.data)
+}
     fn read<R: std::io::Read>(ctx: &TMFImportContext, src: &mut R) -> Result<Self, TMFImportError> {
         let seg_type = ctx.stw.read(src)?;
         let data_length = {
@@ -189,6 +199,13 @@ async fn decode_triangle_seg(mut seg: EncodedSegment) -> Result<DecodedSegment, 
     }
 }
 impl DecodedSegment {
+    pub(crate) async fn optimize(self)->SmallVec<[Self;1]>{
+        smallvec![self]
+    }
+    pub(crate) async fn encode(self)->EncodedSegment{
+        //TODO:encode
+        EncodedSegment{seg_type:SectionType::Invalid,data:[].into(),compresion_type:CompressionType::None}
+    }
     async fn decode(seg: EncodedSegment) -> Result<Self, TMFImportError> {
         match seg.seg_type {
             SectionType::Invalid => Ok(Self::Nothing),

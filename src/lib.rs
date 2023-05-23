@@ -22,6 +22,7 @@ mod pile_map;
 #[doc(hidden)]
 pub mod tangents;
 mod tmf;
+mod tmf_exporter;
 mod tmf_importer;
 mod tmf_segment;
 /// Module used to handle reads of data which is not bit aligned(for example, 3 or 17 bits). This is the module that allows for heavy compression used in this format.
@@ -34,7 +35,7 @@ mod vertices;
 // Unfinished
 mod lz77;
 const TMF_MAJOR: u16 = 0;
-const TMF_MINOR: u16 = 1;
+const TMF_MINOR: u16 = 2;
 const MIN_TMF_MAJOR: u16 = 0;
 const MIN_TMF_MINOR: u16 = 1;
 pub(crate) const MAX_SEG_SIZE: usize = 0x80_00_00_00; // 2_00_00 for fuzzing!
@@ -871,6 +872,16 @@ pub enum TMFImportError {
     InvalidPrecision(u8),
 }
 impl From<std::io::Error> for TMFImportError {
+    fn from(err: std::io::Error) -> Self {
+        Self::IO(err)
+    }
+}
+#[derive(Debug)]
+pub enum TMFExportError {
+    /// An IO error which prevented data from being read.
+    IO(std::io::Error),
+}
+impl From<std::io::Error> for TMFExportError {
     fn from(err: std::io::Error) -> Self {
         Self::IO(err)
     }
