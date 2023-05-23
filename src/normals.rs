@@ -179,8 +179,7 @@ pub(crate) fn read_normal_array<R: Read>(reader: &mut R) -> Result<Box<[Vector3]
         reader.read_exact(&mut tmp)?;
         tmp[0]
     };
-    if precision == 0 {
-    }
+    if precision == 0 {}
     if precision >= u64::BITS as u8 {
         return Err(TMFImportError::InvalidPrecision(precision));
     }
