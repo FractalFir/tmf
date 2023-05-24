@@ -32,9 +32,9 @@ impl Default for UvPrecisionMode {
 pub fn save_uvs<W: Write>(
     uvs: &[Vector2],
     writer: &mut W,
-    precision: FloatType,
+    precision: UvPrecisionMode,
 ) -> std::io::Result<()> {
-    let precision = (1.0 / precision).log2().ceil() as u8;
+    let precision = precision.0;
     let multpiler = ((1 << precision) - 1) as FloatType;
     writer.write_all(&[precision])?;
     writer.write_all(&(uvs.len() as u64).to_le_bytes())?;
@@ -102,7 +102,7 @@ mod test {
         }
         let mut res = Vec::with_capacity(uv_count as usize);
         {
-            save_uvs(&uvs, &mut res, 0.001).unwrap();
+            save_uvs(&uvs, &mut res, UvPrecisionMode::form_texture_resolution(1024.0,0.1)).unwrap();
         }
         let r_uvs = read_uvs(&mut (&res as &[u8])).unwrap();
         assert!(r_uvs.len() == uvs.len());

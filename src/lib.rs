@@ -37,7 +37,7 @@ mod lz77;
 const TMF_MAJOR: u16 = 0;
 const TMF_MINOR: u16 = 2;
 const MIN_TMF_MAJOR: u16 = 0;
-const MIN_TMF_MINOR: u16 = 1;
+const MIN_TMF_MINOR: u16 = 2;
 pub(crate) const MAX_SEG_SIZE: usize = 0x80_00_00_00; // 2_00_00 for fuzzing!
 pub(crate) const MAX_MESH_COUNT: usize = 0x10000;
 /// Index type used for representing triangle indices.

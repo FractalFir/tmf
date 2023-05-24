@@ -1,6 +1,6 @@
 use crate::TMFImportError;
 #[repr(u16)]
-#[derive(Debug, PartialEq,Clone,Copy)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub(crate) enum SectionType {
     Invalid = 0,
     VertexSegment = 1,
@@ -60,7 +60,7 @@ impl SectionType {
     }
 }
 #[repr(u8)]
-#[derive(Debug, PartialEq,Clone,Copy)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub(crate) enum CompressionType {
     None = 0,
     Ommited = 1,
@@ -327,7 +327,8 @@ pub(crate) fn write_mesh<W: Write>(
     )?;
     match &mesh.uvs {
         Some(uvs) => {
-            crate::uv::save_uvs(uvs, &mut curr_segment_data, 0.001)?;
+            use crate::UvPrecisionMode;
+            crate::uv::save_uvs(uvs, &mut curr_segment_data, UvPrecisionMode::form_texture_resolution(1024.0,0.1))?;
             write_segment_header(
                 w,
                 SectionType::UvSegment,
@@ -372,9 +373,9 @@ pub(crate) fn write_string<W: Write>(w: &mut W, s: &str) -> std::io::Result<()> 
 pub(crate) fn write_tmf_header<W: Write>(w: &mut W, mesh_count: u32) -> std::io::Result<()> {
     w.write_all(b"TMF")?;
     w.write_all(&TMF_MAJOR.to_le_bytes())?;
-    w.write_all(&(1_u32).to_le_bytes())?;
+    w.write_all(&(1_u16).to_le_bytes())?;
     w.write_all(&MIN_TMF_MAJOR.to_le_bytes())?;
-    w.write_all(&(1_u32).to_le_bytes())?;
+    w.write_all(&(1_u16).to_le_bytes())?;
     w.write_all(&mesh_count.to_le_bytes())
 }
 pub(crate) fn write<W: Write, S: std::borrow::Borrow<str>>(
