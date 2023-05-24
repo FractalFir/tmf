@@ -243,7 +243,10 @@ impl DecodedSegment {
                 crate::vertices::save_triangles(&triangles,(*max_index) as usize, &mut data)?;
                 SectionType::UvTriangleSegment
             }
-            _ => SectionType::Invalid,
+            Self::AppendCustom(data) => {
+                todo!("Custom data segments not supported by TMF 0.2 exporter yet.");
+            }
+            Self::Nothing=>SectionType::Invalid
         };
         Ok(EncodedSegment {
             seg_type,
@@ -285,6 +288,7 @@ impl DecodedSegment {
             DecodedSegment::AppendCustom(custom_data_seg) => {
                 mesh.add_custom_data_seg(custom_data_seg.clone())
             }
+            DecodedSegment::Nothing=>(),
             _ => todo!("Can't apply decoded segment {self:?}"),
         }
     }

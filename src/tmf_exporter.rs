@@ -30,6 +30,7 @@ async fn write_mesh<W: std::io::Write>(
         encoded.push(seg.encode(p_info,&ei));
     }
     let encoded = futures::future::join_all(encoded).await;
+    target.write_all(&(encoded.len() as u16).to_le_bytes())?;
     for seg in encoded {
         seg?.write(target)?;
     }
@@ -101,7 +102,7 @@ impl<'a> std::iter::Iterator for MeshSegIter<'a> {
                 None => self.next(),
             },
             7..=usize::MAX => {
-                let index = self.item - 7;
+                let index = self.item - 6;
                 let seg = self.mesh.custom_data.get(index)?;
                 Some(DecodedSegment::AppendCustom(seg.clone()))
             }

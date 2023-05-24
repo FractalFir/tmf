@@ -553,9 +553,8 @@ impl TMFMesh {
         w: &mut W,
         p_info: &TMFPrecisionInfo,
         name: S,
-    ) -> std::io::Result<()> {
-        tmf::write_tmf_header(w, 1)?;
-        tmf::write_mesh(self, w, p_info, name.borrow())
+    ) -> Result<(),TMFExportError> {
+        futures::executor::block_on(tmf_exporter::write_tmf(&[(self.clone(),name)], w, p_info))
     }
     /// Writes a number of TMF meshes into one file.
     /// ```
@@ -572,8 +571,8 @@ impl TMFMesh {
         meshes_names: &[(Self, S)],
         w: &mut W,
         p_info: &TMFPrecisionInfo,
-    ) -> std::io::Result<()> {
-        tmf::write(meshes_names, w, p_info)
+    ) -> Result<(),TMFExportError> {
+        futures::executor::block_on(tmf_exporter::write_tmf(meshes_names, w, p_info))
     }
     /// Creates an empty TMF Mesh(mesh with no data). Equivalent to [`TMFMesh::default`].
     /// ```
