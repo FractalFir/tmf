@@ -83,6 +83,7 @@ pub struct TMFPrecisionInfo {
     pub uv_precision: UvPrecisionMode,
     /// Do additional normal pruning before saving (has considerable performance impact if model has many vertices
     pub prune_normals: bool,
+    pub uv_prec:crate::UvPrecisionMode,
 }
 impl Default for TMFPrecisionInfo {
     /// Returns the default, middle-ground settings for saving meshes. Should be indistinguishable by human eye, but the LOD may be not enough for some rare cases (eg. procedural generation).
@@ -92,6 +93,7 @@ impl Default for TMFPrecisionInfo {
             normal_precision: NormalPrecisionMode::default(),
             uv_precision: UvPrecisionMode::default(),
             prune_normals: true,
+            uv_prec:crate::UvPrecisionMode::form_texture_resolution(1, 1.0)
         }
     }
 }
@@ -552,8 +554,8 @@ impl TMFMesh {
         w: &mut W,
         p_info: &TMFPrecisionInfo,
         name: S,
-    ) -> Result<(),TMFExportError> {
-        futures::executor::block_on(tmf_exporter::write_tmf(&[(self.clone(),name)], w, p_info))
+    ) -> Result<(), TMFExportError> {
+        futures::executor::block_on(tmf_exporter::write_tmf(&[(self.clone(), name)], w, p_info))
     }
     /// Writes a number of TMF meshes into one file.
     /// ```
@@ -570,7 +572,7 @@ impl TMFMesh {
         meshes_names: &[(Self, S)],
         w: &mut W,
         p_info: &TMFPrecisionInfo,
-    ) -> Result<(),TMFExportError> {
+    ) -> Result<(), TMFExportError> {
         futures::executor::block_on(tmf_exporter::write_tmf(meshes_names, w, p_info))
     }
     /// Creates an empty TMF Mesh(mesh with no data). Equivalent to [`TMFMesh::default`].
@@ -747,6 +749,7 @@ mod testing {
         assert!(name == "Suzanne", "Name should be Suzanne but is {name}");
         let prec = TMFPrecisionInfo::default();
         tmf_mesh.write_tmf_one(&mut out, &prec, name).unwrap();
+        panic!();
     }
     #[test]
     #[cfg(feature = "obj_import")]

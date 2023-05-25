@@ -102,7 +102,12 @@ mod test {
         }
         let mut res = Vec::with_capacity(uv_count as usize);
         {
-            save_uvs(&uvs, &mut res, UvPrecisionMode::form_texture_resolution(1024.0,0.1)).unwrap();
+            save_uvs(
+                &uvs,
+                &mut res,
+                UvPrecisionMode::form_texture_resolution(1024.0, 0.1),
+            )
+            .unwrap();
         }
         let r_uvs = read_uvs(&mut (&res as &[u8])).unwrap();
         assert!(r_uvs.len() == uvs.len());

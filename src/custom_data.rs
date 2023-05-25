@@ -125,7 +125,7 @@ impl From<&[FloatType]> for CustomData {
         Self::new_float(floats, 0.01)
     }
 }
-impl CustomDataSegment {    
+impl CustomDataSegment {
     pub(crate) fn encode<W: std::io::Write>(&self, target: &mut W) -> std::io::Result<SectionType> {
         use std::io::Write;
         target.write_all(&[self.name_len])?;

@@ -1,6 +1,7 @@
 use crate::tmf_importer::DecodedSegment;
 use crate::{
-    TMFExportError, TMFMesh, TMFPrecisionInfo, MIN_TMF_MAJOR, MIN_TMF_MINOR, TMF_MAJOR, TMF_MINOR,FloatType,IndexType,Vector3
+    FloatType, IndexType, TMFExportError, TMFMesh, TMFPrecisionInfo, Vector3, MIN_TMF_MAJOR,
+    MIN_TMF_MINOR, TMF_MAJOR, TMF_MINOR,
 };
 pub(crate) struct EncodeInfo {
     shortest_edge: FloatType,
@@ -10,7 +11,11 @@ impl Default for EncodeInfo {
         Self { shortest_edge: 0.1 }
     }
 }
-impl  EncodeInfo { pub(crate) fn shortest_edge(&self)->FloatType{self.shortest_edge}}
+impl EncodeInfo {
+    pub(crate) fn shortest_edge(&self) -> FloatType {
+        self.shortest_edge
+    }
+}
 fn calc_shortest_edge(
     vertex_triangles: Option<&[IndexType]>,
     vertices: Option<&[Vector3]>,
@@ -56,7 +61,7 @@ fn calc_shortest_edge(
 
 pub(crate) fn write_mesh_name<W: std::io::Write>(w: &mut W, s: &str) -> std::io::Result<()> {
     let bytes = s.as_bytes();
-    w.write_all(&((bytes.len() as u16)).to_le_bytes())?;
+    w.write_all(&(bytes.len() as u16).to_le_bytes())?;
     w.write_all(bytes)
 }
 async fn write_mesh<W: std::io::Write>(
@@ -67,7 +72,7 @@ async fn write_mesh<W: std::io::Write>(
 ) -> Result<(), TMFExportError> {
     write_mesh_name(target, name)?;
     let mut ei = EncodeInfo::default();
-    ei.shortest_edge = calc_shortest_edge(mesh.get_vertex_triangles(),mesh.get_vertices());
+    ei.shortest_edge = calc_shortest_edge(mesh.get_vertex_triangles(), mesh.get_vertices());
     let tmf_segs = MeshSegIter::tmf_segs(&mesh);
     let mut new_segs = Vec::with_capacity(32);
     for seg in tmf_segs {
@@ -76,10 +81,11 @@ async fn write_mesh<W: std::io::Write>(
             new_segs.push(c_seg);
         }
     }
+    println!("Optimized segs:{}", new_segs.len());
     let tmf_segs = new_segs;
     let mut encoded = Vec::with_capacity(tmf_segs.len());
     for seg in tmf_segs {
-        encoded.push(seg.encode(p_info,&ei));
+        encoded.push(seg.encode(p_info, &ei));
     }
     let encoded = futures::future::join_all(encoded).await;
     target.write_all(&(encoded.len() as u16).to_le_bytes())?;
@@ -127,7 +133,6 @@ impl<'a> std::iter::Iterator for MeshSegIter<'a> {
     type Item = DecodedSegment;
     fn next(&mut self) -> Option<Self::Item> {
         self.item += 1;
-        println!("item:{}",self.item);
         match self.item {
             0 => panic!("Impossible condition reached."),
             1 => match self.mesh.get_vertices() {
@@ -156,7 +161,6 @@ impl<'a> std::iter::Iterator for MeshSegIter<'a> {
             },
             7..=usize::MAX => {
                 let index = self.item - 7;
-                println!("index:{}",index);
                 let seg = self.mesh.custom_data.get(index)?;
                 Some(DecodedSegment::AppendCustom(seg.clone()))
             }

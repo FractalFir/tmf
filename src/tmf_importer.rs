@@ -1,12 +1,12 @@
 use crate::tmf::{CompressionType, SectionType};
+use crate::tmf_exporter::EncodeInfo;
 use crate::unaligned_rw::{UnalignedRWMode, UnalignedReader};
 use crate::CustomDataSegment;
 use crate::FloatType;
 use crate::TMFExportError;
-use crate::tmf_exporter::EncodeInfo;
 use crate::{
     IndexType, TMFImportError, TMFMesh, TMFPrecisionInfo, Vector2, Vector3, MAX_SEG_SIZE,
-    TMF_MAJOR, TMF_MINOR
+    TMF_MAJOR, TMF_MINOR,
 };
 use futures::{executor::block_on, future::join_all};
 use smallvec::{smallvec, SmallVec};
@@ -82,7 +82,7 @@ pub(crate) struct EncodedSegment {
 }
 impl EncodedSegment {
     pub(crate) fn write<W: std::io::Write>(&self, w: &mut W) -> std::io::Result<()> {
-        let st:u8 = self.seg_type as u16 as u8; 
+        let st: u8 = self.seg_type as u16 as u8;
         w.write_all(&[st])?;
         w.write_all(&(self.data.len() as u32).to_le_bytes())?;
         w.write_all(&[self.compresion_type as u8])?;
@@ -195,45 +195,123 @@ async fn decode_triangle_seg(mut seg: EncodedSegment) -> Result<DecodedSegment, 
         panic!("Unreachable condition reached!");
     }
 }
+const TMF_SEG_SIZE: usize =
+    std::mem::size_of::<u8>() + std::mem::size_of::<u32>() + std::mem::size_of::<u8>();
+fn calc_spilt_score(len: usize, local_max: IndexType, total_max: IndexType) -> isize {
+    let gain_bits =
+        ((total_max) as f64).log2().ceil() as usize - ((local_max) as f64).log2().ceil() as usize;
+    let gain = (gain_bits * len) as isize;
+    let loss =
+        ((TMF_SEG_SIZE + std::mem::size_of::<u8>() + std::mem::size_of::<u32>()) * 8) as isize;
+    gain - loss
+}
+fn opt_tris(triangles: &[IndexType]) -> SmallVec<[&[IndexType]; 4]> {
+    let mut best_score = isize::MIN;
+    let mut best_index = usize::MIN;
+    let mut max_index = IndexType::MIN;
+    let total_max = triangles.iter().max().unwrap_or(&1);
+    for index in 0..triangles.len() {
+        max_index = max_index.max(triangles[index]);
+        let score = calc_spilt_score(index, max_index, *total_max);
+        if score > best_score {
+            best_index = index;
+            best_score = score;
+        }
+    }
+    if best_score > 0{
+        let mut res = SmallVec::new();
+        let r_1 = opt_tris(&triangles[..=best_index]);
+        for seg in r_1{
+            res.push(seg);
+        }
+        let r_2 = opt_tris(&triangles[best_index..]);
+        for seg in r_2{
+            res.push(seg);
+        }
+        res
+    }
+    else{
+        smallvec![triangles]
+    }
+}
 impl DecodedSegment {
     pub(crate) async fn optimize(self) -> SmallVec<[Self; 1]> {
-        smallvec![self]
+        match self {
+            Self::AppendTriangleVertex(triangles) => {
+                let optimised = opt_tris(&triangles);
+                let mut res = SmallVec::new();
+                for seg in optimised {
+                    res.push(Self::AppendTriangleVertex(seg.into()));
+                }
+                res
+            }
+            Self::AppendTriangleUV(triangles) => {
+                let optimised = opt_tris(&triangles);
+                let mut res = SmallVec::new();
+                for seg in optimised {
+                    res.push(Self::AppendTriangleUV(seg.into()));
+                }
+                res
+            }
+            Self::AppendTriangleNormal(triangles) => {
+                let optimised = opt_tris(&triangles);
+                let mut res = SmallVec::new();
+                for seg in optimised {
+                    res.push(Self::AppendTriangleNormal(seg.into()));
+                }
+                res
+            }
+            _ => smallvec![self],
+        }
     }
-    pub(crate) async fn encode(self, prec: &TMFPrecisionInfo, ei: &EncodeInfo) -> Result<EncodedSegment,TMFExportError>{
+    pub(crate) async fn encode(
+        self,
+        prec: &TMFPrecisionInfo,
+        ei: &EncodeInfo,
+    ) -> Result<EncodedSegment, TMFExportError> {
         let mut data = vec![];
         let seg_type = match self {
             Self::AppendVertex(vertices) => {
-                crate::vertices::save_tmf_vertices(&vertices, prec.vertex_precision, &mut data, ei.shortest_edge())?;
+                crate::vertices::save_tmf_vertices(
+                    &vertices,
+                    prec.vertex_precision,
+                    &mut data,
+                    ei.shortest_edge(),
+                )?;
                 SectionType::VertexSegment
             }
             Self::AppendNormal(normals) => {
-                crate::normals:: save_normal_array(&normals, &mut data, prec.normal_precision)?;
+                crate::normals::save_normal_array(&normals, &mut data, prec.normal_precision)?;
                 SectionType::NormalSegment
             }
             Self::AppendUV(uvs) => {
-                crate::uv::save_uvs(&uvs, &mut data, crate::UvPrecisionMode::form_texture_resolution(1024.0,0.1))?;
+                crate::uv::save_uvs(
+                    &uvs,
+                    &mut data,
+                    prec.uv_prec,
+                )?;
                 SectionType::UvSegment
             }
             Self::AppendTriangleVertex(triangles) => {
-                let max_index = triangles.iter().max(). unwrap_or(&1);
-                crate::vertices::save_triangles(&triangles,(*max_index) as usize, &mut data)?;
+                let max_index = triangles.iter().max().unwrap_or(&1);
+                println!("triangles_len:{},max_index:{max_index}", triangles.len());
+                crate::vertices::save_triangles(&triangles, (*max_index) as usize, &mut data)?;
                 SectionType::VertexTriangleSegment
             }
             Self::AppendTriangleNormal(triangles) => {
-                let max_index = triangles.iter().max(). unwrap_or(&1);
-                crate::vertices::save_triangles(&triangles,(*max_index) as usize, &mut data)?;
+                let max_index = triangles.iter().max().unwrap_or(&1);
+                crate::vertices::save_triangles(&triangles, (*max_index) as usize, &mut data)?;
                 SectionType::NormalTriangleSegment
             }
             Self::AppendTriangleUV(triangles) => {
-                let max_index = triangles.iter().max(). unwrap_or(&1);
-                crate::vertices::save_triangles(&triangles,(*max_index) as usize, &mut data)?;
+                let max_index = triangles.iter().max().unwrap_or(&1);
+                crate::vertices::save_triangles(&triangles, (*max_index) as usize, &mut data)?;
                 SectionType::UvTriangleSegment
             }
-            Self::AppendCustom(custom_data) => {
-                custom_data.encode(&mut data)?
-            }
-            Self::Nothing=>SectionType::Invalid
+            Self::AppendCustom(custom_data) => custom_data.encode(&mut data)?,
+            Self::Nothing => SectionType::Invalid,
         };
+        println!("seg_type:{seg_type:?}, len:{}", data.len());
         Ok(EncodedSegment {
             seg_type,
             data: data.into(),
@@ -274,7 +352,7 @@ impl DecodedSegment {
             DecodedSegment::AppendCustom(custom_data_seg) => {
                 mesh.add_custom_data_seg(custom_data_seg.clone())
             }
-            DecodedSegment::Nothing=>(),
+            DecodedSegment::Nothing => (),
             _ => todo!("Can't apply decoded segment {self:?}"),
         }
     }
