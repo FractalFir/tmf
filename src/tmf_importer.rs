@@ -3,9 +3,10 @@ use crate::unaligned_rw::{UnalignedRWMode, UnalignedReader};
 use crate::CustomDataSegment;
 use crate::FloatType;
 use crate::TMFExportError;
+use crate::tmf_exporter::EncodeInfo;
 use crate::{
     IndexType, TMFImportError, TMFMesh, TMFPrecisionInfo, Vector2, Vector3, MAX_SEG_SIZE,
-    TMF_MAJOR, TMF_MINOR,
+    TMF_MAJOR, TMF_MINOR
 };
 use futures::{executor::block_on, future::join_all};
 use smallvec::{smallvec, SmallVec};
@@ -26,13 +27,11 @@ impl SegLenWidth {
             Self::U32 => {
                 let mut tmp = [0; std::mem::size_of::<u32>()];
                 src.read_exact(&mut tmp)?;
-                println!("U32 SLW {tmp:?}");
                 u32::from_le_bytes(tmp) as usize
             }
             Self::U64 => {
                 let mut tmp = [0; std::mem::size_of::<u64>()];
                 src.read_exact(&mut tmp)?;
-                println!("U32 SLW {tmp:?}");
                 u64::from_le_bytes(tmp) as usize
             }
         })
@@ -45,10 +44,8 @@ enum SegTypeWidth {
 impl SegTypeWidth {
     fn from_header(header: &TMFHeader) -> Self {
         if header.min_minor > 1 {
-            println!("8Bit segment type widths!");
             Self::U8
         } else {
-            println!("16Bit segment type widths!");
             Self::U16
         }
     }
@@ -57,12 +54,10 @@ impl SegTypeWidth {
             Self::U8 => {
                 let mut tmp = [0; std::mem::size_of::<u8>()];
                 src.read_exact(&mut tmp)?;
-                println!("S_TYPE:{}",tmp[0]);
                 SectionType::from_u8(u8::from_le_bytes(tmp))
             }
             Self::U16 => {
                 let mut tmp = [0; std::mem::size_of::<u16>()];
-                println!("U16 S_TYPE:{}",tmp[0]);
                 src.read_exact(&mut tmp)?;
                 SectionType::from_u16(u16::from_le_bytes(tmp))
             }
@@ -101,7 +96,6 @@ impl EncodedSegment {
             src.read_exact(&mut tmp)?;
             CompressionType::from_u8(tmp[0])?
         };
-        println!("seg with seg_type:{seg_type:?} length:{data_length:x} compression_type:{compresion_type:?}");
         let mut data = vec![0; data_length];
         src.read_exact(&mut data)?;
         Ok(Self {
@@ -201,14 +195,6 @@ async fn decode_triangle_seg(mut seg: EncodedSegment) -> Result<DecodedSegment, 
         panic!("Unreachable condition reached!");
     }
 }
-pub(crate) struct EncodeInfo {
-    shortest_edge: FloatType,
-}
-impl Default for EncodeInfo {
-    fn default() -> Self {
-        Self { shortest_edge: 0.1 }
-    }
-}
 impl DecodedSegment {
     pub(crate) async fn optimize(self) -> SmallVec<[Self; 1]> {
         smallvec![self]
@@ -217,7 +203,7 @@ impl DecodedSegment {
         let mut data = vec![];
         let seg_type = match self {
             Self::AppendVertex(vertices) => {
-                crate::vertices::save_tmf_vertices(&vertices, prec.vertex_precision, &mut data, ei.shortest_edge)?;
+                crate::vertices::save_tmf_vertices(&vertices, prec.vertex_precision, &mut data, ei.shortest_edge())?;
                 SectionType::VertexSegment
             }
             Self::AppendNormal(normals) => {
@@ -243,8 +229,8 @@ impl DecodedSegment {
                 crate::vertices::save_triangles(&triangles,(*max_index) as usize, &mut data)?;
                 SectionType::UvTriangleSegment
             }
-            Self::AppendCustom(data) => {
-                todo!("Custom data segments not supported by TMF 0.2 exporter yet.");
+            Self::AppendCustom(custom_data) => {
+                custom_data.encode(&mut data)?
             }
             Self::Nothing=>SectionType::Invalid
         };
@@ -311,7 +297,6 @@ pub(crate) fn read_string<R: std::io::Read>(src: &mut R) -> std::io::Result<Stri
         u16::from_le_bytes(tmp)
     };
     let mut bytes = vec![0; byte_len as usize];
-    println!("bytes:{bytes:?}");
     src.read_exact(&mut bytes)?;
     match std::str::from_utf8(&bytes) {
         Ok(string) => Ok(string.to_owned()),
@@ -379,7 +364,6 @@ impl TMFImportContext {
             src.read_exact(&mut tmp)?;
             u16::from_le_bytes(tmp)
         }; //self.slw.read(&mut src)?;
-        println!("segment_count:{segment_count:x}");
         let mut decoded_segs = Vec::with_capacity(segment_count as usize);
         for _ in 0..segment_count {
             let encoded = EncodedSegment::read(self, &mut src)?;

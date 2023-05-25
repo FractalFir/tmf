@@ -125,18 +125,13 @@ impl From<&[FloatType]> for CustomData {
         Self::new_float(floats, 0.01)
     }
 }
-impl CustomDataSegment {
-    pub(crate) fn write<W: std::io::Write>(&self, target: &mut W) -> std::io::Result<()> {
-        let mut out_bytes = Vec::with_capacity(4096);
+impl CustomDataSegment {    
+    pub(crate) fn encode<W: std::io::Write>(&self, target: &mut W) -> std::io::Result<SectionType> {
         use std::io::Write;
-        out_bytes.write_all(&[self.name_len])?;
-        out_bytes.write_all(&self.name[..(self.name_len as usize)])?;
-        self.data.write(&mut out_bytes)?;
-        target.write_all(&(self.data.section_type() as u16).to_le_bytes())?;
-        target.write_all(&(out_bytes.len() as u64).to_le_bytes())?;
-        target.write_all(&[crate::tmf::CompressionType::None as u8])?;
-
-        target.write_all(&out_bytes)
+        target.write_all(&[self.name_len])?;
+        target.write_all(&self.name[..(self.name_len as usize)])?;
+        self.data.write(target)?;
+        Ok(self.data.section_type())
     }
     //return Err(std::io::Error::new(std::io::ErrorKind::Other,format!("Invalid custom se"),)),
     pub(crate) fn read<R: std::io::Read>(

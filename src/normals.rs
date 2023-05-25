@@ -10,10 +10,6 @@ use std::io::{Read, Write};
 #[derive(Clone, Copy, PartialEq)]
 /// Setting dictating how much can any normal in a model deviate, expressed as an angle.
 pub struct NormalPrecisionMode(u8);
-pub(crate) fn get_predicted_normal_array_size(prec: NormalPrecisionMode, len: usize) -> usize {
-    let entry_size = (prec.0 as usize) * 2 + 3;
-    (entry_size * len + 8 - 1) / 8 + std::mem::size_of::<u64>() + 1
-}
 impl NormalPrecisionMode {
     /// Creates [`NormalPrecisionMode`] from maximal allowed deviation angle in degrees, for radians use [`Self::from_rad_dev`]
     /// ```

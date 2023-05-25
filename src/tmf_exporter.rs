@@ -1,11 +1,62 @@
 use crate::tmf_importer::DecodedSegment;
 use crate::{
-    TMFExportError, TMFMesh, TMFPrecisionInfo, MIN_TMF_MAJOR, MIN_TMF_MINOR, TMF_MAJOR, TMF_MINOR,
+    TMFExportError, TMFMesh, TMFPrecisionInfo, MIN_TMF_MAJOR, MIN_TMF_MINOR, TMF_MAJOR, TMF_MINOR,FloatType,IndexType,Vector3
 };
+pub(crate) struct EncodeInfo {
+    shortest_edge: FloatType,
+}
+impl Default for EncodeInfo {
+    fn default() -> Self {
+        Self { shortest_edge: 0.1 }
+    }
+}
+impl  EncodeInfo { pub(crate) fn shortest_edge(&self)->FloatType{self.shortest_edge}}
+fn calc_shortest_edge(
+    vertex_triangles: Option<&[IndexType]>,
+    vertices: Option<&[Vector3]>,
+) -> FloatType {
+    let shortest_edge = match vertex_triangles {
+        Some(vertex_triangles) => {
+            if vertex_triangles.is_empty() {
+                //TODO: handle 0 faced mesh as mesh with no faces!
+                return 0.1;
+            }
+            use crate::utilis::distance;
+            let vertices = match vertices {
+                Some(vertices) => vertices,
+                None => return 0.1,
+            };
+            let mut shortest_edge = FloatType::INFINITY;
+            for i in 0..(vertex_triangles.len() / 3) {
+                let d1 = distance(
+                    vertices[vertex_triangles[i * 3] as usize],
+                    vertices[vertex_triangles[i * 3 + 1] as usize],
+                );
+                let d2 = distance(
+                    vertices[vertex_triangles[i * 3 + 1] as usize],
+                    vertices[vertex_triangles[i * 3 + 2] as usize],
+                );
+                let d3 = distance(
+                    vertices[vertex_triangles[i * 3 + 2] as usize],
+                    vertices[vertex_triangles[i * 3] as usize],
+                );
+                shortest_edge = shortest_edge.min(d1.min(d2.min(d3)));
+            }
+            shortest_edge
+        }
+        // TODO: Calculate distance between closest points for point cloud
+        None => 0.1,
+    };
+    assert!(
+        shortest_edge.is_finite(),
+        "Shortest edge should be finite but is '{shortest_edge}'!"
+    );
+    shortest_edge
+}
+
 pub(crate) fn write_mesh_name<W: std::io::Write>(w: &mut W, s: &str) -> std::io::Result<()> {
     let bytes = s.as_bytes();
     w.write_all(&((bytes.len() as u16)).to_le_bytes())?;
-    println!("Writing:{bytes:?}");
     w.write_all(bytes)
 }
 async fn write_mesh<W: std::io::Write>(
@@ -15,7 +66,8 @@ async fn write_mesh<W: std::io::Write>(
     p_info: &TMFPrecisionInfo,
 ) -> Result<(), TMFExportError> {
     write_mesh_name(target, name)?;
-    let ei = crate::tmf_importer::EncodeInfo::default();
+    let mut ei = EncodeInfo::default();
+    ei.shortest_edge = calc_shortest_edge(mesh.get_vertex_triangles(),mesh.get_vertices());
     let tmf_segs = MeshSegIter::tmf_segs(&mesh);
     let mut new_segs = Vec::with_capacity(32);
     for seg in tmf_segs {
@@ -75,6 +127,7 @@ impl<'a> std::iter::Iterator for MeshSegIter<'a> {
     type Item = DecodedSegment;
     fn next(&mut self) -> Option<Self::Item> {
         self.item += 1;
+        println!("item:{}",self.item);
         match self.item {
             0 => panic!("Impossible condition reached."),
             1 => match self.mesh.get_vertices() {
@@ -102,7 +155,8 @@ impl<'a> std::iter::Iterator for MeshSegIter<'a> {
                 None => self.next(),
             },
             7..=usize::MAX => {
-                let index = self.item - 6;
+                let index = self.item - 7;
+                println!("index:{}",index);
                 let seg = self.mesh.custom_data.get(index)?;
                 Some(DecodedSegment::AppendCustom(seg.clone()))
             }
@@ -119,13 +173,11 @@ fn rw_susan_tmf() {
     let (tmf_mesh, name) = TMFMesh::read_from_obj_one(&mut file).unwrap();
     tmf_mesh.verify().unwrap();
     assert!(name == "Suzanne", "Name should be Suzanne but is {name}");
-    println!("{name}");
     let prec = TMFPrecisionInfo::default();
     let mut out = Vec::new();
     {
         futures::executor::block_on(write_tmf(&[(tmf_mesh, name)], &mut out, &prec)).unwrap();
     }
-    //println!("out:{out:?}");
     let (r_mesh, name) = TMFMesh::read_tmf_one(&mut (&out as &[u8])).unwrap();
     assert!(name == "Suzanne", "Name should be Suzanne but is {name}");
     r_mesh.verify().unwrap();
