@@ -93,7 +93,7 @@ impl Default for TMFPrecisionInfo {
             normal_precision: NormalPrecisionMode::default(),
             uv_precision: UvPrecisionMode::default(),
             prune_normals: true,
-            uv_prec:crate::UvPrecisionMode::form_texture_resolution(1, 1.0)
+            uv_prec:crate::UvPrecisionMode::form_texture_resolution(1024.0, 1.0)
         }
     }
 }
@@ -749,7 +749,6 @@ mod testing {
         assert!(name == "Suzanne", "Name should be Suzanne but is {name}");
         let prec = TMFPrecisionInfo::default();
         tmf_mesh.write_tmf_one(&mut out, &prec, name).unwrap();
-        panic!();
     }
     #[test]
     #[cfg(feature = "obj_import")]

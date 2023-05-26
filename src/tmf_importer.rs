@@ -133,7 +133,7 @@ async fn decode_normal_seg(seg: EncodedSegment) -> Result<DecodedSegment, TMFImp
         panic!("Unreachable condition reached!");
     }
 }
-async fn decode_custom_seg(seg: EncodedSegment) -> Result<DecodedSegment, TMFImportError> {
+async fn decode_custom_seg(seg: EncodedSegment,ctx:&crate::tmf_importer::TMFImportContext) -> Result<DecodedSegment, TMFImportError> {
     if matches!(
         seg.seg_type,
         SectionType::CustomIndexSegment | SectionType::CustomFloatSegment
@@ -142,6 +142,7 @@ async fn decode_custom_seg(seg: EncodedSegment) -> Result<DecodedSegment, TMFImp
         Ok(DecodedSegment::AppendCustom(CustomDataSegment::read(
             &mut data,
             seg.seg_type,
+            ctx
         )?))
     } else {
         panic!("Unreachable condition reached!");
@@ -150,34 +151,36 @@ async fn decode_custom_seg(seg: EncodedSegment) -> Result<DecodedSegment, TMFImp
 fn read_default_triangles<R: std::io::Read>(
     mut src: R,
     data: &mut Vec<IndexType>,
+    ctx:&crate::tmf_importer::TMFImportContext
 ) -> Result<(), TMFImportError> {
     let precision = {
         let mut tmp = [0];
         src.read_exact(&mut tmp)?;
         tmp[0]
     };
-    let max_index = {
+    let length = {
         let mut tmp = [0; std::mem::size_of::<u64>()];
         src.read_exact(&mut tmp)?;
         u64::from_le_bytes(tmp)
     };
-    if max_index > MAX_SEG_SIZE as u64 {
+    let min = ctx.read_traingle_min(&mut src)?;
+    if length > MAX_SEG_SIZE as u64 {
         return Err(TMFImportError::SegmentTooLong);
     }
-    *data = Vec::with_capacity(max_index as usize);
+    *data = Vec::with_capacity(length as usize);
     let precision = UnalignedRWMode::precision_bits(precision);
     let mut reader = UnalignedReader::new(src);
-    for _ in 0..max_index {
+    for _ in 0..length{
         data.push(reader.read_unaligned(precision)? as IndexType);
     }
     Ok(())
 }
-async fn decode_triangle_seg(mut seg: EncodedSegment) -> Result<DecodedSegment, TMFImportError> {
+async fn decode_triangle_seg(mut seg: EncodedSegment,ctx:&crate::tmf_importer::TMFImportContext) -> Result<DecodedSegment, TMFImportError> {
     if seg.seg_type.is_triangle() {
         let mut data: &[u8] = &seg.data[..];
         let mut indices = Vec::new();
         match seg.compresion_type {
-            CompressionType::None => read_default_triangles(data, &mut indices)?,
+            CompressionType::None => read_default_triangles(data, &mut indices,ctx)?,
             CompressionType::Ommited => panic!("New decoder does not support ommited segment!"),
             CompressionType::UnalignedLZZ => panic!("Unaligned lzz not supported yet!"),
         };
@@ -220,11 +223,13 @@ fn opt_tris(triangles: &[IndexType]) -> SmallVec<[&[IndexType]; 4]> {
     }
     if best_score > 0{
         let mut res = SmallVec::new();
-        let r_1 = opt_tris(&triangles[..=best_index]);
+        let (s1,s2) = triangles.split_at(best_index);
+        assert_eq!(s1.len() + s2.len(), triangles.len());
+        let r_1 = opt_tris(s1);
         for seg in r_1{
             res.push(seg);
         }
-        let r_2 = opt_tris(&triangles[best_index..]);
+        let r_2 = opt_tris(s2);
         for seg in r_2{
             res.push(seg);
         }
@@ -318,7 +323,7 @@ impl DecodedSegment {
             compresion_type: CompressionType::None,
         })
     }
-    async fn decode(seg: EncodedSegment) -> Result<Self, TMFImportError> {
+    async fn decode(seg: EncodedSegment,ctx:&crate::tmf_importer::TMFImportContext) -> Result<Self, TMFImportError> {
         match seg.seg_type {
             SectionType::Invalid => Ok(Self::Nothing),
             SectionType::VertexSegment => decode_vertex_seg(seg).await,
@@ -328,9 +333,9 @@ impl DecodedSegment {
             | SectionType::NormalTriangleSegment
             | SectionType::UvTriangleSegment
             | SectionType::ColorTriangleSegment
-            | SectionType::TangentTriangleSegment => decode_triangle_seg(seg).await,
+            | SectionType::TangentTriangleSegment => decode_triangle_seg(seg,ctx).await,
             SectionType::CustomIndexSegment | SectionType::CustomFloatSegment => {
-                decode_custom_seg(seg).await
+                decode_custom_seg(seg,ctx).await
             }
             _ => todo!("Unhandled segement type {:?}", seg.seg_type),
         }
@@ -357,9 +362,10 @@ impl DecodedSegment {
         }
     }
 }
-struct TMFImportContext {
+pub(crate) struct TMFImportContext {
     slw: SegLenWidth,
     stw: SegTypeWidth,
+    should_read_min_index:bool,
     meshes: Vec<TMFMesh>,
 }
 struct TMFHeader {
@@ -423,6 +429,16 @@ async fn read_tmf_header<R: std::io::Read>(src: &mut R) -> Result<TMFHeader, TMF
     }
 }
 impl TMFImportContext {
+    pub(crate) fn read_traingle_min<R:std::io::Read>(&self,src:&mut R)->std::io::Result<IndexType>{
+        if self.should_read_min_index{
+            let mut tmp = [0; std::mem::size_of::<u64>()];
+            src.read_exact(&mut tmp)?;
+            Ok(u64::from_le_bytes(tmp) as IndexType)
+        }
+        else{
+            Ok(0)
+        }
+    }
     fn init_header(hdr: TMFHeader) -> Self {
         let slw = SegLenWidth::from_header(&hdr);
         let stw = SegTypeWidth::from_header(&hdr);
@@ -430,11 +446,13 @@ impl TMFImportContext {
             slw,
             stw,
             meshes: Vec::new(),
+            should_read_min_index: (hdr.min_minor > 1)
         }
     }
     async fn import_mesh<R: std::io::Read>(
         &self,
         mut src: R,
+        ctx:&crate::tmf_importer::TMFImportContext
     ) -> Result<(TMFMesh, String), TMFImportError> {
         let name = read_string(&mut src)?;
         let segment_count = {
@@ -445,7 +463,7 @@ impl TMFImportContext {
         let mut decoded_segs = Vec::with_capacity(segment_count as usize);
         for _ in 0..segment_count {
             let encoded = EncodedSegment::read(self, &mut src)?;
-            decoded_segs.push(DecodedSegment::decode(encoded));
+            decoded_segs.push(DecodedSegment::decode(encoded,ctx));
         }
         let mut res = TMFMesh::empty();
         join_all(decoded_segs)
@@ -470,7 +488,7 @@ impl TMFImportContext {
         };
         let mut meshes = Vec::with_capacity((u16::MAX as usize).min(mesh_count as usize));
         for _ in 0..mesh_count {
-            meshes.push(res.import_mesh(&mut src).await?);
+            meshes.push(res.import_mesh(&mut src,&res).await?);
         }
         Ok(meshes)
     }
@@ -498,4 +516,37 @@ fn test() {
         tmf_mesh.write_tmf_one(&mut out, &prec, name).unwrap();
     }
     let imported = futures::executor::block_on(TMFImportContext::import(&out[..])).unwrap();
+}
+#[cfg(test)]
+#[test]
+fn test_triangles_opt(){
+    let mut tmp = Vec::with_capacity(1000_000);
+    for i in 0..1000{
+        tmp.push(i);
+    }
+    let tris = DecodedSegment::AppendTriangleVertex(tmp.into());
+    let tris = block_on(tris.optimize());
+    let tris:Vec<EncodedSegment> = tris.into_iter().map(
+        |seg| {
+            block_on(seg.encode(&TMFPrecisionInfo::default(),&EncodeInfo::default())).unwrap()
+        }
+    ).collect();
+    let ctx = TMFImportContext::init_header(TMFHeader{
+        major:crate::TMF_MAJOR,minor:crate::TMF_MINOR,min_major:crate::MIN_TMF_MAJOR,min_minor:crate::MIN_TMF_MINOR
+    });
+    let tris:Vec<DecodedSegment> = tris.into_iter().map(
+        |seg| {
+            let seg:DecodedSegment = block_on(DecodedSegment::decode(seg,&ctx)).unwrap();
+            seg
+        }
+    ).collect();
+    println!("{tris:?}");
+    let mut curr = 0;
+    for seg in tris.iter(){
+        let values = if let DecodedSegment::AppendTriangleVertex(vals) = seg{vals}else{panic!()};
+        for value in values.iter(){
+            assert_eq!(*value,curr);
+            curr += 1;
+        }
+    }
 }

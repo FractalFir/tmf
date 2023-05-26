@@ -137,6 +137,7 @@ impl CustomDataSegment {
     pub(crate) fn read<R: std::io::Read>(
         mut src: R,
         kind: SectionType,
+        ctx:&crate::tmf_importer::TMFImportContext,
     ) -> Result<Self, TMFImportError> {
         let mut name_len = [0];
         src.read_exact(&mut name_len)?;
@@ -145,7 +146,7 @@ impl CustomDataSegment {
         src.read_exact(&mut name[..(name_len as usize)])?;
         match kind {
             SectionType::CustomIndexSegment => {
-                let result = crate::vertices::read_triangles(&mut src)?;
+                let result = crate::vertices::read_triangles(&mut src,ctx)?;
                 Ok(Self::new_raw(
                     CustomData::new_index(&result, None),
                     name,
