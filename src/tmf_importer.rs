@@ -164,12 +164,16 @@ impl TMFImportContext {
         let mut decoded_segs = Vec::with_capacity(segment_count as usize);
         for _ in 0..segment_count {
             let encoded = EncodedSegment::read(self, &mut src)?;
-            decoded_segs.push(DecodedSegment::decode(encoded, ctx));
+            let ctx = ctx.clone();
+            let decoded = async move{
+                DecodedSegment::decode(encoded, &ctx).await
+            };
+            //let decoded = tokio::task::spawn(decoded);
+           decoded_segs.push(decoded);
         }
         let mut res = TMFMesh::empty();
         join_all(decoded_segs)
-            .await
-            .into_iter()
+            .await.into_iter()
             .collect::<Result<Vec<_>, _>>()?
             .iter()
             .for_each(|seg| {
@@ -197,7 +201,7 @@ impl TMFImportContext {
 pub(crate) fn import_sync<R: std::io::Read>(
     src: R,
 ) -> Result<Vec<(TMFMesh, String)>, TMFImportError> {
-    futures::executor::block_on(TMFImportContext::import(src))
+     crate::tmf::RUNTIME.block_on(TMFImportContext::import(src))
 }
 #[cfg(test)]
 fn init_test_env() {
@@ -218,24 +222,23 @@ fn test() {
     {
         tmf_mesh.write_tmf_one(&mut out, &prec, name).unwrap();
     }
-    let _imported = futures::executor::block_on(TMFImportContext::import(&out[..])).unwrap();
+    let _imported =  crate::tmf::RUNTIME.block_on(TMFImportContext::import(&out[..])).unwrap();
 }
 #[cfg(test)]
 #[test]
 fn test_triangles_opt() {
     use crate::tmf_exporter::EncodeInfo;
     use crate::TMFPrecisionInfo;
-    use futures::executor::block_on;
     let mut tmp = Vec::with_capacity(1_000_000);
     for i in 0..1000 {
         tmp.push(i);
     }
     let tris = DecodedSegment::AppendTriangleVertex(tmp.into());
-    let tris = block_on(tris.optimize());
+    let tris =  crate::tmf::RUNTIME.block_on(tris.optimize());
     let tris: Vec<EncodedSegment> = tris
         .into_iter()
         .map(|seg| {
-            block_on(seg.encode(&TMFPrecisionInfo::default(), &EncodeInfo::default())).unwrap()
+            crate::tmf::RUNTIME.block_on(seg.encode(&TMFPrecisionInfo::default(), &EncodeInfo::default())).unwrap()
         })
         .collect();
     let ctx = TMFImportContext::init_header(TMFHeader {
@@ -247,7 +250,7 @@ fn test_triangles_opt() {
     let tris: Vec<DecodedSegment> = tris
         .into_iter()
         .map(|seg| {
-            let seg: DecodedSegment = block_on(DecodedSegment::decode(seg, &ctx)).unwrap();
+            let seg: DecodedSegment = crate::tmf::RUNTIME.block_on(DecodedSegment::decode(seg, &ctx)).unwrap();
             seg
         })
         .collect();

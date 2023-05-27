@@ -7,7 +7,7 @@ use crate::{
     Vector2, Vector3, MAX_SEG_SIZE,
 };
 lazy_static::lazy_static!{
-   pub(crate) static ref THREAD_POOL:ThreadPool = ThreadPool::new().expect("Could not create the thread pool!");
+    pub(crate) static ref RUNTIME:tokio::runtime::Runtime = tokio::runtime::Runtime::new().unwrap();
 }
 use smallvec::{smallvec, SmallVec};
 #[repr(u16)]

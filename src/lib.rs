@@ -17,6 +17,7 @@ mod model_importer;
 mod normals;
 #[cfg(feature = "obj_import")]
 mod obj;
+mod multi_thread_exec;
 /// Module used when saving vertex grups
 mod pile_map;
 #[doc(hidden)]

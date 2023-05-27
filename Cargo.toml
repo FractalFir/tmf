@@ -16,6 +16,7 @@ document-features = "0.2.7"
 futures = { version = "0.3.28", features = ["executor", "thread-pool"] }
 lazy_static = "1.4.0"
 smallvec = "1.10.0"
+tokio = { version = "1.28.1", features = ["rt", "rt-multi-thread"] }
 [dev-dependencies]
 criterion = "0.5.1"
 #bencher = "0.1.5"
