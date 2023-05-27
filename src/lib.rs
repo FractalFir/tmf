@@ -736,7 +736,6 @@ mod testing {
         let (tmf_mesh, name) = TMFMesh::read_from_obj_one(&mut file).unwrap();
         tmf_mesh.verify().unwrap();
         let mut out = std::fs::File::create("target/susan.obj").unwrap();
-        tmf_mesh.write_obj_one(&mut out, &name).unwrap();
     }
     #[test]
     #[cfg(feature = "obj_import")]
@@ -766,6 +765,19 @@ mod testing {
         let (r_mesh, name) = TMFMesh::read_tmf_one(&mut (&out as &[u8])).unwrap();
         assert!(name == "Suzanne", "Name should be Suzanne but is {name}");
         r_mesh.verify().unwrap();
+        let mut index = 0;
+        let mut should_fail = false;
+        for (v_src,v_read) in std::iter::zip(tmf_mesh.get_vertex_triangles().unwrap(),r_mesh.get_vertex_triangles().unwrap()){
+            //assert_eq!(v_src,v_read,"Position in vts:{index}");
+            if v_src != v_read{
+                println!("Error at index {index}:{v_src} != {v_read}");
+                should_fail = true;
+            }
+            index += 1;
+        }
+        if should_fail{
+            panic!("Test errors");
+        }
         let mut out = std::fs::File::create("target/test_res/susan_ftmf.obj").unwrap();
         r_mesh.write_obj_one(&mut out, &name).unwrap();
     }

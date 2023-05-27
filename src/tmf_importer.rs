@@ -171,7 +171,7 @@ fn read_default_triangles<R: std::io::Read>(
     let precision = UnalignedRWMode::precision_bits(precision);
     let mut reader = UnalignedReader::new(src);
     for _ in 0..length{
-        data.push(reader.read_unaligned(precision)? as IndexType);
+        data.push((reader.read_unaligned(precision)? + min) as IndexType);
     }
     Ok(())
 }
@@ -200,9 +200,11 @@ async fn decode_triangle_seg(mut seg: EncodedSegment,ctx:&crate::tmf_importer::T
 }
 const TMF_SEG_SIZE: usize =
     std::mem::size_of::<u8>() + std::mem::size_of::<u32>() + std::mem::size_of::<u8>();
-fn calc_spilt_score(len: usize, local_max: IndexType, total_max: IndexType) -> isize {
+fn calc_spilt_score(len: usize, delta_span:(IndexType,IndexType)) -> isize {
+    //return isize::MIN;
+    use crate::vertices:: calc_prec;
     let gain_bits =
-        ((total_max) as f64).log2().ceil() as usize - ((local_max) as f64).log2().ceil() as usize;
+        calc_prec(delta_span.0 as usize) as usize - calc_prec(delta_span.1 as usize) as usize;
     let gain = (gain_bits * len) as isize;
     let loss =
         ((TMF_SEG_SIZE + std::mem::size_of::<u8>() + std::mem::size_of::<u32>()) * 8) as isize;
@@ -215,7 +217,7 @@ fn opt_tris(triangles: &[IndexType]) -> SmallVec<[&[IndexType]; 4]> {
     let total_max = triangles.iter().max().unwrap_or(&1);
     for index in 0..triangles.len() {
         max_index = max_index.max(triangles[index]);
-        let score = calc_spilt_score(index, max_index, *total_max);
+        let score = calc_spilt_score(index, (*total_max,max_index));
         if score > best_score {
             best_index = index;
             best_score = score;
@@ -224,7 +226,31 @@ fn opt_tris(triangles: &[IndexType]) -> SmallVec<[&[IndexType]; 4]> {
     if best_score > 0{
         let mut res = SmallVec::new();
         let (s1,s2) = triangles.split_at(best_index);
-        assert_eq!(s1.len() + s2.len(), triangles.len());
+        let r_1 = opt_tris(s1);
+        for seg in r_1{
+            res.push(seg);
+        }
+        let r_2 = opt_tris(s2);
+        for seg in r_2{
+            res.push(seg);
+        }
+        return res;
+    }
+    let mut best_score = isize::MIN;
+    let mut best_index = usize::MIN;
+    let mut min_index = IndexType::MAX;
+    let total_min = triangles.iter().min().unwrap_or(&1);
+    for index in 0..triangles.len() {
+        min_index = min_index.min(triangles[index]);
+        let score = calc_spilt_score(index, (min_index, *total_min));
+        if score > best_score {
+            best_index = index;
+            best_score = score;
+        }
+    }
+    if best_score > 0{
+        let mut res = SmallVec::new();
+        let (s1,s2) = triangles.split_at(best_index);
         let r_1 = opt_tris(s1);
         for seg in r_1{
             res.push(seg);
@@ -299,7 +325,6 @@ impl DecodedSegment {
             }
             Self::AppendTriangleVertex(triangles) => {
                 let max_index = triangles.iter().max().unwrap_or(&1);
-                println!("triangles_len:{},max_index:{max_index}", triangles.len());
                 crate::vertices::save_triangles(&triangles, (*max_index) as usize, &mut data)?;
                 SectionType::VertexTriangleSegment
             }
@@ -316,7 +341,6 @@ impl DecodedSegment {
             Self::AppendCustom(custom_data) => custom_data.encode(&mut data)?,
             Self::Nothing => SectionType::Invalid,
         };
-        println!("seg_type:{seg_type:?}, len:{}", data.len());
         Ok(EncodedSegment {
             seg_type,
             data: data.into(),
@@ -429,11 +453,11 @@ async fn read_tmf_header<R: std::io::Read>(src: &mut R) -> Result<TMFHeader, TMF
     }
 }
 impl TMFImportContext {
-    pub(crate) fn read_traingle_min<R:std::io::Read>(&self,src:&mut R)->std::io::Result<IndexType>{
+    pub(crate) fn read_traingle_min<R:std::io::Read>(&self,src:&mut R)->std::io::Result<u64>{
         if self.should_read_min_index{
             let mut tmp = [0; std::mem::size_of::<u64>()];
             src.read_exact(&mut tmp)?;
-            Ok(u64::from_le_bytes(tmp) as IndexType)
+            Ok(u64::from_le_bytes(tmp))
         }
         else{
             Ok(0)

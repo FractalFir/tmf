@@ -81,7 +81,7 @@ async fn write_mesh<W: std::io::Write>(
             new_segs.push(c_seg);
         }
     }
-    println!("Optimized segs:{}", new_segs.len());
+    //println!("Optimized segs:{}", new_segs.len());
     let tmf_segs = new_segs;
     let mut encoded = Vec::with_capacity(tmf_segs.len());
     for seg in tmf_segs {

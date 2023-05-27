@@ -176,21 +176,24 @@ pub fn read_tmf_vertices<R: Read>(reader: &mut R) -> Result<Box<[Vector3]>, TMFI
     }
     Ok(vertices.into())
 }
+pub(crate) fn calc_prec(max:usize)->u8{
+    (max as FloatType + 1.0).log2().ceil() as u8
+}
 pub fn save_triangles<W: Write>(
     triangles: &[IndexType],
     max_index: usize,
     writer: &mut W,
 ) -> std::io::Result<()> {
-    let precision = (max_index as FloatType).log2().ceil() as u8;
-    println!("prec:{precision}");
-    writer.write_all(&precision.to_le_bytes())?;
     let min = *triangles.iter().min().unwrap_or(&0);
+    let triangles:Vec<IndexType> = triangles.iter().map(|i| i - min).collect();
+    let precision = calc_prec(max_index);
+    writer.write_all(&precision.to_le_bytes())?;
     writer.write_all(&(triangles.len() as u64).to_le_bytes())?;
     writer.write_all(&(min as u64).to_le_bytes())?;
     let precision = UnalignedRWMode::precision_bits(precision);
     let mut writer = UnalignedWriter::new(writer);
     for index in triangles {
-        writer.write_unaligned(precision, *index as u64)?;
+        writer.write_unaligned(precision, index as u64)?;
     }
     writer.flush()
 }
@@ -213,7 +216,7 @@ pub(crate) fn read_triangles<R: Read>(reader: &mut R,ctx:&crate::tmf_importer::T
     let precision = UnalignedRWMode::precision_bits(precision);
     let mut reader = UnalignedReader::new(reader);
     for _ in 0..length {
-        res.push(reader.read_unaligned(precision)? as IndexType);
+        res.push((reader.read_unaligned(precision)? + min) as IndexType);
     }
     Ok(res.into())
 }
