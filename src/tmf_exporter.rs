@@ -1,4 +1,4 @@
-use crate::tmf_importer::DecodedSegment;
+use crate::tmf::DecodedSegment;
 use crate::{
     FloatType, IndexType, TMFExportError, TMFMesh, TMFPrecisionInfo, Vector3, MIN_TMF_MAJOR,
     MIN_TMF_MINOR, TMF_MAJOR, TMF_MINOR,
@@ -71,9 +71,10 @@ async fn write_mesh<W: std::io::Write>(
     p_info: &TMFPrecisionInfo,
 ) -> Result<(), TMFExportError> {
     write_mesh_name(target, name)?;
-    let mut ei = EncodeInfo::default();
-    ei.shortest_edge = calc_shortest_edge(mesh.get_vertex_triangles(), mesh.get_vertices());
-    let tmf_segs = MeshSegIter::tmf_segs(&mesh);
+    let ei = EncodeInfo {
+        shortest_edge: calc_shortest_edge(mesh.get_vertex_triangles(), mesh.get_vertices()),
+    };
+    let tmf_segs = MeshSegIter::tmf_segs(mesh);
     let mut new_segs = Vec::with_capacity(32);
     for seg in tmf_segs {
         let c_segs = seg.optimize().await;

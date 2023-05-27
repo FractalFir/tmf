@@ -176,7 +176,7 @@ pub fn read_tmf_vertices<R: Read>(reader: &mut R) -> Result<Box<[Vector3]>, TMFI
     }
     Ok(vertices.into())
 }
-pub(crate) fn calc_prec(max:usize)->u8{
+pub(crate) fn calc_prec(max: usize) -> u8 {
     (max as FloatType + 1.0).log2().ceil() as u8
 }
 pub fn save_triangles<W: Write>(
@@ -185,7 +185,7 @@ pub fn save_triangles<W: Write>(
     writer: &mut W,
 ) -> std::io::Result<()> {
     let min = *triangles.iter().min().unwrap_or(&0);
-    let triangles:Vec<IndexType> = triangles.iter().map(|i| i - min).collect();
+    let triangles: Vec<IndexType> = triangles.iter().map(|i| i - min).collect();
     let precision = calc_prec(max_index);
     writer.write_all(&precision.to_le_bytes())?;
     writer.write_all(&(triangles.len() as u64).to_le_bytes())?;
@@ -197,7 +197,10 @@ pub fn save_triangles<W: Write>(
     }
     writer.flush()
 }
-pub(crate) fn read_triangles<R: Read>(reader: &mut R,ctx:&crate::tmf_importer::TMFImportContext) -> Result<Box<[IndexType]>, TMFImportError> {
+pub(crate) fn read_triangles<R: Read>(
+    reader: &mut R,
+    ctx: &crate::tmf_importer::TMFImportContext,
+) -> Result<Box<[IndexType]>, TMFImportError> {
     let precision = {
         let mut tmp = [0];
         reader.read_exact(&mut tmp)?;
@@ -226,7 +229,7 @@ mod testing {
         let dx = a.0 - b.0;
         let dy = a.1 - b.1;
         let dz = a.2 - b.2;
-        return (dx * dx + dy * dy + dz * dz).sqrt();
+        (dx * dx + dy * dy + dz * dz).sqrt()
     }
     use super::*;
     /*

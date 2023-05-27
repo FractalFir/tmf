@@ -1,7 +1,7 @@
 use crate::FloatType;
 #[derive(Clone, Copy, Debug)]
 /// A value describing handedness of tangent.
-pub struct HandenesType(bool);
+pub struct HandenesType(FloatType);
 #[derive(Clone, Copy)]
 /// A value specifying how precise saved (x,y,z) values must be.
 pub struct TangentPrecisionMode(crate::NormalPrecisionMode);
@@ -12,11 +12,11 @@ impl TangentPrecisionMode {
 }
 impl TangentPrecisionMode {
     ///Creates a tangent precision mode with maximal deviation of (x,y,z) part being *deg* degrees.
-    fn from_deg_dev(deg: FloatType) -> Self {
+    pub fn from_deg_dev(deg: FloatType) -> Self {
         Self(crate::NormalPrecisionMode::from_deg_dev(deg))
     }
     ///Creates a tangent precision mode with maximal deviation of (x,y,z) part being *rad* radians.
-    fn from_rad_dev(rad: FloatType) -> Self {
+    pub fn from_rad_dev(rad: FloatType) -> Self {
         Self(crate::NormalPrecisionMode::from_rad_dev(rad))
     }
 }
@@ -26,11 +26,15 @@ impl Default for TangentPrecisionMode {
     }
 }
 impl HandenesType {
-    fn to_bool(&self) -> bool {
-        self.0
+    fn to_bool(self) -> bool {
+        self.0.is_sign_negative()
     }
     fn from_bool(src: bool) -> Self {
-        Self(src)
+        if src {
+            Self(-1.0)
+        } else {
+            Self(1.0)
+        }
     }
 }
 /// A representation of a Tangent.

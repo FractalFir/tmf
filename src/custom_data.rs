@@ -1,11 +1,8 @@
 use crate::tmf::SectionType;
-use crate::FloatType;
-use crate::IndexType;
-use crate::TMFImportError;
-use crate::MAX_SEG_SIZE;
+use crate::{FloatType, IndexType, TMFImportError, MAX_SEG_SIZE};
 #[derive(Clone, Debug)]
 pub(crate) struct CustomDataSegment {
-    name: [u8; u8::MAX as usize],
+    name: Vec<u8>,
     name_len: u8,
     data: CustomData,
 }
@@ -16,6 +13,7 @@ pub enum DataSegmentError {
 }
 impl CustomDataSegment {
     fn new_raw(data: CustomData, raw: [u8; u8::MAX as usize], name_len: u8) -> Self {
+        let raw = raw[0..(name_len as usize)].into();
         Self {
             name: raw,
             name_len,
@@ -127,7 +125,6 @@ impl From<&[FloatType]> for CustomData {
 }
 impl CustomDataSegment {
     pub(crate) fn encode<W: std::io::Write>(&self, target: &mut W) -> std::io::Result<SectionType> {
-        use std::io::Write;
         target.write_all(&[self.name_len])?;
         target.write_all(&self.name[..(self.name_len as usize)])?;
         self.data.write(target)?;
@@ -137,7 +134,7 @@ impl CustomDataSegment {
     pub(crate) fn read<R: std::io::Read>(
         mut src: R,
         kind: SectionType,
-        ctx:&crate::tmf_importer::TMFImportContext,
+        ctx: &crate::tmf_importer::TMFImportContext,
     ) -> Result<Self, TMFImportError> {
         let mut name_len = [0];
         src.read_exact(&mut name_len)?;
@@ -146,7 +143,7 @@ impl CustomDataSegment {
         src.read_exact(&mut name[..(name_len as usize)])?;
         match kind {
             SectionType::CustomIndexSegment => {
-                let result = crate::vertices::read_triangles(&mut src,ctx)?;
+                let result = crate::vertices::read_triangles(&mut src, ctx)?;
                 Ok(Self::new_raw(
                     CustomData::new_index(&result, None),
                     name,

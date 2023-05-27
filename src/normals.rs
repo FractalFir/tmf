@@ -1,7 +1,5 @@
 use crate::unaligned_rw::{UnalignedRWMode, UnalignedReader, UnalignedWriter};
-use crate::TMFImportError;
-use crate::MAX_SEG_SIZE;
-use crate::{FloatType, IndexType, Vector3};
+use crate::{FloatType, TMFImportError, Vector3, MAX_SEG_SIZE};
 #[cfg(not(feature = "double_precision"))]
 use std::f32::consts::FRAC_PI_2;
 #[cfg(feature = "double_precision")]
@@ -36,9 +34,6 @@ impl NormalPrecisionMode {
     pub fn from_rad_dev(rad: FloatType) -> Self {
         let prec = (FRAC_PI_2 / rad).log2().ceil() as u8;
         Self(prec)
-    }
-    pub(crate) fn bits(&self) -> u8 {
-        self.0
     }
 }
 impl Default for NormalPrecisionMode {
@@ -191,8 +186,6 @@ pub(crate) fn read_normal_array<R: Read>(reader: &mut R) -> Result<Box<[Vector3]
 #[cfg(test)]
 mod test_normal {
     use super::*;
-    pub const NORM_PREC_LOW: NormalPrecisionMode = NormalPrecisionMode(7);
-    pub const NORM_PREC_MID: NormalPrecisionMode = NormalPrecisionMode(10);
     pub const NORM_PREC_HIGH: NormalPrecisionMode = NormalPrecisionMode(13);
     fn dot(a: Vector3, b: Vector3) -> FloatType {
         a.0 * b.0 + a.1 * b.1 + a.2 * b.2
@@ -245,7 +238,7 @@ mod test_normal {
     fn rw_normal_array() {
         use rand::{thread_rng, Rng};
         let mut rng = thread_rng();
-        let count = ((rng.gen::<IndexType>() % 0x800) + 0x800) as usize;
+        let count = ((rng.gen::<crate::IndexType>() % 0x800) + 0x800) as usize;
         let mut res = Vec::with_capacity(count);
         let mut normals = Vec::with_capacity(count);
         for _ in 0..count {
@@ -280,52 +273,4 @@ mod test_normal {
             assert!(dt < 0.000333, "{x}:{sin} - {fsin} = {dt}");
         }
     }
-}
-// Calcuates size of the map necesary for map pruning of normals
-fn map_size(prec: &NormalPrecisionMode) -> u128 {
-    let asine_bits = prec.bits();
-    let z_bits = prec.bits();
-    let sign_bits = 3; //3 signs 1 bit each
-    let toatal_bits = asine_bits + z_bits + sign_bits;
-    1 << toatal_bits
-}
-fn normal_to_map_index(normal: Vector3, prec: &NormalPrecisionMode) -> u64 {
-    let (asine, z, sx, sy, sz) = normal_to_encoding(normal, prec);
-    let (sx, sy, sz) = (sx as u64, sy as u64, sz as u64);
-    let z_offset = prec.bits();
-    let s_offset = z_offset + prec.bits();
-    asine | (z << z_offset) | (sx << s_offset) | (sy << (s_offset + 1)) | (sz << (s_offset + 2))
-}
-use crate::TMFPrecisionInfo;
-pub(crate) fn map_prune(
-    normals: &mut Vec<Vector3>,
-    normal_faces: &mut [IndexType],
-    map_max: usize,
-    prec: &TMFPrecisionInfo,
-) {
-    let map_size = map_size(&prec.normal_precision);
-    // Map size exceeds maximal allowed map size, return.
-    if map_size > map_max as u128 {
-        return;
-    }
-    let map_size = map_size as usize;
-    let mut map: Vec<IndexType> = vec![IndexType::MAX; map_size];
-    // New, smaller normals
-    let mut new_normals = Vec::with_capacity(normals.len());
-    for normal in normals.iter() {
-        //
-        // Calculate index into the map
-        let index = normal_to_map_index(*normal, &prec.normal_precision) as usize;
-        if map[index] == IndexType::MAX {
-            let new_map_index = new_normals.len();
-            map[index] = new_map_index as IndexType;
-            new_normals.push(*normal);
-        }
-    }
-    for index in normal_faces {
-        *index =
-            map[normal_to_map_index(normals[*index as usize], &prec.normal_precision) as usize];
-        //assert!(((*index) as usize) < new_normals.len());
-    }
-    *normals = new_normals;
 }

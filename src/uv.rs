@@ -87,7 +87,7 @@ mod test {
     fn dst(a: Vector2, b: Vector2) -> FloatType {
         let dx = a.0 - b.0;
         let dy = a.1 - b.1;
-        return (dx * dx + dy * dy).sqrt();
+        (dx * dx + dy * dy).sqrt()
     }
     #[test]
     fn rw_uvs() {

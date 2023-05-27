@@ -28,7 +28,7 @@ fast_trig = []
 double_precision = []
 ## Changes the index format to long(u64) in order to support reading models with over 2^32 - 1 points, at cost of increased memory footprint.
 long_indices = []
-## Chnages the index format to short(u16), decreasng memory footprint, but limiting max model vertex count to 2^16 - 1(65535).
+## Changes the index format to short(u16), decreasng memory footprint, but limiting max model vertex count to 2^16 - 1(65535).
 short_indices = []
 ## Changes the internal setting of the unaligned reader to use different data size. Can be beneficial for small models on some systems.
 byte_rw = []

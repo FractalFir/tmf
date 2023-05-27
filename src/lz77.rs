@@ -322,11 +322,11 @@ fn find_in_sliding_win() {
         0b0000000111110110111110110100001111100001100011101011001000000010,
         0b0110011011000010110001111010111111001100010010000001000011001000,
     ];
-    let (o, l) = get_best_match_within_window(&a, &b, 60, 80);
+    let (_o, _l) = get_best_match_within_window(&a, &b, 60, 80);
 }
 #[test]
 #[ignore]
 fn test_encode() {
     let data = [2582, 8907545, 86606, 70115397, 717606];
-    let compressed = encode(&data, 6);
+    let _compressed = encode(&data, 6);
 }

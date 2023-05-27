@@ -24,7 +24,6 @@ pub mod tangents;
 mod tmf;
 mod tmf_exporter;
 mod tmf_importer;
-mod tmf_segment;
 /// Module used to handle reads of data which is not bit aligned(for example, 3 or 17 bits). This is the module that allows for heavy compression used in this format.
 #[doc(hidden)]
 pub mod unaligned_rw;
@@ -83,7 +82,7 @@ pub struct TMFPrecisionInfo {
     pub uv_precision: UvPrecisionMode,
     /// Do additional normal pruning before saving (has considerable performance impact if model has many vertices
     pub prune_normals: bool,
-    pub uv_prec:crate::UvPrecisionMode,
+    pub uv_prec: crate::UvPrecisionMode,
 }
 impl Default for TMFPrecisionInfo {
     /// Returns the default, middle-ground settings for saving meshes. Should be indistinguishable by human eye, but the LOD may be not enough for some rare cases (eg. procedural generation).
@@ -93,7 +92,7 @@ impl Default for TMFPrecisionInfo {
             normal_precision: NormalPrecisionMode::default(),
             uv_precision: UvPrecisionMode::default(),
             prune_normals: true,
-            uv_prec:crate::UvPrecisionMode::form_texture_resolution(1024.0, 1.0)
+            uv_prec: crate::UvPrecisionMode::form_texture_resolution(1024.0, 1.0),
         }
     }
 }
@@ -119,32 +118,6 @@ fn vec_first<T: Sized + Clone>(vec: Vec<T>) -> T {
     vec[0].clone()
 }
 impl TMFMesh {
-    pub(crate) fn get_segment_count(&self) -> usize {
-        let mut count = 0;
-        //TODO: when adding new fields change this.
-        if self.normals.is_some() {
-            count += 1
-        };
-        if self.normal_triangles.is_some() {
-            count += 1
-        };
-        if self.vertices.is_some() {
-            count += 1
-        };
-        if self.vertex_triangles.is_some() {
-            count += 1
-        };
-        if self.uvs.is_some() {
-            count += 1
-        };
-        if self.uv_triangles.is_some() {
-            count += 1
-        };
-        if self.materials.is_some() {
-            count += 1
-        };
-        count + self.custom_data.len()
-    }
     /// Sets mesh vertex array and returns old vertex array if present. New mesh data is **not** checked during this function call, so to ensure mesh is valid call [`Self::verify`] before saving.
     ///```
     /// # use tmf::FloatType;
@@ -714,6 +687,43 @@ impl TMFMesh {
         };
     }
 }
+/// An enum describing an error that occurred during loading a TMF mesh.  
+#[derive(Debug)]
+pub enum TMFImportError {
+    /// An IO error which prevented data from being read.
+    IO(std::io::Error),
+    /// A segment uses an unknown compression type, invalid for the minimum TMF version specified by file header.
+    CompressionTypeUnknown(u8),
+    /// A method which should return one mesh was called, but TMF file had no meshes present.
+    NoMeshes,
+    /// A method which should return one mesh was called, but more than one mesh was present.
+    TooManyMeshes,
+    /// Provides source was not a TMF file.
+    NotTMFFile,
+    /// File was created with a TMF version newer than this, and can't be read properly.
+    NewerVersionRequired,
+    /// A file segment exceeded the maximum length(2GB) was encountered. This segments length is highly unusual, and the segment unlikely to be valid. The segment was not read to prevent memory issues.
+    SegmentTooLong,
+    /// A segments compression type requires that it must be preceded by another segment, from which some of the data is deduced.   
+    NoDataBeforeOmmitedSegment,
+    /// Byte precision is too high(over 64 bits) and is invalid.
+    InvalidPrecision(u8),
+}
+impl From<std::io::Error> for TMFImportError {
+    fn from(err: std::io::Error) -> Self {
+        Self::IO(err)
+    }
+}
+#[derive(Debug)]
+pub enum TMFExportError {
+    /// An IO error which prevented data from being read.
+    IO(std::io::Error),
+}
+impl From<std::io::Error> for TMFExportError {
+    fn from(err: std::io::Error) -> Self {
+        Self::IO(err)
+    }
+}
 #[cfg(test)]
 mod testing {
     use super::*;
@@ -733,9 +743,9 @@ mod testing {
     fn rw_susan_obj() {
         init_test_env();
         let mut file = std::fs::File::open("testing/susan.obj").unwrap();
-        let (tmf_mesh, name) = TMFMesh::read_from_obj_one(&mut file).unwrap();
+        let (tmf_mesh, _name) = TMFMesh::read_from_obj_one(&mut file).unwrap();
         tmf_mesh.verify().unwrap();
-        let mut out = std::fs::File::create("target/susan.obj").unwrap();
+        let _out = std::fs::File::create("target/susan.obj").unwrap();
     }
     #[test]
     #[cfg(feature = "obj_import")]
@@ -767,15 +777,18 @@ mod testing {
         r_mesh.verify().unwrap();
         let mut index = 0;
         let mut should_fail = false;
-        for (v_src,v_read) in std::iter::zip(tmf_mesh.get_vertex_triangles().unwrap(),r_mesh.get_vertex_triangles().unwrap()){
+        for (v_src, v_read) in std::iter::zip(
+            tmf_mesh.get_vertex_triangles().unwrap(),
+            r_mesh.get_vertex_triangles().unwrap(),
+        ) {
             //assert_eq!(v_src,v_read,"Position in vts:{index}");
-            if v_src != v_read{
+            if v_src != v_read {
                 println!("Error at index {index}:{v_src} != {v_read}");
                 should_fail = true;
             }
             index += 1;
         }
-        if should_fail{
+        if should_fail {
             panic!("Test errors");
         }
         let mut out = std::fs::File::create("target/test_res/susan_ftmf.obj").unwrap();
@@ -856,45 +869,10 @@ mod testing {
         let tmf_mesh = TMFMesh::read_from_obj_one(&mut file).unwrap().0;
         tmf_mesh.verify().unwrap();
         let mut out = std::fs::File::create("target/60k.tmf").unwrap();
-        let mut prec = TMFPrecisionInfo::default();
-        prec.prune_normals = false;
+        let prec = TMFPrecisionInfo {
+            prune_normals: false,
+            ..Default::default()
+        };
         tmf_mesh.write_tmf_one(&mut out, &prec, "").unwrap();
-    }
-}
-/// An enum describing an error that occurred during loading a TMF mesh.  
-#[derive(Debug)]
-pub enum TMFImportError {
-    /// An IO error which prevented data from being read.
-    IO(std::io::Error),
-    /// A segment uses an unknown compression type, invalid for the minimum TMF version specified by file header.
-    CompressionTypeUnknown(u8),
-    /// A method which should return one mesh was called, but TMF file had no meshes present.
-    NoMeshes,
-    /// A method which should return one mesh was called, but more than one mesh was present.
-    TooManyMeshes,
-    /// Provides source was not a TMF file.
-    NotTMFFile,
-    /// File was created with a TMF version newer than this, and can't be read properly.
-    NewerVersionRequired,
-    /// A file segment exceeded the maximum length(2GB) was encountered. This segments length is highly unusual, and the segment unlikely to be valid. The segment was not read to prevent memory issues.
-    SegmentTooLong,
-    /// A segments compression type requires that it must be preceded by another segment, from which some of the data is deduced.   
-    NoDataBeforeOmmitedSegment,
-    /// Byte precision is too high(over 64 bits) and is invalid.
-    InvalidPrecision(u8),
-}
-impl From<std::io::Error> for TMFImportError {
-    fn from(err: std::io::Error) -> Self {
-        Self::IO(err)
-    }
-}
-#[derive(Debug)]
-pub enum TMFExportError {
-    /// An IO error which prevented data from being read.
-    IO(std::io::Error),
-}
-impl From<std::io::Error> for TMFExportError {
-    fn from(err: std::io::Error) -> Self {
-        Self::IO(err)
     }
 }
