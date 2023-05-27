@@ -1,6 +1,7 @@
 use crate::tmf::{DecodedSegment, EncodedSegment, SectionType};
 use crate::{TMFImportError, TMFMesh, TMF_MAJOR, TMF_MINOR};
 use futures::future::join_all;
+#[derive(Clone,Copy)]
 pub(crate) enum SegLenWidth {
     U32,
     U64,
@@ -28,6 +29,7 @@ impl SegLenWidth {
         })
     }
 }
+#[derive(Clone,Copy)]
 pub(crate) enum SegTypeWidth {
     U16,
     U8,
@@ -55,11 +57,11 @@ impl SegTypeWidth {
         })
     }
 }
+#[derive(Clone)]
 pub(crate) struct TMFImportContext {
     slw: SegLenWidth,
     stw: SegTypeWidth,
     should_read_min_index: bool,
-    meshes: Vec<TMFMesh>,
 }
 // While some of those fileds are not read yet, they may be relevant in the future.
 #[allow(dead_code)]
@@ -145,7 +147,6 @@ impl TMFImportContext {
         Self {
             slw,
             stw,
-            meshes: Vec::new(),
             should_read_min_index: (hdr.min_minor > 1),
         }
     }

@@ -1,11 +1,14 @@
 use crate::tmf_exporter::EncodeInfo;
 use crate::tmf_importer::TMFImportContext;
 use crate::unaligned_rw::{UnalignedRWMode, UnalignedReader};
+use futures::executor::ThreadPool;
 use crate::{
     CustomDataSegment, IndexType, TMFExportError, TMFImportError, TMFMesh, TMFPrecisionInfo,
     Vector2, Vector3, MAX_SEG_SIZE,
 };
-
+lazy_static::lazy_static!{
+   pub(crate) static ref THREAD_POOL:ThreadPool = ThreadPool::new().expect("Could not create the thread pool!");
+}
 use smallvec::{smallvec, SmallVec};
 #[repr(u16)]
 #[derive(Debug, PartialEq, Clone, Copy)]

@@ -13,9 +13,11 @@ categories = ["game-development","rendering::data-formats","compression"]
 ##! Test
 [dependencies]
 document-features = "0.2.7"
-futures = "0.3.28"
+futures = { version = "0.3.28", features = ["executor", "thread-pool"] }
+lazy_static = "1.4.0"
 smallvec = "1.10.0"
 [dev-dependencies]
+criterion = "0.5.1"
 #bencher = "0.1.5"
 rand = "0.8.5"
 [features]
@@ -35,12 +37,12 @@ byte_rw = []
 model_importer = []
 ## Adds the ability to import/export .obj files
 obj_import = ["model_importer"]
-#
-#[[bench]]
-#name = "unaligned_rw"
-#harness = false
-#[[bench]]
-#name = "read_write_tmf"
-#harness = false
+
+[[bench]]
+name = "unaligned_rw"
+harness = false
+[[bench]]
+name = "read_write_tmf"
+harness = false
 [profile.bench]
 #debug = true

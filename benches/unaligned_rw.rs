@@ -1,10 +1,7 @@
-#[macro_use]
-extern crate bencher;
-
-use bencher::Bencher;
-use tmf::unaligned_rw::{UnalignedRWMode, UnalignedReader, UnalignedWriter};
-fn unaligned_read(bench: &mut Bencher) {
-    bench.iter(|| {
+use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use tmf::unaligned_rw::{UnalignedRWMode,UnalignedReader,UnalignedWriter};
+fn unaligned_read(c: &mut Criterion) {
+    c.bench_function("unaligned_read", |b| b.iter(||{
         let mut reader = UnalignedReader::new(&CHANIGING_ALGHMENT_EXPECTED as &[u8]);
         for byte in 1..64 {
             assert!(
@@ -14,11 +11,11 @@ fn unaligned_read(bench: &mut Bencher) {
                     == byte as u64
             );
         }
-    })
+    }));
 }
 
-fn unaligned_write(bench: &mut Bencher) {
-    bench.iter(|| {
+fn unaligned_write(c: &mut Criterion) {
+    c.bench_function("unaligned_write", |b| b.iter(||{
         let mut result = Vec::with_capacity(64);
         {
             let mut writter = UnalignedWriter::new(&mut result);
@@ -29,10 +26,10 @@ fn unaligned_write(bench: &mut Bencher) {
             }
         }
         assert!(result == CHANIGING_ALGHMENT_EXPECTED);
-    });
+    }));
 }
-benchmark_group!(benches, unaligned_read, unaligned_write);
-benchmark_main!(benches);
+criterion_group!(benches, unaligned_read, unaligned_write);
+criterion_main!(benches);
 pub const CHANIGING_ALGHMENT_EXPECTED: [u8; 252] = [
     0b11001101, 0b00001010, 0b00110000, 0b01110000, 0b10000000, 0b01001000, 0b00010100, 0b00000010,
     0b11000000, 0b00110000, 0b00000001, 0b10100000, 0b00000111, 0b00000000, 0b00001111, 0b00000000,

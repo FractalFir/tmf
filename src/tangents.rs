@@ -61,6 +61,7 @@ fn tangent_from_encoding(
     let handeness = HandenesType::from_bool(handenes);
     (normal, handeness)
 }
+//fn save_tangents()
 #[cfg(test)]
 fn test_tangent(tangent: Tangent, prec: TangentPrecisionMode) -> FloatType {
     let encoded = tangent_to_encoding(tangent, prec);
