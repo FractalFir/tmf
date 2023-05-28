@@ -19,7 +19,6 @@ smallvec = "1.10.0"
 tokio = { version = "1.28.1", features = ["rt", "rt-multi-thread"] }
 [dev-dependencies]
 criterion = "0.5.1"
-#bencher = "0.1.5"
 rand = "0.8.5"
 [features]
 default = ["obj_import"]
@@ -46,4 +45,4 @@ harness = false
 name = "read_write_tmf"
 harness = false
 [profile.bench]
-#debug = true
+debug = true

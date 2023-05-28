@@ -844,6 +844,7 @@ mod testing {
         let mut out = std::fs::File::create("target/test_res/multiple.obj").unwrap();
         TMFMesh::write_obj(&meshes, &mut out).unwrap();
     }
+    /*
     #[ignore]
     #[test]
     #[cfg(feature = "obj_import")]
@@ -853,5 +854,5 @@ mod testing {
         let tmf_mesh = TMFMesh::read_from_obj_one(&mut file).unwrap().0;
         tmf_mesh.verify().unwrap();
         todo!();
-    }
+    }*/
 }
