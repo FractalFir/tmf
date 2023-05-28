@@ -477,7 +477,7 @@ impl TMFMesh {
                 "More than one mesh present in .obj file while only one expected.",
             ))
         } else {
-            Ok(vec_first(meshes))
+            Ok(meshes.into_iter().next().unwrap())
         }
     }
     /// Writes this TMF  mesh to a .obj file.
@@ -599,13 +599,7 @@ impl TMFMesh {
         } else if meshes.len() > 1 {
             Err(TMFImportError::TooManyMeshes)
         } else {
-            // TODO: find a way to remove this redundant clone call
-            // This is a very stupid little "bug". Because 'meshes' must contain exactly 1 element(previous checks), the first element should just be returned.
-            // This is in fact how it used to work, but after adding mesh names and changing the return type from TMFMesh to (TMFMesh,String) the function .nth(0) used
-            // to get the first element started returning a reference for no apparent reason? So this less efficient way must suffice for now.This could be maybe fixed
-            // with std::mem::swap, uninitialised dummy value and some fancy manual dropping but it would require using `unsafe` and could lead to a memory leak if done
-            // incorrectly, so the clone call stays for now.
-            Ok(vec_first(meshes))
+            Ok(meshes.into_iter().next().unwrap())
         }
     }
     /// Adds custom data array.
