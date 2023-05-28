@@ -1,4 +1,6 @@
 use crate::FloatType;
+use crate::unaligned_rw::{UnalignedWriter,UnalignedReader,UnalignedRWMode};
+use crate::NormalPrecisionMode;
 #[derive(Clone, Copy, Debug)]
 /// A value describing handedness of tangent.
 pub struct HandenesType(FloatType);
@@ -9,6 +11,7 @@ impl TangentPrecisionMode {
     fn normal_precision(&self) -> crate::NormalPrecisionMode {
         self.0
     }
+    pub(crate) fn from_bits(bits:u8)->Self{Self(NormalPrecisionMode::from_bits(bits))}
 }
 impl TangentPrecisionMode {
     ///Creates a tangent precision mode with maximal deviation of (x,y,z) part being *deg* degrees.
@@ -61,7 +64,51 @@ fn tangent_from_encoding(
     let handeness = HandenesType::from_bool(handenes);
     (normal, handeness)
 }
-//fn save_tangents()
+fn save_tangents<W:std::io::Write>(tangents:&[Tangent],prec: TangentPrecisionMode,target:&mut W)->std::io::Result<()>{
+    let count = (tangents.len() as u64).to_le_bytes();
+    target.write_all(&count)?;
+    let bits_prec = prec.normal_precision().bits();
+    target.write_all(&[bits_prec])?;
+    let mut writer = UnalignedWriter::new(target);
+    let bits_prec = UnalignedRWMode::precision_bits(bits_prec);
+    for tangent in tangents{
+        let (asine,z,sx,sy,sz,handeness) = tangent_to_encoding(*tangent,prec);
+        writer.write_bit(handeness)?;
+        writer.write_bit(sx)?;
+        writer.write_bit(sy)?;
+        writer.write_bit(sz)?;
+        writer.write_unaligned(bits_prec, asine)?;
+        writer.write_unaligned(bits_prec, z)?;
+    }
+    writer.flush()?;
+    Ok(())
+}
+fn read_tangents<R:std::io::Read>(src:&mut R)->std::io::Result::<Box<[Tangent]>>{
+    let count = {
+        let mut tmp = [0;std::mem::size_of::<u64>()];
+        src.read_exact(&mut tmp)?;
+        u64::from_le_bytes(tmp)
+    };
+    let bits_prec = {
+        let mut tmp = [0;std::mem::size_of::<u8>()];
+        src.read_exact(&mut tmp)?;
+        u8::from_le_bytes(tmp)
+    };
+    let mut reader = UnalignedReader::new(src);
+    let prec = UnalignedRWMode::precision_bits(bits_prec);
+    let tan_prec = TangentPrecisionMode::from_bits(bits_prec);
+    let mut tangents = Vec::with_capacity(count as usize);
+    for _ in 0..count{
+        let handeness = reader.read_bit()?;
+        let sx = reader.read_bit()?;
+        let sy = reader.read_bit()?;
+        let sz = reader.read_bit()?;
+        let asine = reader.read_unaligned(prec)?;
+        let z = reader.read_unaligned(prec)?;
+        tangents.push(tangent_from_encoding(asine,z,sx,sy,sz,handeness,tan_prec));
+    }
+    Ok(tangents.into())
+}
 #[cfg(test)]
 fn test_tangent(tangent: Tangent, prec: TangentPrecisionMode) -> FloatType {
     let encoded = tangent_to_encoding(tangent, prec);

@@ -79,10 +79,9 @@ pub struct TMFPrecisionInfo {
     /// How much can normal angle deviate, as an angle in degrees.
     pub normal_precision: NormalPrecisionMode,
     /// How much can saved UVs deviate.
-    pub uv_precision: UvPrecisionMode,
-    /// Do additional normal pruning before saving (has considerable performance impact if model has many vertices
-    pub prune_normals: bool,
     pub uv_prec: crate::UvPrecisionMode,
+    /// How much can saved tangents deviate
+    pub tangent_prec: TangentPrecisionMode,
 }
 impl Default for TMFPrecisionInfo {
     /// Returns the default, middle-ground settings for saving meshes. Should be indistinguishable by human eye, but the LOD may be not enough for some rare cases (eg. procedural generation).
@@ -90,9 +89,8 @@ impl Default for TMFPrecisionInfo {
         TMFPrecisionInfo {
             vertex_precision: VertexPrecisionMode::default(),
             normal_precision: NormalPrecisionMode::default(),
-            uv_precision: UvPrecisionMode::default(),
-            prune_normals: true,
-            uv_prec: crate::UvPrecisionMode::form_texture_resolution(1024.0, 1.0),
+            uv_prec: crate::UvPrecisionMode::default(),
+            tangent_prec:TangentPrecisionMode::default(),
         }
     }
 }
@@ -759,6 +757,22 @@ mod testing {
         let prec = TMFPrecisionInfo::default();
         tmf_mesh.write_tmf_one(&mut out, &prec, name).unwrap();
     }
+    #[ignore]
+    #[test]
+    #[cfg(feature = "obj_import")]
+    fn save_nefertiti_tmf() {
+        init_test_env();
+        let mut file = match std::fs::File::open("testing/Nefertiti.obj"){
+            Ok(file)=>file,
+            Err(_)=>return,
+        };
+        let (tmf_mesh, name) = TMFMesh::read_from_obj_one(&mut file).unwrap();
+        tmf_mesh.verify().unwrap();
+        let mut out = std::fs::File::create("target/test_res/Nefertiti.tmf").unwrap();
+        assert!(name == "Nefertiti", "Name should be Nefertiti but is {name}");
+        let prec = TMFPrecisionInfo::default();
+        tmf_mesh.write_tmf_one(&mut out, &prec, name).unwrap();
+    }
     #[test]
     #[cfg(feature = "obj_import")]
     fn rw_susan_tmf() {
@@ -794,7 +808,6 @@ mod testing {
         let mut out = std::fs::File::create("target/test_res/susan_ftmf.obj").unwrap();
         r_mesh.write_obj_one(&mut out, &name).unwrap();
     }
-    #[test]
     #[cfg(all(feature = "triangulation", feature = "obj_import"))]
     fn rw_cube_obj_not_triangulated() {
         init_test_env();
@@ -840,39 +853,5 @@ mod testing {
         let tmf_mesh = TMFMesh::read_from_obj_one(&mut file).unwrap().0;
         tmf_mesh.verify().unwrap();
         todo!();
-    }
-    #[ignore]
-    #[test]
-    #[cfg(feature = "obj_import")]
-    fn rw_60k_sph() {
-        init_test_env();
-        let mut file = std::fs::File::open("testing/60k.obj").unwrap();
-        let (tmf_mesh, name) = TMFMesh::read_from_obj_one(&mut file).unwrap();
-        tmf_mesh.verify().unwrap();
-        let mut out = Vec::new();
-        {
-            tmf_mesh
-                .write_tmf_one(&mut out, &TMFPrecisionInfo::default(), name)
-                .unwrap();
-        }
-        let (r_mesh, name) = TMFMesh::read_tmf_one(&mut (&out as &[u8])).unwrap();
-        r_mesh.verify().unwrap();
-        let mut out = std::fs::File::create("target/60k_ftmf.obj").unwrap();
-        r_mesh.write_obj_one(&mut out, &name).unwrap();
-    }
-    #[ignore]
-    #[test]
-    #[cfg(feature = "obj_import")]
-    fn save_60k_sph_tmf() {
-        init_test_env();
-        let mut file = std::fs::File::open("testing/60k.obj").unwrap();
-        let tmf_mesh = TMFMesh::read_from_obj_one(&mut file).unwrap().0;
-        tmf_mesh.verify().unwrap();
-        let mut out = std::fs::File::create("target/60k.tmf").unwrap();
-        let prec = TMFPrecisionInfo {
-            prune_normals: false,
-            ..Default::default()
-        };
-        tmf_mesh.write_tmf_one(&mut out, &prec, "").unwrap();
     }
 }

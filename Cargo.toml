@@ -13,7 +13,7 @@ categories = ["game-development","rendering::data-formats","compression"]
 ##! Test
 [dependencies]
 document-features = "0.2.7"
-futures = { version = "0.3.28", features = ["executor", "thread-pool"] }
+futures = { version = "0.3.28" }
 lazy_static = "1.4.0"
 smallvec = "1.10.0"
 tokio = { version = "1.28.1", features = ["rt", "rt-multi-thread"] }

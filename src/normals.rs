@@ -35,6 +35,8 @@ impl NormalPrecisionMode {
         let prec = (FRAC_PI_2 / rad).log2().ceil() as u8;
         Self(prec)
     }
+    pub(crate) fn bits(&self)->u8{self.0}
+    pub(crate) fn from_bits(bits:u8)->Self{Self(bits)}
 }
 impl Default for NormalPrecisionMode {
     /// Default precision of saved normals is 1.0 degrees
@@ -118,9 +120,9 @@ fn save_normal<W: Write>(
     let (asine, z, sx, sy, sz) = normal_to_encoding(normal, &precision);
     let main_prec = UnalignedRWMode::precision_bits(precision.0);
 
-    writer.write_unaligned(SIGN_PREC, sx as u64)?;
-    writer.write_unaligned(SIGN_PREC, sy as u64)?;
-    writer.write_unaligned(SIGN_PREC, sz as u64)?;
+    writer.write_bit(sx)?;
+    writer.write_bit(sy)?;
+    writer.write_bit(sz)?;
     writer.write_unaligned(main_prec, asine)?;
     writer.write_unaligned(main_prec, z)?;
 
@@ -133,9 +135,9 @@ fn read_normal<R: Read>(
 ) -> std::io::Result<Vector3> {
     let main_prec = UnalignedRWMode::precision_bits(precision.0);
     // Get signs of x y z component
-    let sx = reader.read_unaligned(SIGN_PREC)? != 0;
-    let sy = reader.read_unaligned(SIGN_PREC)? != 0;
-    let sz = reader.read_unaligned(SIGN_PREC)? != 0;
+    let sx = reader.read_bit()?;
+    let sy = reader.read_bit()?;
+    let sz = reader.read_bit()?;
     let asine = reader.read_unaligned(main_prec)?;
     let z = reader.read_unaligned(main_prec)?;
 

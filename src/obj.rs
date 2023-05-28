@@ -48,10 +48,10 @@ fn parse_float_type(float: &str) -> Result<FloatType> {
         )),
     }
 }
-fn parse_index(uint: &str) -> Result<IndexType> {
+fn parse_index(uint: &str) -> IndexType {
     match uint.parse::<IndexType>() {
-        Ok(uint) => Ok(uint),
-        Err(err) => Err(std::io::Error::new(std::io::ErrorKind::Other, err)),
+        Ok(uint) => uint,
+        Err(_) => 1,
     }
 }
 fn match_split(split: Option<&str>) -> Result<&str> {
@@ -65,11 +65,16 @@ fn match_split(split: Option<&str>) -> Result<&str> {
 }
 use smallvec::SmallVec;
 use std::str::Split;
-fn load_indices(split: &mut Split<&[char; 2]>) -> Result<(IndexType, IndexType, IndexType)> {
+fn load_indices(split: &mut Split<&[char; 2]>) -> Result<(IndexType, IndexType, IndexType)> {    
     let (i0, i1, i2) = (
-        parse_index(match_split(split.next())?)?,
-        parse_index(match_split(split.next())?)?,
-        parse_index(match_split(split.next())?)?,
+        match_split(split.next())?,
+        match_split(split.next())?,
+        match_split(split.next())?,
+    );
+    let (i0,i1,i2) = (
+        parse_index(i0),
+        parse_index(i1),
+        parse_index(i2),
     );
     if i0 < 1 || i1 < 1 || i2 < 1 {
         Err(std::io::Error::new(

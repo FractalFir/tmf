@@ -10,6 +10,20 @@ fn read_tmf(c: &mut Criterion) {
         black_box(r_mesh);
     }));
 }
+fn read_nefreti_tmf(c: &mut Criterion) {
+    use std::io::Read;
+    use tmf::TMFMesh;
+    let mut file = match std::fs::File::open("target/test_res/Nefertiti.tmf"){
+        Ok(file)=>file,
+        Err(_)=>return,
+    };
+    let mut out = Vec::new();
+    file.read_to_end(&mut out);
+    c.bench_function("read nefretiti.tmf", |b| b.iter(|| {
+        let r_mesh = TMFMesh::read_tmf_one(&mut (&out as &[u8])).unwrap();
+        black_box(r_mesh);
+    }));
+}
 fn write_tmf(c: &mut Criterion) {
     use std::io::Read;
     use tmf::TMFMesh;
@@ -25,5 +39,5 @@ fn write_tmf(c: &mut Criterion) {
         black_box(&mut out);
     }));
 }
-criterion_group!(benches, read_tmf, write_tmf);
+criterion_group!(benches, read_tmf, read_nefreti_tmf, write_tmf);
 criterion_main!(benches);
