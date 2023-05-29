@@ -49,6 +49,45 @@ impl<R: Read> UnalignedReader<R> {
         self.bits_read += 1;
         Ok(res != 0)
     }
+    pub fn read2_unaligned(&mut self, mode: UnalignedRWMode) -> Result<(u64,u64)>{
+        if mode.0 > (u64::BITS/2) as u8{
+           Ok((self. read_unaligned(mode)?,self. read_unaligned(mode)?))
+        }
+        else{
+            let read_size = UnalignedRWMode(mode.0*2);
+            let data = self. read_unaligned(read_size)?;
+            let r1 = data>>mode.0;
+            let r2 = data<<(u64::BITS as u8 - mode.0)>>(u64::BITS as u8 - mode.0);
+            Ok((r1,r2))
+        }
+    }
+    pub fn read_pair_unaligned(&mut self, mode1: UnalignedRWMode,mode2: UnalignedRWMode) -> Result<(u64,u64)>{
+        if mode1.0 + mode2.0 > u64::BITS as u8{
+           Ok((self. read_unaligned(mode1)?,self. read_unaligned(mode2)?))
+        }
+        else{
+            let read_size = UnalignedRWMode(mode1.0 + mode2.0);
+            let data = self. read_unaligned(read_size)?;
+            let r1 = data>>mode1.0;
+            let r2 = data<<(u64::BITS as u8 - mode1.0)>>(u64::BITS as u8 - mode1.0);
+            Ok((r1,r2))
+        }
+    }
+    pub fn read3_unaligned(&mut self, mode: UnalignedRWMode) -> Result<(u64,u64,u64)>{
+        if mode.0 > (u64::BITS/3) as u8{
+            let res_1_2 = self.read2_unaligned(mode)?;
+            Ok((res_1_2.0,res_1_2.1,self. read_unaligned(mode)?))
+        }
+        else{
+            let read_size = UnalignedRWMode(mode.0*3);
+            let data = self. read_unaligned(read_size)?;
+            let r1 = data>>(mode.0)*2;
+            let r_23 = data<<(u64::BITS as u8 - mode.0*2)>>(u64::BITS as u8 - mode.0*2);
+            let r2 = r_23>>mode.0;
+            let r3 = r_23<<(u64::BITS as u8 - mode.0)>>(u64::BITS as u8 - mode.0);
+            Ok((r1,r2,r3))
+        }
+    }
     //pub fn read_array(&mut self,prec:UnalignedRWMode)->Result<
     /// Reads *mode.0* bits from self, keeping internal alignment
     pub fn read_unaligned(&mut self, mode: UnalignedRWMode) -> Result<u64> {
@@ -227,6 +266,27 @@ mod test_reader {
         for byte in 0..0x10 {
             let rbyte = reader.read_unaligned(UnalignedRWMode(4)).unwrap() as u8;
             assert!(rbyte == byte, "{rbyte} != {byte}");
+        }
+    }
+    #[test]
+    fn read2_half_aligned() {
+        let bytes: [u8; 8] = [0x01, 0x23, 0x45, 0x67, 0x89, 0xAB, 0xCD, 0xEF];
+        let mut reader = UnalignedReader::new(&bytes as &[u8]);
+        for byte in 0..(0x10/2) {
+            let (r1,r2) = reader.read2_unaligned(UnalignedRWMode(4)).unwrap();
+            assert_eq!(r1,byte*2);
+            assert_eq!(r2,byte*2+1);
+        }
+    }
+    #[test]
+    fn read3_half_aligned() {
+        let bytes: [u8; 8] = [0x01, 0x23, 0x45, 0x67, 0x89, 0xAB, 0xCD, 0xEF];
+        let mut reader = UnalignedReader::new(&bytes as &[u8]);
+        for byte in 0..(0x10/3) {
+            let (r1,r2,r3) = reader.read3_unaligned(UnalignedRWMode(4)).unwrap();
+            assert_eq!(r1,byte*3,"r1");
+            assert_eq!(r2,byte*3+1,"r2");
+            assert_eq!(r3,byte*3+2,"r3");
         }
     }
     #[test]

@@ -142,9 +142,7 @@ fn read_normal<R: Read>(
     let sx = reader.read_bit()?;
     let sy = reader.read_bit()?;
     let sz = reader.read_bit()?;
-    let asine = reader.read_unaligned(main_prec)?;
-    let z = reader.read_unaligned(main_prec)?;
-
+    let (asine,z) = reader.read2_unaligned(main_prec)?;
     Ok(normal_from_encoding(asine, z, sx, sy, sz, precision))
 }
 pub(crate) fn save_normal_array<W: Write>(

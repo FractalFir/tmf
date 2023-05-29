@@ -163,6 +163,7 @@ pub fn read_tmf_vertices<R: Read>(reader: &mut R) -> Result<Box<[Vector3]>, TMFI
     let mut vertices = Vec::with_capacity(vertex_count);
     let mut reader = UnalignedReader::new(reader);
     for _ in 0..vertex_count {
+        //let (x,y) = reader.read_pair_unaligned(prec_x,prec_y)?;
         let x = reader.read_unaligned(prec_x)?;
         let y = reader.read_unaligned(prec_y)?;
         let z = reader.read_unaligned(prec_z)?;
@@ -218,8 +219,13 @@ pub(crate) fn read_triangles<R: Read>(
     let mut res = Vec::with_capacity(length as usize);
     let precision = UnalignedRWMode::precision_bits(precision);
     let mut reader = UnalignedReader::new(reader);
-    for _ in 0..length {
-        res.push((reader.read_unaligned(precision)? + min) as IndexType);
+    for _ in 0..(length/2) {
+        let (i1,i2) = reader.read2_unaligned(precision)?;
+        res.push((i1 + min) as IndexType);
+        res.push((i2 + min) as IndexType);
+    }
+    for i in 0..length%2{
+         res.push((reader.read_unaligned(precision)? + min) as IndexType);
     }
     Ok(res.into())
 }
