@@ -2,10 +2,10 @@ use crate::tmf_exporter::EncodeInfo;
 use crate::tmf_importer::TMFImportContext;
 use crate::unaligned_rw::{UnalignedRWMode, UnalignedReader};
 use crate::{
-    CustomDataSegment,  TMFExportError, TMFImportError, TMFMesh, TMFPrecisionInfo,
-    Vector2, Vector3, IndexType, FloatType, MAX_SEG_SIZE,VertexPrecisionMode
+    CustomDataSegment, FloatType, IndexType, TMFExportError, TMFImportError, TMFMesh,
+    TMFPrecisionInfo, Tangent, Vector2, Vector3, VertexPrecisionMode, MAX_SEG_SIZE,
 };
-lazy_static::lazy_static!{
+lazy_static::lazy_static! {
     pub(crate) static ref RUNTIME:tokio::runtime::Runtime = tokio::runtime::Runtime::new().unwrap();
 }
 use smallvec::{smallvec, SmallVec};
@@ -91,6 +91,7 @@ pub(crate) enum DecodedSegment {
     AppendVertex(Box<[Vector3]>),
     AppendNormal(Box<[Vector3]>),
     AppendUV(Box<[Vector2]>),
+    AppendTangent(Box<[Tangent]>),
     AppendTriangleVertex(Box<[IndexType]>),
     AppendTriangleNormal(Box<[IndexType]>),
     AppendTriangleUV(Box<[IndexType]>),
@@ -294,71 +295,74 @@ fn opt_tris(triangles: &[IndexType]) -> SmallVec<[&[IndexType]; 4]> {
         smallvec![triangles]
     }
 }
-fn range_to_vertex_bit_count(span:std::ops::Range<Vector3>,shortest_edge:FloatType)->u8{
-    let dx = span.end.0 - span.start.0; 
-    let dy = span.end.1 - span.start.1; 
+fn range_to_vertex_bit_count(span: std::ops::Range<Vector3>, shortest_edge: FloatType) -> u8 {
+    let dx = span.end.0 - span.start.0;
+    let dy = span.end.1 - span.start.1;
     let dz = span.end.2 - span.start.2;
-    let inc_x = (shortest_edge / dx);
-    let inc_y = (shortest_edge / dy);
-    let inc_z = (shortest_edge / dy);
+    let inc_x = shortest_edge / dx;
+    let inc_y = shortest_edge / dy;
+    let inc_z = shortest_edge / dy;
     let prec_x = (1.0 / inc_x).log2().ceil() as u8;
     let prec_y = (1.0 / inc_y).log2().ceil() as u8;
     let prec_z = (1.0 / inc_z).log2().ceil() as u8;
     prec_x + prec_y + prec_z
 }
-fn expand_vertex_span(span:std::ops::Range<Vector3>,point:Vector3)->std::ops::Range<Vector3>{
+fn expand_vertex_span(span: std::ops::Range<Vector3>, point: Vector3) -> std::ops::Range<Vector3> {
     let min = span.start;
     let max = span.end;
-    let min = (min.0.min(point.0),min.1.min(point.1),min.2.min(point.2));
-    let max = (max.0.max(point.0),max.1.max(point.1),max.2.max(point.2));
+    let min = (min.0.min(point.0), min.1.min(point.1), min.2.min(point.2));
+    let max = (max.0.max(point.0), max.1.max(point.1), max.2.max(point.2));
     min..max
 }
-fn find_best_vertex_spilt(vertices:&[Vector3],shortest_edge:FloatType)->Option<usize>{
-    let mut total_span = (0.0,0.0,0.0)..(0.0,0.0,0.0);
-    vertices.iter().for_each(|point|{
-        total_span = expand_vertex_span(total_span.clone(),*point);
+fn find_best_vertex_spilt(vertices: &[Vector3], shortest_edge: FloatType) -> Option<usize> {
+    let mut total_span = (0.0, 0.0, 0.0)..(0.0, 0.0, 0.0);
+    vertices.iter().for_each(|point| {
+        total_span = expand_vertex_span(total_span.clone(), *point);
     });
     let total_span = total_span;
-    let total_per_vertex_bit_count = range_to_vertex_bit_count(total_span.clone(),shortest_edge);
+    let total_per_vertex_bit_count = range_to_vertex_bit_count(total_span.clone(), shortest_edge);
     let mut best_split_score = isize::MIN;
     let mut best_split_index = usize::MIN;
-    let mut min_span = (0.0,0.0,0.0)..(0.0,0.0,0.0);
+    let mut min_span = (0.0, 0.0, 0.0)..(0.0, 0.0, 0.0);
     let mut per_vertex_bit_count = 0;
     for (index, vertex) in vertices.iter().enumerate() {
-        if !min_span.contains(vertex) || true{
-            min_span = expand_vertex_span(min_span,*vertex);
-            per_vertex_bit_count = range_to_vertex_bit_count(min_span.clone(),shortest_edge);
+        if !min_span.contains(vertex) || true {
+            min_span = expand_vertex_span(min_span, *vertex);
+            per_vertex_bit_count = range_to_vertex_bit_count(min_span.clone(), shortest_edge);
             //println!("vertex:{vertex:?}\t\tmin_span:{min_span:?}");
-        }
-        else{
+        } else {
             let gain_per_vert = total_per_vertex_bit_count - per_vertex_bit_count;
             let gain = index * (gain_per_vert as usize);
-            let loss = TMF_SEG_SIZE + std::mem::size_of::<u64>() + 6 * std::mem::size_of::<f64>() + 3*std::mem::size_of::<u8>();
+            let loss = TMF_SEG_SIZE
+                + std::mem::size_of::<u64>()
+                + 6 * std::mem::size_of::<f64>()
+                + 3 * std::mem::size_of::<u8>();
             let score = gain as isize - (loss as isize);
             //println!("{score}");
-            if score > best_split_score{
+            if score > best_split_score {
                 best_split_index = index;
                 best_split_score = score;
             }
         }
     }
     assert!(best_split_index < vertices.len() - 1);
-    if best_split_score > 0{
+    if best_split_score > 0 {
         Some(best_split_index)
-    }
-    else{
+    } else {
         None
     }
 }
-fn opt_vertices(vertices:&[Vector3])->SmallVec<[&[Vector3]; 4]>{
-    if vertices.len() < 16 {return smallvec![vertices]}
+fn opt_vertices(vertices: &[Vector3]) -> SmallVec<[&[Vector3]; 4]> {
+    if vertices.len() < 16 {
+        return smallvec![vertices];
+    }
     let len = vertices.len();
-    let split_pos = find_best_vertex_spilt(vertices,0.01);
-    if let Some(split_pos) = split_pos{
-        let (i0,i1) = vertices.split_at(split_pos);
+    let split_pos = find_best_vertex_spilt(vertices, 0.01);
+    if let Some(split_pos) = split_pos {
+        let (i0, i1) = vertices.split_at(split_pos);
         let mut res = SmallVec::new();
         let r_0 = opt_vertices(i0);
-        eprintln!("vertices.len {}",vertices.len());
+        eprintln!("vertices.len {}", vertices.len());
         for seg in r_0 {
             res.push(seg);
         }
@@ -367,9 +371,9 @@ fn opt_vertices(vertices:&[Vector3])->SmallVec<[&[Vector3]; 4]>{
             res.push(seg);
         }
         res
+    } else {
+        smallvec![vertices]
     }
-    else{
-    smallvec![vertices]}
 }
 impl DecodedSegment {
     pub(crate) async fn optimize(self) -> SmallVec<[Self; 1]> {
@@ -398,7 +402,7 @@ impl DecodedSegment {
                 }
                 res
             }
-            Self::AppendVertex(vertices)=>{
+            Self::AppendVertex(vertices) => {
                 let optimised = opt_vertices(&vertices);
                 let mut res = SmallVec::new();
                 for seg in optimised {
@@ -424,6 +428,10 @@ impl DecodedSegment {
                     ei.shortest_edge(),
                 )?;
                 SectionType::VertexSegment
+            }
+            Self::AppendTangent(tangents) => {
+                crate::tangents::save_tangents(&tangents, prec.tangent_prec, &mut data)?;
+                SectionType::TangentSegment
             }
             Self::AppendNormal(normals) => {
                 crate::normals::save_normal_array(&normals, &mut data, prec.normal_precision)?;
@@ -493,6 +501,9 @@ impl DecodedSegment {
             }
             DecodedSegment::AppendCustom(custom_data_seg) => {
                 mesh.add_custom_data_seg(custom_data_seg.clone())
+            }
+            DecodedSegment::AppendTangent(_) => {
+                todo!()
             }
             DecodedSegment::Nothing => (),
         }

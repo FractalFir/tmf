@@ -90,7 +90,7 @@ impl Default for TMFPrecisionInfo {
             vertex_precision: VertexPrecisionMode::default(),
             normal_precision: NormalPrecisionMode::default(),
             uv_prec: crate::UvPrecisionMode::default(),
-            tangent_prec:TangentPrecisionMode::default(),
+            tangent_prec: TangentPrecisionMode::default(),
         }
     }
 }
@@ -103,6 +103,7 @@ pub struct TMFMesh {
     vertex_triangles: Option<Vec<IndexType>>,
     uvs: Option<Vec<Vector2>>,
     uv_triangles: Option<Vec<IndexType>>,
+    tangents: Option<Vec<Tangent>>,
     materials: Option<MaterialInfo>,
     custom_data: Vec<CustomDataSegment>,
 }
@@ -138,9 +139,7 @@ impl TMFMesh {
     /// do_something(&old_vertices);
     ///```
     pub fn set_vertices<T: Into<Vec<Vector3>>>(&mut self, vertices: T) -> Option<Vec<Vector3>> {
-        let mut vertices = Some(vertices.into());
-        std::mem::swap(&mut vertices, &mut self.vertices);
-        vertices
+        self.vertices.replace(vertices.into())
     }
     /// Sets mesh normal array and returns old normal array if present. New mesh data is **not** checked during this function call, so to ensure mesh is valid call `verify` before saving.
     ///```
@@ -151,7 +150,7 @@ impl TMFMesh {
     /// mesh.set_normals(normals);
     ///```
     ///```
-    /// # fn do_something(_:&[(FloatType,FloatType,FloatType)]){}
+    /// # fn do_something(_:&[tmf::Vector3]){}
     /// # use tmf::TMFMesh;
     /// # use tmf::FloatType;
     /// # let new_normals = Vec::new();
@@ -163,9 +162,30 @@ impl TMFMesh {
     /// do_something(&old_normals);
     ///```
     pub fn set_normals<T: Into<Vec<Vector3>>>(&mut self, normals: T) -> Option<Vec<Vector3>> {
-        let mut normals = Some(normals.into());
-        std::mem::swap(&mut normals, &mut self.normals);
-        normals
+        self.normals.replace(normals.into())
+    }
+    /// Sets mesh tangent array and returns old tangent array if present. New mesh data is **not** checked during this function call, so to ensure mesh is valid call `verify` before saving.
+    ///```
+    /// # use tmf::TMFMesh;
+    /// // Set the tangents of the mesh
+    /// # let tangents = Vec::new();
+    /// # let mut mesh = TMFMesh::empty();
+    /// mesh.set_tangents(tangents);
+    ///```
+    ///```
+    /// # fn do_something(_:&[tmf::Tangent]){}
+    /// # use tmf::TMFMesh;
+    /// # use tmf::FloatType;
+    /// # let new_tangents = Vec::new();
+    /// # let mut mesh = TMFMesh::empty();
+    /// # mesh.set_tangents(new_tangents.clone());
+    /// // Change the tangents  of this mesh for some other tangents...
+    /// let old_tangents = mesh.set_tangents(new_tangents).expect("Mesh had no tangents!");
+    /// // ... and the do something with old tangents
+    /// do_something(&old_tangents);
+    ///```
+    pub fn set_tangents<T: Into<Vec<Tangent>>>(&mut self, tangents: T) -> Option<Vec<Tangent>> {
+        self.tangents.replace(tangents.into())
     }
     /// Sets mesh uv array and returns old uv array if present. New mesh daata is **not** checked during this function call, so to ensure mesh is valid call [`Self::verify`] before saving.
     ///```
@@ -190,9 +210,7 @@ impl TMFMesh {
     /// do_something(&old_uvs);
     ///```
     pub fn set_uvs<T: Into<Vec<Vector2>>>(&mut self, uvs: T) -> Option<Vec<Vector2>> {
-        let mut uvs = Some(uvs.into());
-        std::mem::swap(&mut uvs, &mut self.uvs);
-        uvs
+        self.uvs.replace(uvs.into())
     }
     /// Sets vertex index array to *triangles* and returns old triangles if present.
     ///```
@@ -205,9 +223,7 @@ impl TMFMesh {
         &mut self,
         triangles: T,
     ) -> Option<Vec<IndexType>> {
-        let mut triangles = Some(triangles.into());
-        std::mem::swap(&mut triangles, &mut self.vertex_triangles);
-        triangles
+        self.vertex_triangles.replace(triangles.into())
     }
     /// Sets normal index array to *triangles* and returns old triangles if present.
     ///```
@@ -220,9 +236,7 @@ impl TMFMesh {
         &mut self,
         triangles: T,
     ) -> Option<Vec<IndexType>> {
-        let mut triangles = Some(triangles.into());
-        std::mem::swap(&mut triangles, &mut self.normal_triangles);
-        triangles
+        self.normal_triangles.replace(triangles.into())
     }
     /// Sets uv index array to *triangles* and returns old triangles if present.
     ///```
@@ -235,9 +249,7 @@ impl TMFMesh {
         &mut self,
         triangles: T,
     ) -> Option<Vec<IndexType>> {
-        let mut triangles = Some(triangles.into());
-        std::mem::swap(&mut triangles, &mut self.uv_triangles);
-        triangles
+        self.uv_triangles.replace(triangles.into())
     }
     /// Gets the vertex array of this [`TMFMesh`].
     ///```
@@ -260,6 +272,18 @@ impl TMFMesh {
     pub fn get_normals(&self) -> Option<&[Vector3]> {
         match &self.normals {
             Some(normals) => Some(normals.as_ref()),
+            None => None,
+        }
+    }
+    /// Gets the tangent array of this [`TMFMesh`].
+    ///```
+    /// # use tmf::TMFMesh;
+    /// # let mesh = TMFMesh::empty();
+    /// let normals = mesh.get_tangents();
+    ///```
+    pub fn get_tangents(&self) -> Option<&[Tangent]> {
+        match &self.tangents {
+            Some(tangents) => Some(tangents.as_ref()),
             None => None,
         }
     }
@@ -560,6 +584,7 @@ impl TMFMesh {
             uvs: None,
             vertex_triangles: None,
             vertices: None,
+            tangents: None,
             materials: None,
             custom_data: Vec::new(),
         }
@@ -756,14 +781,17 @@ mod testing {
     #[cfg(feature = "obj_import")]
     fn save_nefertiti_tmf() {
         init_test_env();
-        let mut file = match std::fs::File::open("testing/Nefertiti.obj"){
-            Ok(file)=>file,
-            Err(_)=>return,
+        let mut file = match std::fs::File::open("testing/Nefertiti.obj") {
+            Ok(file) => file,
+            Err(_) => return,
         };
         let (tmf_mesh, name) = TMFMesh::read_from_obj_one(&mut file).unwrap();
         tmf_mesh.verify().unwrap();
         let mut out = std::fs::File::create("target/test_res/Nefertiti.tmf").unwrap();
-        assert!(name == "Nefertiti", "Name should be Nefertiti but is {name}");
+        assert!(
+            name == "Nefertiti",
+            "Name should be Nefertiti but is {name}"
+        );
         let prec = TMFPrecisionInfo::default();
         tmf_mesh.write_tmf_one(&mut out, &prec, name).unwrap();
     }

@@ -1,32 +1,36 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use tmf::unaligned_rw::{UnalignedRWMode,UnalignedReader,UnalignedWriter};
+use tmf::unaligned_rw::{UnalignedRWMode, UnalignedReader, UnalignedWriter};
 fn unaligned_read(c: &mut Criterion) {
-    c.bench_function("unaligned_read", |b| b.iter(||{
-        let mut reader = UnalignedReader::new(&CHANIGING_ALGHMENT_EXPECTED as &[u8]);
-        for byte in 1..64 {
-            assert!(
-                reader
-                    .read_unaligned(UnalignedRWMode::precision_bits(byte))
-                    .unwrap()
-                    == byte as u64
-            );
-        }
-    }));
+    c.bench_function("unaligned_read", |b| {
+        b.iter(|| {
+            let mut reader = UnalignedReader::new(&CHANIGING_ALGHMENT_EXPECTED as &[u8]);
+            for byte in 1..64 {
+                assert!(
+                    reader
+                        .read_unaligned(UnalignedRWMode::precision_bits(byte))
+                        .unwrap()
+                        == byte as u64
+                );
+            }
+        })
+    });
 }
 
 fn unaligned_write(c: &mut Criterion) {
-    c.bench_function("unaligned_write", |b| b.iter(||{
-        let mut result = Vec::with_capacity(64);
-        {
-            let mut writter = UnalignedWriter::new(&mut result);
-            for byte in 1..64 {
-                writter
-                    .write_unaligned(UnalignedRWMode::precision_bits(byte), byte as u64)
-                    .unwrap();
+    c.bench_function("unaligned_write", |b| {
+        b.iter(|| {
+            let mut result = Vec::with_capacity(64);
+            {
+                let mut writter = UnalignedWriter::new(&mut result);
+                for byte in 1..64 {
+                    writter
+                        .write_unaligned(UnalignedRWMode::precision_bits(byte), byte as u64)
+                        .unwrap();
+                }
             }
-        }
-        assert!(result == CHANIGING_ALGHMENT_EXPECTED);
-    }));
+            assert!(result == CHANIGING_ALGHMENT_EXPECTED);
+        })
+    });
 }
 criterion_group!(benches, unaligned_read, unaligned_write);
 criterion_main!(benches);

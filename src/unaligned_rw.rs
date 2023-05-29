@@ -34,18 +34,18 @@ impl<R: Read> UnalignedReader<R> {
         Ok(())
     }
     /// Reads exactly one bit from UBA.
-    pub fn read_bit(&mut self)->Result<bool>{
+    pub fn read_bit(&mut self) -> Result<bool> {
         // If all bits in current_byte read, read new byte with new bits, and set amount of bits bits_read in current bit back to 0.
         if self.bits_read >= UNALIGNED_STORAGE_BITS {
             self.read_to_internal_storage()?;
-            if (UNALIGNED_STORAGE_BITS - self.bits_read) < 1{
+            if (UNALIGNED_STORAGE_BITS - self.bits_read) < 1 {
                 use std::io::{Error, ErrorKind};
                 return Err(Error::from(ErrorKind::UnexpectedEof));
-            } 
+            }
         }
-        const BIT_MASK:UnalignedStorage = 1<<(UNALIGNED_STORAGE_BITS - 1);
-        let res = self.current_byte&BIT_MASK;
-        self.current_byte<<=1;
+        const BIT_MASK: UnalignedStorage = 1 << (UNALIGNED_STORAGE_BITS - 1);
+        let res = self.current_byte & BIT_MASK;
+        self.current_byte <<= 1;
         self.bits_read += 1;
         Ok(res != 0)
     }
@@ -127,9 +127,9 @@ impl<W: Write> UnalignedWriter<W> {
         }
     }
     /// Writes exactly one bit from UBA.
-    pub fn write_bit(&mut self,bit:bool)->Result<()>{
-        const BIT_PREC:UnalignedRWMode = UnalignedRWMode::precision_bits(1);
-        self.write_unaligned(BIT_PREC,bit as u64)
+    pub fn write_bit(&mut self, bit: bool) -> Result<()> {
+        const BIT_PREC: UnalignedRWMode = UnalignedRWMode::precision_bits(1);
+        self.write_unaligned(BIT_PREC, bit as u64)
     }
     #[inline(always)]
     pub fn write_unaligned(&mut self, mode: UnalignedRWMode, mut data: u64) -> Result<()> {
@@ -231,13 +231,16 @@ mod test_reader {
     }
     #[test]
     fn read_bit() {
-        let bytes: [u8; 2] = [0b1110_0010,0b1010_0101];
-        let expected:[bool;16] = [true,true,true,false,false,false,true,false,true,false,true,false,false,true,false,true];
+        let bytes: [u8; 2] = [0b1110_0010, 0b1010_0101];
+        let expected: [bool; 16] = [
+            true, true, true, false, false, false, true, false, true, false, true, false, false,
+            true, false, true,
+        ];
         let mut reader = UnalignedReader::new(&bytes as &[u8]);
-        for val in expected{
+        for val in expected {
             let rval = reader.read_bit().unwrap();
             println!("{val} {rval}");
-            assert_eq!(val,rval);
+            assert_eq!(val, rval);
         }
     }
     #[test]

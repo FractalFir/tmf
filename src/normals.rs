@@ -35,8 +35,12 @@ impl NormalPrecisionMode {
         let prec = (FRAC_PI_2 / rad).log2().ceil() as u8;
         Self(prec)
     }
-    pub(crate) fn bits(&self)->u8{self.0}
-    pub(crate) fn from_bits(bits:u8)->Self{Self(bits)}
+    pub(crate) fn bits(&self) -> u8 {
+        self.0
+    }
+    pub(crate) fn from_bits(bits: u8) -> Self {
+        Self(bits)
+    }
 }
 impl Default for NormalPrecisionMode {
     /// Default precision of saved normals is 1.0 degrees
@@ -95,10 +99,10 @@ pub(crate) fn normal_from_encoding(
     let z = (z as FloatType) / divisor;
     #[cfg(feature = "fast_trig")]
     let x = fsin(asine as fprec) as FloatType;
-    #[cfg(not(feature = "fast_trig"))]
-    let (x, y) = asine.sin_cos();
     #[cfg(feature = "fast_trig")]
     let y = (1.0 - x * x).sqrt();
+    #[cfg(not(feature = "fast_trig"))]
+    let (x, y) = asine.sin_cos();
     // Calculate XY magnitude
     let xy_mag = (1.0 - z * z).sqrt();
     // Adjust x an y
