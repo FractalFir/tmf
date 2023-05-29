@@ -89,7 +89,7 @@ pub(crate) fn save_tangents<W: std::io::Write>(
     writer.flush()?;
     Ok(())
 }
-fn read_tangents<R: std::io::Read>(src: &mut R) -> std::io::Result<Box<[Tangent]>> {
+pub(crate) fn read_tangents<R: std::io::Read>(src: &mut R) -> std::io::Result<Box<[Tangent]>> {
     let count = {
         let mut tmp = [0; std::mem::size_of::<u64>()];
         src.read_exact(&mut tmp)?;
@@ -187,6 +187,7 @@ fn rw_susan_tmf() {
     let (r_mesh, name) = TMFMesh::read_tmf_one(&mut (&out as &[u8])).unwrap();
     assert!(name == "Suzanne", "Name should be Suzanne but is {name}");
     r_mesh.verify().unwrap();
+    r_mesh.get_tangents().unwrap();
 }
 #[cfg(test)]
 fn init_test_env() {

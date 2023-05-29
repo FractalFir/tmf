@@ -671,6 +671,14 @@ impl TMFMesh {
             }
         };
     }
+    pub fn append_tangents(&mut self, tangents: &[Tangent]) {
+        match &mut self.tangents {
+            Some(ref mut self_t) => self_t.extend(tangents),
+            None => {
+                self.set_tangents(tangents);
+            }
+        };
+    }
     pub fn append_uvs(&mut self, uvs: &[Vector2]) {
         match &mut self.uvs {
             Some(ref mut self_uv) => self_uv.extend(uvs),

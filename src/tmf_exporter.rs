@@ -160,8 +160,13 @@ impl<'a> std::iter::Iterator for MeshSegIter<'a> {
                 Some(tris) => Some(DecodedSegment::AppendTriangleUV(tris.into())),
                 None => self.next(),
             },
-            7..=usize::MAX => {
-                let index = self.item - 7;
+            7 => match self.mesh.get_tangents() {
+                Some(tans) => {Some(DecodedSegment::AppendTangent(tans.into()))},
+                None => self.next(),
+            },
+            8=>self.next(),
+            9..=usize::MAX => {
+                let index = self.item - 9;
                 let seg = self.mesh.custom_data.get(index)?;
                 Some(DecodedSegment::AppendCustom(seg.clone()))
             }

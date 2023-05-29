@@ -62,6 +62,7 @@ impl SectionType {
             4 => Self::NormalTriangleSegment,
             5 => Self::UvSegment,
             6 => Self::UvTriangleSegment,
+            9 => Self::TangentSegment,
             15 => Self::CustomIndexSegment,
             16 => Self::CustomFloatSegment,
             _ => Self::Invalid,
@@ -103,6 +104,9 @@ pub(crate) struct EncodedSegment {
     data: Box<[u8]>,
 }
 impl EncodedSegment {
+    pub(crate) fn seg_type(&self)->SectionType{
+        self.seg_type
+    }
     pub(crate) fn write<W: std::io::Write>(&self, w: &mut W) -> std::io::Result<()> {
         let st: u8 = self.seg_type as u16 as u8;
         w.write_all(&[st])?;
@@ -362,7 +366,6 @@ fn opt_vertices(vertices: &[Vector3]) -> SmallVec<[&[Vector3]; 4]> {
         let (i0, i1) = vertices.split_at(split_pos);
         let mut res = SmallVec::new();
         let r_0 = opt_vertices(i0);
-        eprintln!("vertices.len {}", vertices.len());
         for seg in r_0 {
             res.push(seg);
         }
@@ -474,6 +477,10 @@ impl DecodedSegment {
             SectionType::VertexSegment => decode_vertex_seg(seg).await,
             SectionType::NormalSegment => decode_normal_seg(seg).await,
             SectionType::UvSegment => decode_uv_seg(seg).await,
+            SectionType::TangentSegment=>async{
+                let tans = crate::tangents::read_tangents(&mut &seg.data[..])?;
+               Ok(DecodedSegment::AppendTangent(tans.into()))
+            }.await,
             SectionType::VertexTriangleSegment
             | SectionType::NormalTriangleSegment
             | SectionType::UvTriangleSegment
@@ -502,8 +509,8 @@ impl DecodedSegment {
             DecodedSegment::AppendCustom(custom_data_seg) => {
                 mesh.add_custom_data_seg(custom_data_seg.clone())
             }
-            DecodedSegment::AppendTangent(_) => {
-                todo!()
+            DecodedSegment::AppendTangent(tans) => {
+                mesh.append_tangents(tans);
             }
             DecodedSegment::Nothing => (),
         }

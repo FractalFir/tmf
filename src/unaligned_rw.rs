@@ -239,7 +239,7 @@ mod test_reader {
         let mut reader = UnalignedReader::new(&bytes as &[u8]);
         for val in expected {
             let rval = reader.read_bit().unwrap();
-            println!("{val} {rval}");
+            //println!("{val} {rval}");
             assert_eq!(val, rval);
         }
     }

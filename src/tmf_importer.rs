@@ -164,6 +164,7 @@ impl TMFImportContext {
         let mut decoded_segs = Vec::with_capacity(segment_count as usize);
         for _ in 0..segment_count {
             let encoded = EncodedSegment::read(self, &mut src)?;
+            //println!("encoded_type:{:?}",encoded.seg_type());
             let ctx = ctx.clone();
             let decoded = async move { DecodedSegment::decode(encoded, &ctx).await };
             //let decoded = tokio::task::spawn(decoded);
