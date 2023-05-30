@@ -45,4 +45,5 @@ harness = false
 name = "read_write_tmf"
 harness = false
 [profile.bench]
+#TODO: REMEMBER to set debug to false before release!
 debug = true

@@ -6,7 +6,7 @@ type UnalignedStorage = usize;
 const UNALIGNED_STORAGE_BITS: u8 = (std::mem::size_of::<UnalignedStorage>() * 8) as u8;
 pub struct UnalignedReader<R: Read> {
     /// Buff Reader used to speedup reads in some cases.
-    reader: BufReader<R>,
+    reader: R,
     /// current byte read from file.
     current_byte: UnalignedStorage,
     /// Amount of bits that have been already read.
@@ -124,7 +124,7 @@ impl<R: Read> UnalignedReader<R> {
     }
     /// Creates new Unaligned Reader form *r*
     pub fn new(r: R) -> Self {
-        let reader = BufReader::new(r);
+        let reader = r;
         let current_byte = 0; //read this
         let bits_read = UNALIGNED_STORAGE_BITS;
         Self {
