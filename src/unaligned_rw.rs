@@ -50,6 +50,7 @@ impl<R: Read> UnalignedReader<R> {
         Ok(res != 0)
     }
     pub fn read2_unaligned(&mut self, mode: UnalignedRWMode) -> Result<(u64,u64)>{
+        assert_ne!(mode.0,0);
         if mode.0 > (u64::BITS/2) as u8{
            Ok((self. read_unaligned(mode)?,self. read_unaligned(mode)?))
         }
@@ -88,7 +89,6 @@ impl<R: Read> UnalignedReader<R> {
             Ok((r1,r2,r3))
         }
     }
-    //pub fn read_array(&mut self,prec:UnalignedRWMode)->Result<
     /// Reads *mode.0* bits from self, keeping internal alignment
     pub fn read_unaligned(&mut self, mode: UnalignedRWMode) -> Result<u64> {
         if mode.0 == 0 || mode.0 >= u64::BITS as u8 {
@@ -98,7 +98,7 @@ impl<R: Read> UnalignedReader<R> {
         let mut res: u64 = 0;
         // Total bits remaining to read
         let mut total_read = mode.0;
-        while total_read > 0 {
+        while total_read != 0{
             // If all bits in current_byte read, read new byte with new bits, and set amount of bits bits_read in current bit back to 0.
             if self.bits_read >= UNALIGNED_STORAGE_BITS {
                 self.read_to_internal_storage()?;
@@ -119,7 +119,7 @@ impl<R: Read> UnalignedReader<R> {
             }
             // Decrement total amount of bits left to read
             total_read -= read_ammount;
-        }
+        };
         Ok(res)
     }
     /// Creates new Unaligned Reader form *r*
@@ -219,6 +219,9 @@ pub struct UnalignedRWMode(u8);
 impl UnalignedRWMode {
     pub const fn precision_bits(bits: u8) -> Self {
         Self(bits)
+    }
+    pub const fn bits(&self)->u8{
+        self.0
     }
 }
 #[cfg(test)]

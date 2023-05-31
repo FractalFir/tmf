@@ -186,7 +186,6 @@ pub fn save_triangles<W: Write>(
     writer: &mut W,
 ) -> std::io::Result<()> {
     let min = *triangles.iter().min().unwrap_or(&0);
-    let triangles: Vec<IndexType> = triangles.iter().map(|i| i - min).collect();
     let precision = calc_prec(max_index);
     writer.write_all(&precision.to_le_bytes())?;
     writer.write_all(&(triangles.len() as u64).to_le_bytes())?;
@@ -194,7 +193,7 @@ pub fn save_triangles<W: Write>(
     let precision = UnalignedRWMode::precision_bits(precision);
     let mut writer = UnalignedWriter::new(writer);
     for index in triangles {
-        writer.write_unaligned(precision, index as u64)?;
+        writer.write_unaligned(precision, (index - min) as u64)?;
     }
     writer.flush()
 }

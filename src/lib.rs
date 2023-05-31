@@ -800,8 +800,10 @@ mod testing {
             name == "Nefertiti",
             "Name should be Nefertiti but is {name}"
         );
+        println!("uv_tris:{:?}",&tmf_mesh.get_uv_triangles().unwrap().iter().max().unwrap());
         let prec = TMFPrecisionInfo::default();
         tmf_mesh.write_tmf_one(&mut out, &prec, name).unwrap();
+        panic!();
     }
     #[test]
     #[cfg(feature = "obj_import")]

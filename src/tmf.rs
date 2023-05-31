@@ -75,6 +75,8 @@ pub(crate) enum CompressionType {
     None = 0,
     Ommited = 1,
     UnalignedLZZ = 2,
+    /// Represents data that is laid out sequentially and changes by exactly one with each element.
+    Sequence = 255,
 }
 impl CompressionType {
     pub fn from_u8(input: u8) -> Result<Self, TMFImportError> {
@@ -82,6 +84,7 @@ impl CompressionType {
             0 => Ok(Self::None),
             1 => Ok(Self::Ommited),
             2 => Ok(Self::UnalignedLZZ),
+            255=>Ok(Self::Sequence),
             _ => Err(TMFImportError::CompressionTypeUnknown(input)),
         }
     }
@@ -185,7 +188,7 @@ fn read_default_triangles<R: std::io::Read>(
     data: &mut Vec<IndexType>,
     ctx: &crate::tmf_importer::TMFImportContext,
 ) -> Result<(), TMFImportError> {
-    let precision = {
+    let precision_bits = {
         let mut tmp = [0];
         src.read_exact(&mut tmp)?;
         tmp[0]
@@ -199,13 +202,31 @@ fn read_default_triangles<R: std::io::Read>(
     if length > MAX_SEG_SIZE as u64 {
         return Err(TMFImportError::SegmentTooLong);
     }
-    *data = Vec::with_capacity(length as usize);
-    let precision = UnalignedRWMode::precision_bits(precision);
+    data.reserve(length as usize);
+    let buf = data.spare_capacity_mut();
+    let precision = UnalignedRWMode::precision_bits(precision_bits);
     let mut reader = UnalignedReader::new(src);
-    for _ in 0..length {
-        data.push((reader.read_unaligned(precision)? + min) as IndexType);
+    if precision_bits == 0{
+        use std::mem::MaybeUninit;
+        buf.fill(MaybeUninit::new(0));
     }
+    else {
+        for index in 0..(length as usize)/2 {
+        let(i1,i2) = reader.read2_unaligned(precision)?;
+        buf[index*2].write((i1 + min) as IndexType);
+        buf[index*2 + 1].write((i2 + min) as IndexType);
+    }
+    if length%2 != 0{
+        let i = reader.read_unaligned(precision)?;
+        buf[(length - 1) as usize].write((i + min) as IndexType);
+    } 
+    }
+    unsafe { data.set_len(length as usize) }
     Ok(())
+}
+fn read_triangle_sequence<R:std::io::Read>(mut src: R,
+    data: &mut Vec<IndexType>)-> Result<(), TMFImportError>{
+    todo!();
 }
 async fn decode_triangle_seg(
     seg: EncodedSegment,
@@ -216,6 +237,7 @@ async fn decode_triangle_seg(
         let mut indices = Vec::new();
         match seg.compresion_type {
             CompressionType::None => read_default_triangles(data, &mut indices, ctx)?,
+            CompressionType::Sequence => read_triangle_sequence(data, &mut indices)?,
             CompressionType::Ommited => panic!("New decoder does not support ommited segment!"),
             CompressionType::UnalignedLZZ => panic!("Unaligned lzz not supported yet!"),
         };
@@ -245,6 +267,7 @@ fn calc_spilt_score(len: usize, delta_span: (IndexType, IndexType)) -> isize {
         ((TMF_SEG_SIZE + std::mem::size_of::<u8>() + std::mem::size_of::<u32>()) * 8) as isize;
     gain - loss
 }
+//fn search_for_sequential_regions
 fn opt_tris(triangles: &[IndexType]) -> SmallVec<[&[IndexType]; 4]> {
     let mut best_score = isize::MIN;
     let mut best_index = usize::MIN;
@@ -445,17 +468,17 @@ impl DecodedSegment {
                 SectionType::UvSegment
             }
             Self::AppendTriangleVertex(triangles) => {
-                let max_index = triangles.iter().max().unwrap_or(&1);
+                let max_index = triangles.iter().max().unwrap_or(&0);
                 crate::vertices::save_triangles(&triangles, (*max_index) as usize, &mut data)?;
                 SectionType::VertexTriangleSegment
             }
             Self::AppendTriangleNormal(triangles) => {
-                let max_index = triangles.iter().max().unwrap_or(&1);
+                let max_index = triangles.iter().max().unwrap_or(&0);
                 crate::vertices::save_triangles(&triangles, (*max_index) as usize, &mut data)?;
                 SectionType::NormalTriangleSegment
             }
             Self::AppendTriangleUV(triangles) => {
-                let max_index = triangles.iter().max().unwrap_or(&1);
+                let max_index = triangles.iter().max().unwrap_or(&0);
                 crate::vertices::save_triangles(&triangles, (*max_index) as usize, &mut data)?;
                 SectionType::UvTriangleSegment
             }
