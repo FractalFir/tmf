@@ -47,6 +47,7 @@ impl CustomDataSegment {
 #[derive(Clone, Debug)]
 pub enum CustomData {
     CustomIndex(Box<[IndexType]>, usize),
+    CustomIntiger(Box<[IndexType]>, usize),
     CustomFloat(Box<[FloatType]>, FloatType),
 }
 impl CustomData {
@@ -54,6 +55,12 @@ impl CustomData {
     pub fn is_index(&self) -> Option<(&[IndexType], usize)> {
         match self {
             Self::CustomIndex(array, max_index) => Some((array, *max_index)),
+            _ => None,
+        }
+    }
+    pub fn is_intiger(&self) -> Option<(&[IndexType], usize)> {
+        match self {
+            Self::CustomIntiger(array, max_index) => Some((array, *max_index)),
             _ => None,
         }
     }
@@ -66,6 +73,9 @@ impl CustomData {
     fn write<W: std::io::Write>(&self, target: &mut W) -> std::io::Result<()> {
         match self {
             Self::CustomIndex(data, max_index) => {
+                crate::vertices::save_triangles(data, *max_index, target)
+            }
+            Self::CustomIntiger(data, max_index) => {
                 crate::vertices::save_triangles(data, *max_index, target)
             }
             CustomData::CustomFloat(data, prec) => {
@@ -99,6 +109,7 @@ impl CustomData {
     fn section_type(&self) -> SectionType {
         match self {
             Self::CustomIndex(_, _) => SectionType::CustomIndexSegment,
+            Self::CustomIntiger(_, _) => SectionType::CustomIntigerSegment,
             Self::CustomFloat(_, _) => SectionType::CustomFloatSegment,
         }
     }
@@ -111,6 +122,13 @@ impl CustomData {
             None => indices.iter().max().copied().unwrap_or(0) as usize,
         };
         Self::CustomIndex(indices.into(), max_index)
+    }
+    fn new_intiger(indices: &[IndexType], max_intiger: Option<usize>) -> Self {
+        let max_intiger = match max_intiger {
+            Some(max_intiger) => max_intiger,
+            None => indices.iter().max().copied().unwrap_or(0) as usize,
+        };
+        Self::CustomIntiger(indices.into(), max_intiger)
     }
 }
 impl From<&[IndexType]> for CustomData {
@@ -146,6 +164,14 @@ impl CustomDataSegment {
                 let result = crate::vertices::read_triangles(&mut src, ctx)?;
                 Ok(Self::new_raw(
                     CustomData::new_index(&result, None),
+                    name,
+                    name_len,
+                ))
+            }
+            SectionType::CustomIntigerSegment => {
+                let result = crate::vertices::read_triangles(&mut src, ctx)?;
+                Ok(Self::new_raw(
+                    CustomData::new_intiger(&result, None),
                     name,
                     name_len,
                 ))

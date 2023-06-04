@@ -211,7 +211,6 @@ fn init_test_env() {
 #[test]
 fn test() {
     use crate::TMFPrecisionInfo;
-
     init_test_env();
     let mut file = std::fs::File::open("testing/susan.obj").unwrap();
     let (tmf_mesh, name) = TMFMesh::read_from_obj_one(&mut file).unwrap();
@@ -260,7 +259,6 @@ fn test_triangles_opt() {
             seg
         })
         .collect();
-    println!("{tris:?}");
     let mut curr = 0;
     for seg in tris.iter() {
         let values = if let DecodedSegment::AppendTriangleVertex(vals) = seg {

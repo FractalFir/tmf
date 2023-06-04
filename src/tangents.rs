@@ -165,7 +165,7 @@ fn tangents_rw() {
 #[cfg(test)]
 #[test]
 #[cfg(feature = "obj_import")]
-fn rw_susan_tmf() {
+fn rw_susan_tmf_tans() {
     use crate::{TMFMesh, TMFPrecisionInfo};
     init_test_env();
     let mut file = std::fs::File::open("testing/susan.obj").unwrap();
@@ -188,6 +188,32 @@ fn rw_susan_tmf() {
     assert!(name == "Suzanne", "Name should be Suzanne but is {name}");
     r_mesh.verify().unwrap();
     r_mesh.get_tangents().unwrap();
+}
+#[cfg(test)]
+#[test]
+#[cfg(feature = "obj_import")]
+fn rw_susan_tmf_tan_tris() {
+    use crate::{TMFMesh, TMFPrecisionInfo};
+    init_test_env();
+    let mut file = std::fs::File::open("testing/susan.obj").unwrap();
+    let (mut tmf_mesh, name) = TMFMesh::read_from_obj_one(&mut file).unwrap();
+    tmf_mesh.verify().unwrap();
+    let len = tmf_mesh.get_vertex_triangles().unwrap().len();
+    tmf_mesh.set_tangent_triangles(
+        (0..(len as crate::IndexType))
+            .into_iter()
+            .collect::<Vec<_>>(),
+    );
+    assert!(name == "Suzanne", "Name should be Suzanne but is {name}");
+    let prec = TMFPrecisionInfo::default();
+    let mut out = Vec::new();
+    {
+        tmf_mesh.write_tmf_one(&mut out, &prec, name).unwrap();
+    }
+    let (r_mesh, name) = TMFMesh::read_tmf_one(&mut (&out as &[u8])).unwrap();
+    assert!(name == "Suzanne", "Name should be Suzanne but is {name}");
+    r_mesh.verify().unwrap();
+    r_mesh.get_tangent_triangles().unwrap();
 }
 #[cfg(test)]
 fn init_test_env() {

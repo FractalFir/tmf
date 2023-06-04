@@ -102,6 +102,7 @@ pub struct TMFMesh {
     uvs: Option<Vec<Vector2>>,
     uv_triangles: Option<Vec<IndexType>>,
     tangents: Option<Vec<Tangent>>,
+    tangent_triangles: Option<Vec<IndexType>>,
     materials: Option<MaterialInfo>,
     custom_data: Vec<CustomDataSegment>,
 }
@@ -246,6 +247,19 @@ impl TMFMesh {
     ) -> Option<Vec<IndexType>> {
         self.uv_triangles.replace(triangles.into())
     }
+    /// Sets tangent index array to *triangles* and returns old triangles if present.
+    ///```
+    /// # use tmf::TMFMesh;
+    /// # let mut mesh = TMFMesh::empty();
+    /// # let triangles = [0,1,2,3,2,1];
+    /// mesh.set_tangent_triangles(triangles);
+    ///```
+    pub fn set_tangent_triangles<T: Into<Vec<IndexType>>>(
+        &mut self,
+        triangles: T,
+    ) -> Option<Vec<IndexType>> {
+        self.tangent_triangles.replace(triangles.into())
+    }
     /// Gets the vertex array of this [`TMFMesh`].
     ///```
     /// # use tmf::TMFMesh;  
@@ -334,6 +348,19 @@ impl TMFMesh {
     pub fn get_uv_triangles(&self) -> Option<&[IndexType]> {
         match &self.uv_triangles {
             Some(uv_triangles) => Some(uv_triangles.as_ref()),
+            None => None,
+        }
+    }
+    /// Gets the tangent triangle index array of this [`TMFMesh`].
+    ///```
+    /// # use tmf::TMFMesh;
+    /// # let mesh = TMFMesh::empty();
+    /// let tangent_triangles = mesh.get_tangent_triangles();
+    ///```
+    #[must_use]
+    pub fn get_tangent_triangles(&self) -> Option<&[IndexType]> {
+        match &self.tangent_triangles {
+            Some(tangent_triangles) => Some(tangent_triangles.as_ref()),
             None => None,
         }
     }
@@ -610,6 +637,7 @@ impl TMFMesh {
             tangents: None,
             materials: None,
             custom_data: Vec::new(),
+            tangent_triangles: None,
         }
     }
     /// Reads all meshes from a .tmf file.
@@ -749,6 +777,15 @@ impl TMFMesh {
             Some(ref mut self_uvt) => self_uvt.extend(triangles),
             None => {
                 self.set_uv_triangles(triangles);
+            }
+        };
+    }
+    /// Appends indices to this meshes uv triangle array.
+    pub fn append_tangent_triangles(&mut self, triangles: &[IndexType]) {
+        match &mut self.tangent_triangles {
+            Some(ref mut self_tant) => self_tant.extend(triangles),
+            None => {
+                self.set_tangent_triangles(triangles);
             }
         };
     }

@@ -35,6 +35,7 @@ pub(crate) enum SectionType {
     CustomVector3Segment = 20,
     CustomVector4Segment = 21,
     CustomColorSegment = 23,
+    CustomIntigerSegment = 24,
 }
 impl SectionType {
     pub fn is_triangle(&self) -> bool {
@@ -63,8 +64,10 @@ impl SectionType {
             5 => Self::UvSegment,
             6 => Self::UvTriangleSegment,
             9 => Self::TangentSegment,
+            10 => Self::TangentTriangleSegment,
             15 => Self::CustomIndexSegment,
             16 => Self::CustomFloatSegment,
+            24 => Self::CustomIntigerSegment,
             _ => Self::Invalid,
         }
     }
@@ -99,6 +102,7 @@ pub(crate) enum DecodedSegment {
     AppendTriangleVertex(Box<[IndexType]>),
     AppendTriangleNormal(Box<[IndexType]>),
     AppendTriangleUV(Box<[IndexType]>),
+    AppendTriangleTangent(Box<[IndexType]>),
     AppendCustom(CustomDataSegment),
 }
 pub(crate) struct EncodedSegment {
@@ -250,6 +254,7 @@ async fn decode_triangle_seg(
                 DecodedSegment::AppendTriangleNormal(indices.into())
             }
             SectionType::UvTriangleSegment => DecodedSegment::AppendTriangleUV(indices.into()),
+            SectionType::TangentTriangleSegment => DecodedSegment::AppendTriangleTangent(indices.into()),
             _ => panic!("Unsupported section type {:?}", seg.seg_type),
         })
     } else {
@@ -429,6 +434,14 @@ impl DecodedSegment {
                 }
                 res
             }
+            Self::AppendTriangleTangent(triangles) => {
+                let optimised = opt_tris(&triangles);
+                let mut res = SmallVec::new();
+                for seg in optimised {
+                    res.push(Self::AppendTriangleTangent(seg.into()));
+                }
+                res
+            }
             Self::AppendVertex(vertices) => {
                 let optimised = opt_vertices(&vertices);
                 let mut res = SmallVec::new();
@@ -483,6 +496,11 @@ impl DecodedSegment {
                 crate::vertices::save_triangles(&triangles, (*max_index) as usize, &mut data)?;
                 SectionType::UvTriangleSegment
             }
+            Self::AppendTriangleTangent(triangles)=> {
+                let max_index = triangles.iter().max().unwrap_or(&0);
+                crate::vertices::save_triangles(&triangles, (*max_index) as usize, &mut data)?;
+                SectionType::TangentTriangleSegment
+            }
             Self::AppendCustom(custom_data) => custom_data.encode(&mut data)?,
             Self::Nothing => SectionType::Invalid,
         };
@@ -496,6 +514,7 @@ impl DecodedSegment {
         seg: EncodedSegment,
         ctx: &crate::tmf_importer::TMFImportContext,
     ) -> Result<Self, TMFImportError> {
+ 
         match seg.seg_type {
             SectionType::Invalid => Ok(Self::Nothing),
             SectionType::VertexSegment => decode_vertex_seg(seg).await,
@@ -524,21 +543,12 @@ impl DecodedSegment {
             DecodedSegment::AppendVertex(verts) => mesh.append_vertices(verts),
             DecodedSegment::AppendNormal(norms) => mesh.append_normals(norms),
             DecodedSegment::AppendUV(uvs) => mesh.append_uvs(uvs),
-            DecodedSegment::AppendTriangleVertex(vert_triangles) => {
-                mesh.append_vertex_triangles(vert_triangles)
-            }
-            DecodedSegment::AppendTriangleNormal(norm_triangles) => {
-                mesh.append_normal_triangles(norm_triangles)
-            }
-            DecodedSegment::AppendTriangleUV(uv_triangles) => {
-                mesh.append_uv_triangles(uv_triangles)
-            }
-            DecodedSegment::AppendCustom(custom_data_seg) => {
-                mesh.add_custom_data_seg(custom_data_seg.clone())
-            }
-            DecodedSegment::AppendTangent(tans) => {
-                mesh.append_tangents(tans);
-            }
+            DecodedSegment::AppendTriangleVertex(vert_triangles) => mesh.append_vertex_triangles(vert_triangles),
+            DecodedSegment::AppendTriangleNormal(norm_triangles) => mesh.append_normal_triangles(norm_triangles),
+            DecodedSegment::AppendTriangleUV(uv_triangles) => mesh.append_uv_triangles(uv_triangles),
+            DecodedSegment::AppendCustom(custom_data_seg) => mesh.add_custom_data_seg(custom_data_seg.clone()),
+            DecodedSegment::AppendTangent(tans) => mesh.append_tangents(tans),
+            DecodedSegment::AppendTriangleTangent(tan_triangles) => mesh.append_tangent_triangles(tan_triangles),
             DecodedSegment::Nothing => (),
         }
     }
