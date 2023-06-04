@@ -113,6 +113,33 @@ impl Default for TMFMesh {
     }
 }
 impl TMFMesh {
+    pub fn optimize(&mut self) {
+        /*
+        if let Some((vertices, vertex_triangles)) =
+            self.get_vertices().zip(self.get_vertex_triangles())
+        {
+            let (vertex_triangles, vertices) =
+                utilis::optimize_triangle_indices(vertex_triangles, vertices);
+            self.set_vertices(vertices);
+            self.set_vertex_triangles(vertex_triangles);
+        }
+        if let Some((normals, normal_triangles)) =
+            self.get_normals().zip(self.get_normal_triangles())
+        {
+            let (normal_triangles, normals) =
+                utilis::optimize_triangle_indices(normal_triangles, normals);
+            self.set_normals(normals);
+            self.set_normal_triangles(normal_triangles);
+        }
+        if let Some((uvs, uv_triangles)) =
+            self.get_uvs().zip(self.get_uv_triangles())
+        {
+            let (uv_triangles, uvs) =
+                utilis::optimize_triangle_indices(uv_triangles, uvs);
+            self.set_uvs(uvs);
+            self.set_uv_triangles(uv_triangles);
+        }*/
+    }
     /// Sets mesh vertex array and returns old vertex array if present. New mesh data is **not** checked during this function call, so to ensure mesh is valid call [`Self::verify`] before saving.
     ///```
     /// # use tmf::FloatType;
@@ -829,11 +856,13 @@ impl From<std::io::Error> for TMFExportError {
     }
 }
 #[cfg(test)]
+pub(crate) fn init_test_env() {
+    std::fs::create_dir_all("target/test_res").unwrap();
+}
+#[cfg(test)]
 mod testing {
     use super::*;
-    fn init_test_env() {
-        std::fs::create_dir_all("target/test_res").unwrap();
-    }
+
     #[test]
     #[cfg(feature = "obj_import")]
     fn read_susan_obj() {
@@ -849,6 +878,7 @@ mod testing {
         let mut file = std::fs::File::open("testing/susan.obj").unwrap();
         let (tmf_mesh, _name) = TMFMesh::read_from_obj_one(&mut file).unwrap();
         tmf_mesh.verify().unwrap();
+        //tmf_mesh.optimize();
         let _out = std::fs::File::create("target/susan.obj").unwrap();
     }
     #[test]
@@ -872,8 +902,9 @@ mod testing {
             Ok(file) => file,
             Err(_) => return,
         };
-        let (tmf_mesh, name) = TMFMesh::read_from_obj_one(&mut file).unwrap();
+        let (mut tmf_mesh, name) = TMFMesh::read_from_obj_one(&mut file).unwrap();
         tmf_mesh.verify().unwrap();
+        tmf_mesh.optimize();
         let mut out = std::fs::File::create("target/test_res/Nefertiti.tmf").unwrap();
         assert!(
             name == "Nefertiti",
@@ -888,12 +919,25 @@ mod testing {
         panic!();
     }
     #[test]
+    fn analize_suzan() {
+        let mut file = std::fs::File::open("target/test_res/optimized_susan.tmf").unwrap();
+        let mut out = Vec::new();
+        file.read_to_end(&mut out).unwrap();
+        let r_mesh = crate::tmf::RUNTIME
+            .block_on(tmf_importer::TMFImportContext::analize(
+                &mut (&out as &[u8]),
+            ))
+            .unwrap();
+        todo!();
+    }
+    #[test]
     #[cfg(feature = "obj_import")]
     fn rw_susan_tmf() {
         init_test_env();
         let mut file = std::fs::File::open("testing/susan.obj").unwrap();
-        let (tmf_mesh, name) = TMFMesh::read_from_obj_one(&mut file).unwrap();
+        let (mut tmf_mesh, name) = TMFMesh::read_from_obj_one(&mut file).unwrap();
         tmf_mesh.verify().unwrap();
+        tmf_mesh.optimize();
         assert!(name == "Suzanne", "Name should be Suzanne but is {name}");
         let prec = TMFPrecisionInfo::default();
         let mut out = Vec::new();

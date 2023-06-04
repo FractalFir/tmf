@@ -181,6 +181,35 @@ impl TMFImportContext {
             });
         Ok((res, name))
     }
+    async fn analize_mesh<R: std::io::Read>(
+        &self,
+        mut src: R,
+        ctx: &crate::tmf_importer::TMFImportContext,
+    ) -> Result<(), TMFImportError> {
+        let name = read_string(&mut src)?;
+        let segment_count = {
+            let mut tmp = [0; std::mem::size_of::<u16>()];
+            src.read_exact(&mut tmp)?;
+            u16::from_le_bytes(tmp)
+        };
+        let mut results = [0; 256];
+        for _ in 0..segment_count {
+            let encoded = EncodedSegment::read(self, &mut src)?;
+            results[encoded.seg_type() as u8 as usize] += encoded.seg_length();
+        }
+        let mut res = Vec::new();
+        let mut total = 0;
+        for i in 0..results.len() {
+            let byte_len = results[i];
+            total += byte_len;
+            if byte_len != 0 {
+                res.push((format!("{:?}", SectionType::from_u8(i as u8)), byte_len));
+            }
+        }
+        res.sort_by(|a, b| a.1.cmp(&b.1));
+        println!("res:{res:?}, total_len:{total}");
+        Ok(())
+    }
     pub(crate) async fn import<R: std::io::Read>(
         mut src: R,
     ) -> Result<Vec<(TMFMesh, String)>, TMFImportError> {
@@ -196,6 +225,19 @@ impl TMFImportContext {
             meshes.push(res.import_mesh(&mut src, &res).await?);
         }
         Ok(meshes)
+    }
+    pub(crate) async fn analize<R: std::io::Read>(mut src: R) -> Result<(), TMFImportError> {
+        let header = read_tmf_header(&mut src).await?;
+        let res = Self::init_header(header);
+        let mesh_count = {
+            let mut tmp = [0; std::mem::size_of::<u32>()];
+            src.read_exact(&mut tmp)?;
+            u32::from_le_bytes(tmp)
+        };
+        for _ in 0..mesh_count {
+            res.analize_mesh(&mut src, &res).await?;
+        }
+        Ok(())
     }
 }
 pub(crate) fn import_sync<R: std::io::Read>(

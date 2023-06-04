@@ -82,3 +82,39 @@ pub(crate) fn sub_vec3(a: Vector3, b: Vector3) -> Vector3 {
 pub(crate) fn add_vec3(a: Vector3, b: Vector3) -> Vector3 {
     (a.0 + b.0, a.1 + b.1, a.2 + b.2)
 }
+pub(crate) fn optimize_triangle_indices<T: Sized + Copy + std::fmt::Debug>(
+    indices: &[IndexType],
+    data: &[T],
+) -> (Box<[IndexType]>, Box<[T]>) {
+    if indices.len() == 0 || data.len() == 0{
+        return (indices.into(),data.into())
+    }
+    let mut first_occurs = vec![usize::MAX;data.len()];
+    let mut curr_occurance = 0;
+    for index in indices{
+        if first_occurs[*index as usize] > curr_occurance{
+           first_occurs[*index as usize] = curr_occurance;
+           curr_occurance += 1;
+        }
+    }
+    //println!("first_occurs:{first_occurs:?}");
+    let mut new_indices:Box<[_]> = indices.iter().map(|index|{first_occurs[*index as usize] as IndexType}).collect();
+    //println!("new_indices:{new_indices:?}");
+    let mut new_data:Box<[_]> = (0..data.len()).into_iter().map(|index|{data[index]}).collect();
+    (new_indices,new_data)
+}
+#[test]
+#[cfg(feature = "obj_import")]
+fn save_optimized_susan_tmf() {
+    use crate::{TMFMesh, TMFPrecisionInfo};
+    crate::init_test_env();
+    let mut file = std::fs::File::open("testing/susan.obj").unwrap();
+    let (mut tmf_mesh, name) = TMFMesh::read_from_obj_one(&mut file).unwrap();
+    tmf_mesh.verify().unwrap();
+    tmf_mesh.optimize();
+    tmf_mesh.verify().unwrap();
+    let mut out = std::fs::File::create("target/test_res/optimized_susan.tmf").unwrap();
+    assert!(name == "Suzanne", "Name should be Suzanne but is {name}");
+    let prec = TMFPrecisionInfo::default();
+    tmf_mesh.write_tmf_one(&mut out, &prec, name).unwrap();
+}

@@ -111,6 +111,9 @@ pub(crate) struct EncodedSegment {
     data: Box<[u8]>,
 }
 impl EncodedSegment {
+    pub(crate) fn seg_length(&self) -> usize {
+        self.data.len()
+    }
     pub(crate) fn seg_type(&self) -> SectionType {
         self.seg_type
     }
@@ -254,7 +257,9 @@ async fn decode_triangle_seg(
                 DecodedSegment::AppendTriangleNormal(indices.into())
             }
             SectionType::UvTriangleSegment => DecodedSegment::AppendTriangleUV(indices.into()),
-            SectionType::TangentTriangleSegment => DecodedSegment::AppendTriangleTangent(indices.into()),
+            SectionType::TangentTriangleSegment => {
+                DecodedSegment::AppendTriangleTangent(indices.into())
+            }
             _ => panic!("Unsupported section type {:?}", seg.seg_type),
         })
     } else {
@@ -273,7 +278,37 @@ fn calc_spilt_score(len: usize, delta_span: (IndexType, IndexType)) -> isize {
         ((TMF_SEG_SIZE + std::mem::size_of::<u8>() + std::mem::size_of::<u32>()) * 8) as isize;
     gain - loss
 }
-//fn search_for_sequential_regions
+fn search_for_sequential_regions(triangles:&[IndexType]){
+    /*
+    let mut last = 0;
+    let mut span_start = 0;
+    let mut span_len = 0;
+    let mut pos = 0;
+    let mut spans:SmallVec<[(usize,usize);4]> = SmallVec::new();
+    for index in triangles{
+        if last + 1 == *index{
+            if span_len == 0{
+                span_start = pos;
+            }
+            span_len += 1;
+        }
+        else{
+            if span_len > 4{
+                spans.push((span_start,span_len));
+                println!("span_start:{span_start:?},span_len:{span_len:?}");
+            }
+            span_len = 0;
+        }
+        last = *index;
+        pos += 1;
+    }
+    if span_len > 4{
+        spans.push((span_start,span_len));
+        println!("span_start:{span_start:?},span_len:{span_len:?}");;
+    }
+    todo!();
+    */
+}
 fn opt_tris(triangles: &[IndexType]) -> SmallVec<[&[IndexType]; 4]> {
     let mut best_score = isize::MIN;
     let mut best_index = usize::MIN;
@@ -386,9 +421,10 @@ fn find_best_vertex_spilt(vertices: &[Vector3], shortest_edge: FloatType) -> Opt
     }
 }
 fn opt_vertices(vertices: &[Vector3]) -> SmallVec<[&[Vector3]; 4]> {
+    /*
     if vertices.len() < 16 {
         return smallvec![vertices];
-    }
+    }*/
     let _len = vertices.len();
     let split_pos = find_best_vertex_spilt(vertices, 0.01);
     if let Some(split_pos) = split_pos {
@@ -411,6 +447,7 @@ impl DecodedSegment {
     pub(crate) async fn optimize(self) -> SmallVec<[Self; 1]> {
         match self {
             Self::AppendTriangleVertex(triangles) => {
+                search_for_sequential_regions(&triangles);
                 let optimised = opt_tris(&triangles);
                 let mut res = SmallVec::new();
                 for seg in optimised {
@@ -496,7 +533,7 @@ impl DecodedSegment {
                 crate::vertices::save_triangles(&triangles, (*max_index) as usize, &mut data)?;
                 SectionType::UvTriangleSegment
             }
-            Self::AppendTriangleTangent(triangles)=> {
+            Self::AppendTriangleTangent(triangles) => {
                 let max_index = triangles.iter().max().unwrap_or(&0);
                 crate::vertices::save_triangles(&triangles, (*max_index) as usize, &mut data)?;
                 SectionType::TangentTriangleSegment
@@ -514,7 +551,6 @@ impl DecodedSegment {
         seg: EncodedSegment,
         ctx: &crate::tmf_importer::TMFImportContext,
     ) -> Result<Self, TMFImportError> {
- 
         match seg.seg_type {
             SectionType::Invalid => Ok(Self::Nothing),
             SectionType::VertexSegment => decode_vertex_seg(seg).await,
@@ -543,12 +579,22 @@ impl DecodedSegment {
             DecodedSegment::AppendVertex(verts) => mesh.append_vertices(verts),
             DecodedSegment::AppendNormal(norms) => mesh.append_normals(norms),
             DecodedSegment::AppendUV(uvs) => mesh.append_uvs(uvs),
-            DecodedSegment::AppendTriangleVertex(vert_triangles) => mesh.append_vertex_triangles(vert_triangles),
-            DecodedSegment::AppendTriangleNormal(norm_triangles) => mesh.append_normal_triangles(norm_triangles),
-            DecodedSegment::AppendTriangleUV(uv_triangles) => mesh.append_uv_triangles(uv_triangles),
-            DecodedSegment::AppendCustom(custom_data_seg) => mesh.add_custom_data_seg(custom_data_seg.clone()),
+            DecodedSegment::AppendTriangleVertex(vert_triangles) => {
+                mesh.append_vertex_triangles(vert_triangles)
+            }
+            DecodedSegment::AppendTriangleNormal(norm_triangles) => {
+                mesh.append_normal_triangles(norm_triangles)
+            }
+            DecodedSegment::AppendTriangleUV(uv_triangles) => {
+                mesh.append_uv_triangles(uv_triangles)
+            }
+            DecodedSegment::AppendCustom(custom_data_seg) => {
+                mesh.add_custom_data_seg(custom_data_seg.clone())
+            }
             DecodedSegment::AppendTangent(tans) => mesh.append_tangents(tans),
-            DecodedSegment::AppendTriangleTangent(tan_triangles) => mesh.append_tangent_triangles(tan_triangles),
+            DecodedSegment::AppendTriangleTangent(tan_triangles) => {
+                mesh.append_tangent_triangles(tan_triangles)
+            }
             DecodedSegment::Nothing => (),
         }
     }
