@@ -188,20 +188,37 @@ mod test_normal {
     fn dot(a: Vector3, b: Vector3) -> FloatType {
         a.0 * b.0 + a.1 * b.1 + a.2 * b.2
     }
+    /// Angle between two vectors in degrees.
+    fn ang_between(a: Vector3, b: Vector3) -> FloatType {
+        dot(a, b).clamp(0.0, 1.0).acos() * 180.0 / PI
+    }
     fn test_save(normal: Vector3) {
         let mut res = Vec::with_capacity(64);
         let precision = NormalPrecisionMode(14);
         {
-            let mut writter = UnalignedWriter::new(&mut res);
-            save_normal(normal, precision, &mut writter).unwrap();
+            let mut writer = UnalignedWriter::new(&mut res);
+            save_normal(normal, precision, &mut writer).unwrap();
         }
         let mut reader = UnalignedReader::new(&res as &[u8]);
         let r_normal = read_normal(precision, &mut reader).unwrap();
-        let n_dot = (1.0 - dot(r_normal, normal)) * 180.0;
+        let ang_diff = ang_between(r_normal, normal);
         assert!(
-            n_dot < 0.01,
-            "expected:{normal:?} != read:{r_normal:?} angle:{n_dot}"
+            ang_diff < 0.01,
+            "expected:{normal:?} != read:{r_normal:?} angle:{ang_diff}"
         );
+    }
+    /// Generator function for random normals (normalized).
+    fn random_normals() -> impl Iterator<Item = Vector3> {
+        use rand::{thread_rng, Rng};
+        let mut rng = thread_rng();
+        std::iter::from_fn(move || {
+            Some((
+                rng.gen::<FloatType>() * 2.0 - 1.0,
+                rng.gen::<FloatType>() * 2.0 - 1.0,
+                rng.gen::<FloatType>() * 2.0 - 1.0,
+            ))
+        })
+        .map(normalize)
     }
     #[test]
     fn x_axis_rw() {
@@ -220,15 +237,7 @@ mod test_normal {
     }
     #[test]
     fn random_axis_rw() {
-        use rand::{thread_rng, Rng};
-        let mut rng = thread_rng();
-        for _ in 0..100_000 {
-            let norm = (
-                rng.gen::<FloatType>() * 2.0 - 1.0,
-                rng.gen::<FloatType>() * 2.0 - 1.0,
-                rng.gen::<FloatType>() * 2.0 - 1.0,
-            );
-            let norm = normalize(norm);
+        for norm in random_normals().take(100_000) {
             test_save(norm);
         }
     }
@@ -238,25 +247,16 @@ mod test_normal {
         let mut rng = thread_rng();
         let count = ((rng.gen::<crate::IndexType>() % 0x800) + 0x800) as usize;
         let mut res = Vec::with_capacity(count);
-        let mut normals = Vec::with_capacity(count);
-        for _ in 0..count {
-            let norm = (
-                rng.gen::<FloatType>() * 2.0 - 1.0,
-                rng.gen::<FloatType>() * 2.0 - 1.0,
-                rng.gen::<FloatType>() * 2.0 - 1.0,
-            );
-            let norm = normalize(norm);
-            normals.push(norm);
-        }
+        let normals: Vec<_> = random_normals().take(count).collect();
         save_normal_array(&normals, &mut res, NORM_PREC_HIGH).unwrap();
         let r_normals = read_normal_array(&mut (&res as &[u8])).unwrap();
         for i in 0..count {
             let r_normal = r_normals[i];
             let normal = normals[i];
-            let n_dot = (1.0 - dot(r_normal, normal)) * 180.0;
+            let ang_diff = ang_between(r_normal, normal);
             assert!(
-                n_dot < 0.1,
-                "expected:{normal:?} != read:{r_normal:?} angle:{n_dot}"
+                ang_diff < 0.1,
+                "expected:{normal:?} != read:{r_normal:?} angle:{ang_diff}"
             );
         }
     }
