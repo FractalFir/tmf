@@ -59,8 +59,8 @@ impl SegTypeWidth {
 }
 #[derive(Clone)]
 pub(crate) struct TMFImportContext {
-    slw: SegLenWidth,
-    stw: SegTypeWidth,
+    segment_length_width: SegLenWidth,
+    segment_type_width: SegTypeWidth,
     should_read_min_index: bool,
 }
 // While some of those fileds are not read yet, they may be relevant in the future.
@@ -126,11 +126,11 @@ async fn read_tmf_header<R: std::io::Read>(src: &mut R) -> Result<TMFHeader, TMF
     }
 }
 impl TMFImportContext {
-    pub(crate) fn stw(&self) -> &SegTypeWidth {
-        &self.stw
+    pub(crate) fn segment_type_width(&self) -> &SegTypeWidth {
+        &self.segment_type_width
     }
-    pub(crate) fn slw(&self) -> &SegLenWidth {
-        &self.slw
+    pub(crate) fn segment_length_width(&self) -> &SegLenWidth {
+        &self.segment_length_width
     }
     pub(crate) fn read_traingle_min<R: std::io::Read>(&self, src: &mut R) -> std::io::Result<u64> {
         if self.should_read_min_index {
@@ -142,11 +142,11 @@ impl TMFImportContext {
         }
     }
     fn init_header(hdr: TMFHeader) -> Self {
-        let slw = SegLenWidth::from_header(&hdr);
-        let stw = SegTypeWidth::from_header(&hdr);
+        let segment_length_width = SegLenWidth::from_header(&hdr);
+        let segment_type_width = SegTypeWidth::from_header(&hdr);
         Self {
-            slw,
-            stw,
+            segment_length_width,
+            segment_type_width,
             should_read_min_index: (hdr.min_minor > 1),
         }
     }
@@ -160,7 +160,7 @@ impl TMFImportContext {
             let mut tmp = [0; std::mem::size_of::<u16>()];
             src.read_exact(&mut tmp)?;
             u16::from_le_bytes(tmp)
-        }; //self.slw.read(&mut src)?;
+        }; //self.segment_length_width.read(&mut src)?;
         let mut decoded_segs = Vec::with_capacity(segment_count as usize);
         for _ in 0..segment_count {
             let encoded = EncodedSegment::read(self, &mut src)?;

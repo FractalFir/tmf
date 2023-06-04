@@ -1,4 +1,4 @@
-use std::io::{BufReader, BufWriter, Read, Result, Write};
+use std::io::{BufWriter, Read, Result, Write};
 #[cfg(not(feature = "byte_rw"))]
 type UnalignedStorage = usize;
 #[cfg(feature = "byte_rw")]
@@ -49,44 +49,45 @@ impl<R: Read> UnalignedReader<R> {
         self.bits_read += 1;
         Ok(res != 0)
     }
-    pub fn read2_unaligned(&mut self, mode: UnalignedRWMode) -> Result<(u64,u64)>{
-        assert_ne!(mode.0,0);
-        if mode.0 > (u64::BITS/2) as u8{
-           Ok((self. read_unaligned(mode)?,self. read_unaligned(mode)?))
-        }
-        else{
-            let read_size = UnalignedRWMode(mode.0*2);
-            let data = self. read_unaligned(read_size)?;
-            let r1 = data>>mode.0;
-            let r2 = data<<(u64::BITS as u8 - mode.0)>>(u64::BITS as u8 - mode.0);
-            Ok((r1,r2))
+    pub fn read2_unaligned(&mut self, mode: UnalignedRWMode) -> Result<(u64, u64)> {
+        assert_ne!(mode.0, 0);
+        if mode.0 > (u64::BITS / 2) as u8 {
+            Ok((self.read_unaligned(mode)?, self.read_unaligned(mode)?))
+        } else {
+            let read_size = UnalignedRWMode(mode.0 * 2);
+            let data = self.read_unaligned(read_size)?;
+            let r1 = data >> mode.0;
+            let r2 = data << (u64::BITS as u8 - mode.0) >> (u64::BITS as u8 - mode.0);
+            Ok((r1, r2))
         }
     }
-    pub fn read_pair_unaligned(&mut self, mode1: UnalignedRWMode,mode2: UnalignedRWMode) -> Result<(u64,u64)>{
-        if mode1.0 + mode2.0 > u64::BITS as u8{
-           Ok((self. read_unaligned(mode1)?,self. read_unaligned(mode2)?))
-        }
-        else{
+    pub fn read_pair_unaligned(
+        &mut self,
+        mode1: UnalignedRWMode,
+        mode2: UnalignedRWMode,
+    ) -> Result<(u64, u64)> {
+        if mode1.0 + mode2.0 > u64::BITS as u8 {
+            Ok((self.read_unaligned(mode1)?, self.read_unaligned(mode2)?))
+        } else {
             let read_size = UnalignedRWMode(mode1.0 + mode2.0);
-            let data = self. read_unaligned(read_size)?;
-            let r1 = data>>mode1.0;
-            let r2 = data<<(u64::BITS as u8 - mode1.0)>>(u64::BITS as u8 - mode1.0);
-            Ok((r1,r2))
+            let data = self.read_unaligned(read_size)?;
+            let r1 = data >> mode1.0;
+            let r2 = data << (u64::BITS as u8 - mode1.0) >> (u64::BITS as u8 - mode1.0);
+            Ok((r1, r2))
         }
     }
-    pub fn read3_unaligned(&mut self, mode: UnalignedRWMode) -> Result<(u64,u64,u64)>{
-        if mode.0 > (u64::BITS/3) as u8{
+    pub fn read3_unaligned(&mut self, mode: UnalignedRWMode) -> Result<(u64, u64, u64)> {
+        if mode.0 > (u64::BITS / 3) as u8 {
             let res_1_2 = self.read2_unaligned(mode)?;
-            Ok((res_1_2.0,res_1_2.1,self. read_unaligned(mode)?))
-        }
-        else{
-            let read_size = UnalignedRWMode(mode.0*3);
-            let data = self. read_unaligned(read_size)?;
-            let r1 = data>>(mode.0)*2;
-            let r_23 = data<<(u64::BITS as u8 - mode.0*2)>>(u64::BITS as u8 - mode.0*2);
-            let r2 = r_23>>mode.0;
-            let r3 = r_23<<(u64::BITS as u8 - mode.0)>>(u64::BITS as u8 - mode.0);
-            Ok((r1,r2,r3))
+            Ok((res_1_2.0, res_1_2.1, self.read_unaligned(mode)?))
+        } else {
+            let read_size = UnalignedRWMode(mode.0 * 3);
+            let data = self.read_unaligned(read_size)?;
+            let r1 = data >> ((mode.0) * 2);
+            let r_23 = data << (u64::BITS as u8 - mode.0 * 2) >> (u64::BITS as u8 - mode.0 * 2);
+            let r2 = r_23 >> mode.0;
+            let r3 = r_23 << (u64::BITS as u8 - mode.0) >> (u64::BITS as u8 - mode.0);
+            Ok((r1, r2, r3))
         }
     }
     /// Reads *mode.0* bits from self, keeping internal alignment
@@ -98,7 +99,7 @@ impl<R: Read> UnalignedReader<R> {
         let mut res: u64 = 0;
         // Total bits remaining to read
         let mut total_read = mode.0;
-        while total_read != 0{
+        while total_read != 0 {
             // If all bits in current_byte read, read new byte with new bits, and set amount of bits bits_read in current bit back to 0.
             if self.bits_read >= UNALIGNED_STORAGE_BITS {
                 self.read_to_internal_storage()?;
@@ -119,7 +120,7 @@ impl<R: Read> UnalignedReader<R> {
             }
             // Decrement total amount of bits left to read
             total_read -= read_ammount;
-        };
+        }
         Ok(res)
     }
     /// Creates new Unaligned Reader form *r*
@@ -220,7 +221,7 @@ impl UnalignedRWMode {
     pub const fn precision_bits(bits: u8) -> Self {
         Self(bits)
     }
-    pub const fn bits(&self)->u8{
+    pub const fn bits(&self) -> u8 {
         self.0
     }
 }
@@ -275,21 +276,21 @@ mod test_reader {
     fn read2_half_aligned() {
         let bytes: [u8; 8] = [0x01, 0x23, 0x45, 0x67, 0x89, 0xAB, 0xCD, 0xEF];
         let mut reader = UnalignedReader::new(&bytes as &[u8]);
-        for byte in 0..(0x10/2) {
-            let (r1,r2) = reader.read2_unaligned(UnalignedRWMode(4)).unwrap();
-            assert_eq!(r1,byte*2);
-            assert_eq!(r2,byte*2+1);
+        for byte in 0..(0x10 / 2) {
+            let (r1, r2) = reader.read2_unaligned(UnalignedRWMode(4)).unwrap();
+            assert_eq!(r1, byte * 2);
+            assert_eq!(r2, byte * 2 + 1);
         }
     }
     #[test]
     fn read3_half_aligned() {
         let bytes: [u8; 8] = [0x01, 0x23, 0x45, 0x67, 0x89, 0xAB, 0xCD, 0xEF];
         let mut reader = UnalignedReader::new(&bytes as &[u8]);
-        for byte in 0..(0x10/3) {
-            let (r1,r2,r3) = reader.read3_unaligned(UnalignedRWMode(4)).unwrap();
-            assert_eq!(r1,byte*3,"r1");
-            assert_eq!(r2,byte*3+1,"r2");
-            assert_eq!(r3,byte*3+2,"r3");
+        for byte in 0..(0x10 / 3) {
+            let (r1, r2, r3) = reader.read3_unaligned(UnalignedRWMode(4)).unwrap();
+            assert_eq!(r1, byte * 3, "r1");
+            assert_eq!(r2, byte * 3 + 1, "r2");
+            assert_eq!(r3, byte * 3 + 2, "r3");
         }
     }
     #[test]

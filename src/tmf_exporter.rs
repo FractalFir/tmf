@@ -118,6 +118,7 @@ pub(crate) fn write_tmf_header<W: std::io::Write>(
     w.write_all(&(MIN_TMF_MINOR).to_le_bytes())?;
     Ok(w.write_all(&mesh_count.to_le_bytes())?)
 }
+#[cfg(test)]
 fn init_test_env() {
     std::fs::create_dir_all("target/test_res").unwrap();
 }
@@ -161,10 +162,10 @@ impl<'a> std::iter::Iterator for MeshSegIter<'a> {
                 None => self.next(),
             },
             7 => match self.mesh.get_tangents() {
-                Some(tans) => {Some(DecodedSegment::AppendTangent(tans.into()))},
+                Some(tans) => Some(DecodedSegment::AppendTangent(tans.into())),
                 None => self.next(),
             },
-            8=>self.next(),
+            8 => self.next(),
             9..=usize::MAX => {
                 let index = self.item - 9;
                 let seg = self.mesh.custom_data.get(index)?;

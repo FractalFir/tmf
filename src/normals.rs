@@ -55,7 +55,7 @@ impl Default for NormalPrecisionMode {
         Self::from_deg_dev(1.0)
     }
 }
-const SIGN_PREC: UnalignedRWMode = UnalignedRWMode::precision_bits(1);
+//const SIGN_PREC: UnalignedRWMode = UnalignedRWMode::precision_bits(1);
 use crate::utilis::*;
 pub fn normalize_arr(normals: &mut [Vector3]) {
     for normal in normals {
@@ -142,7 +142,7 @@ fn read_normal<R: Read>(
     let sx = reader.read_bit()?;
     let sy = reader.read_bit()?;
     let sz = reader.read_bit()?;
-    let (asine,z) = reader.read2_unaligned(main_prec)?;
+    let (asine, z) = reader.read2_unaligned(main_prec)?;
     Ok(normal_from_encoding(asine, z, sx, sy, sz, precision))
 }
 pub(crate) fn save_normal_array<W: Write>(

@@ -3,7 +3,7 @@ use crate::tmf_importer::TMFImportContext;
 use crate::unaligned_rw::{UnalignedRWMode, UnalignedReader};
 use crate::{
     CustomDataSegment, FloatType, IndexType, TMFExportError, TMFImportError, TMFMesh,
-    TMFPrecisionInfo, Tangent, Vector2, Vector3, VertexPrecisionMode, MAX_SEG_SIZE,
+    TMFPrecisionInfo, Tangent, Vector2, Vector3, MAX_SEG_SIZE,
 };
 lazy_static::lazy_static! {
     pub(crate) static ref RUNTIME:tokio::runtime::Runtime = tokio::runtime::Runtime::new().unwrap();
@@ -84,7 +84,7 @@ impl CompressionType {
             0 => Ok(Self::None),
             1 => Ok(Self::Ommited),
             2 => Ok(Self::UnalignedLZZ),
-            255=>Ok(Self::Sequence),
+            255 => Ok(Self::Sequence),
             _ => Err(TMFImportError::CompressionTypeUnknown(input)),
         }
     }
@@ -107,7 +107,7 @@ pub(crate) struct EncodedSegment {
     data: Box<[u8]>,
 }
 impl EncodedSegment {
-    pub(crate) fn seg_type(&self)->SectionType{
+    pub(crate) fn seg_type(&self) -> SectionType {
         self.seg_type
     }
     pub(crate) fn write<W: std::io::Write>(&self, w: &mut W) -> std::io::Result<()> {
@@ -121,8 +121,8 @@ impl EncodedSegment {
         ctx: &TMFImportContext,
         src: &mut R,
     ) -> Result<Self, TMFImportError> {
-        let seg_type = ctx.stw().read(src)?;
-        let data_length = ctx.slw().read(src)?;
+        let seg_type = ctx.segment_type_width().read(src)?;
+        let data_length = ctx.segment_length_width().read(src)?;
         let compresion_type = {
             let mut tmp = [0];
             src.read_exact(&mut tmp)?;
@@ -206,26 +206,27 @@ fn read_default_triangles<R: std::io::Read>(
     let buf = data.spare_capacity_mut();
     let precision = UnalignedRWMode::precision_bits(precision_bits);
     let mut reader = UnalignedReader::new(src);
-    if precision_bits == 0{
+    if precision_bits == 0 {
         use std::mem::MaybeUninit;
         buf.fill(MaybeUninit::new(0));
-    }
-    else {
-        for index in 0..(length as usize)/2 {
-        let(i1,i2) = reader.read2_unaligned(precision)?;
-        buf[index*2].write((i1 + min) as IndexType);
-        buf[index*2 + 1].write((i2 + min) as IndexType);
-    }
-    if length%2 != 0{
-        let i = reader.read_unaligned(precision)?;
-        buf[(length - 1) as usize].write((i + min) as IndexType);
-    } 
+    } else {
+        for index in 0..(length as usize) / 2 {
+            let (i1, i2) = reader.read2_unaligned(precision)?;
+            buf[index * 2].write((i1 + min) as IndexType);
+            buf[index * 2 + 1].write((i2 + min) as IndexType);
+        }
+        if length % 2 != 0 {
+            let i = reader.read_unaligned(precision)?;
+            buf[(length - 1) as usize].write((i + min) as IndexType);
+        }
     }
     unsafe { data.set_len(length as usize) }
     Ok(())
 }
-fn read_triangle_sequence<R:std::io::Read>(mut src: R,
-    data: &mut Vec<IndexType>)-> Result<(), TMFImportError>{
+fn read_triangle_sequence<R: std::io::Read>(
+    _src: R,
+    _data: &mut Vec<IndexType>,
+) -> Result<(), TMFImportError> {
     todo!();
 }
 async fn decode_triangle_seg(
@@ -325,7 +326,7 @@ fn opt_tris(triangles: &[IndexType]) -> SmallVec<[&[IndexType]; 4]> {
 fn range_to_vertex_bit_count(span: std::ops::Range<Vector3>, shortest_edge: FloatType) -> u8 {
     let dx = span.end.0 - span.start.0;
     let dy = span.end.1 - span.start.1;
-    let dz = span.end.2 - span.start.2;
+    let _dz = span.end.2 - span.start.2;
     let inc_x = shortest_edge / dx;
     let inc_y = shortest_edge / dy;
     let inc_z = shortest_edge / dy;
@@ -347,7 +348,7 @@ fn find_best_vertex_spilt(vertices: &[Vector3], shortest_edge: FloatType) -> Opt
         total_span = expand_vertex_span(total_span.clone(), *point);
     });
     let total_span = total_span;
-    let total_per_vertex_bit_count = range_to_vertex_bit_count(total_span.clone(), shortest_edge);
+    let total_per_vertex_bit_count = range_to_vertex_bit_count(total_span, shortest_edge);
     let mut best_split_score = isize::MIN;
     let mut best_split_index = usize::MIN;
     let mut min_span = (0.0, 0.0, 0.0)..(0.0, 0.0, 0.0);
@@ -383,7 +384,7 @@ fn opt_vertices(vertices: &[Vector3]) -> SmallVec<[&[Vector3]; 4]> {
     if vertices.len() < 16 {
         return smallvec![vertices];
     }
-    let len = vertices.len();
+    let _len = vertices.len();
     let split_pos = find_best_vertex_spilt(vertices, 0.01);
     if let Some(split_pos) = split_pos {
         let (i0, i1) = vertices.split_at(split_pos);
@@ -500,10 +501,13 @@ impl DecodedSegment {
             SectionType::VertexSegment => decode_vertex_seg(seg).await,
             SectionType::NormalSegment => decode_normal_seg(seg).await,
             SectionType::UvSegment => decode_uv_seg(seg).await,
-            SectionType::TangentSegment=>async{
-                let tans = crate::tangents::read_tangents(&mut &seg.data[..])?;
-               Ok(DecodedSegment::AppendTangent(tans.into()))
-            }.await,
+            SectionType::TangentSegment => {
+                async {
+                    let tans = crate::tangents::read_tangents(&mut &seg.data[..])?;
+                    Ok(DecodedSegment::AppendTangent(tans))
+                }
+                .await
+            }
             SectionType::VertexTriangleSegment
             | SectionType::NormalTriangleSegment
             | SectionType::UvTriangleSegment

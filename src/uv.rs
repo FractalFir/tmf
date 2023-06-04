@@ -74,7 +74,7 @@ pub fn read_uvs<R: Read>(reader: &mut R) -> Result<Box<[Vector2]>, TMFImportErro
     let precision = UnalignedRWMode::precision_bits(precision);
     let mut reader = UnalignedReader::new(reader);
     for _ in 0..count {
-        let (x,y) = reader.read2_unaligned(precision)?;
+        let (x, y) = reader.read2_unaligned(precision)?;
         let x = (x as FloatType) / divisor;
         let y = (y as FloatType) / divisor;
         uvs.push((x, y));

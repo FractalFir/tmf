@@ -177,8 +177,10 @@ pub fn read_tmf_vertices<R: Read>(reader: &mut R) -> Result<Box<[Vector3]>, TMFI
     }
     Ok(vertices.into())
 }
+//Those issues wont happen.
+#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
 pub(crate) fn calc_prec(max: usize) -> u8 {
-    (max as FloatType + 1.0).log2().ceil() as u8
+    (max as FloatType + 1.0).log2().abs().ceil() as u8
 }
 pub fn save_triangles<W: Write>(
     triangles: &[IndexType],
@@ -189,11 +191,11 @@ pub fn save_triangles<W: Write>(
     let precision = calc_prec(max_index);
     writer.write_all(&precision.to_le_bytes())?;
     writer.write_all(&(triangles.len() as u64).to_le_bytes())?;
-    writer.write_all(&(min as u64).to_le_bytes())?;
+    writer.write_all(&u64::from(min).to_le_bytes())?;
     let precision = UnalignedRWMode::precision_bits(precision);
     let mut writer = UnalignedWriter::new(writer);
     for index in triangles {
-        writer.write_unaligned(precision, (index - min) as u64)?;
+        writer.write_unaligned(precision, u64::from(index - min))?;
     }
     writer.flush()
 }
@@ -218,13 +220,13 @@ pub(crate) fn read_triangles<R: Read>(
     let mut res = Vec::with_capacity(length as usize);
     let precision = UnalignedRWMode::precision_bits(precision);
     let mut reader = UnalignedReader::new(reader);
-    for _ in 0..(length/2) {
-        let (i1,i2) = reader.read2_unaligned(precision)?;
+    for _ in 0..(length / 2) {
+        let (i1, i2) = reader.read2_unaligned(precision)?;
         res.push((i1 + min) as IndexType);
         res.push((i2 + min) as IndexType);
     }
-    for i in 0..length%2{
-         res.push((reader.read_unaligned(precision)? + min) as IndexType);
+    for _i in 0..length % 2 {
+        res.push((reader.read_unaligned(precision)? + min) as IndexType);
     }
     Ok(res.into())
 }

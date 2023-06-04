@@ -49,10 +49,7 @@ fn parse_float_type(float: &str) -> Result<FloatType> {
     }
 }
 fn parse_index(uint: &str) -> IndexType {
-    match uint.parse::<IndexType>() {
-        Ok(uint) => uint,
-        Err(_) => 1,
-    }
+    uint.parse::<IndexType>().unwrap_or(1)
 }
 fn match_split(split: Option<&str>) -> Result<&str> {
     match split {

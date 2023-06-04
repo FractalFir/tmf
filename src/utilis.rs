@@ -67,16 +67,14 @@ pub(crate) fn distance(a: Vector3, b: Vector3) -> FloatType {
     (dx * dx + dy * dy + dz * dz).sqrt()
 }
 pub(crate) fn dot(a: Vector3, b: Vector3) -> FloatType {
-    let x = a.0 * b.0;
-    let y = a.1 * b.1;
-    let z = a.2 * b.2;
-    x + y + z
+    a.0 * b.0 + a.1 * b.1 + a.2 * b.2
 }
 pub(crate) fn cross(a: Vector3, b: Vector3) -> Vector3 {
-    let x = a.1 * b.2 - a.2 * b.1;
-    let y = a.2 * b.0 - a.0 * b.2;
-    let z = a.0 * b.1 - a.1 * b.0;
-    (x, y, z)
+    (
+        a.1 * b.2 - a.2 * b.1,
+        a.2 * b.0 - a.0 * b.2,
+        a.0 * b.1 - a.1 * b.0,
+    )
 }
 pub(crate) fn sub_vec3(a: Vector3, b: Vector3) -> Vector3 {
     (a.0 - b.0, a.1 - b.1, a.2 - b.2)

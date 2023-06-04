@@ -17,8 +17,6 @@ mod model_importer;
 mod normals;
 #[cfg(feature = "obj_import")]
 mod obj;
-/// Module used when saving vertex grups
-mod pile_map;
 #[doc(hidden)]
 pub mod tangents;
 mod tmf;
@@ -112,9 +110,6 @@ impl Default for TMFMesh {
     fn default() -> Self {
         Self::empty()
     }
-}
-fn vec_first<T: Sized + Clone>(vec: Vec<T>) -> T {
-    vec[0].clone()
 }
 impl TMFMesh {
     /// Sets mesh vertex array and returns old vertex array if present. New mesh data is **not** checked during this function call, so to ensure mesh is valid call [`Self::verify`] before saving.
@@ -257,6 +252,7 @@ impl TMFMesh {
     /// # let mesh = TMFMesh::empty();
     /// let vertices = mesh.get_vertices();
     ///```
+    #[must_use]
     pub fn get_vertices(&self) -> Option<&[Vector3]> {
         match &self.vertices {
             Some(vertices) => Some(vertices.as_ref()),
@@ -269,6 +265,7 @@ impl TMFMesh {
     /// # let mesh = TMFMesh::empty();
     /// let normals = mesh.get_normals();
     ///```
+    #[must_use]
     pub fn get_normals(&self) -> Option<&[Vector3]> {
         match &self.normals {
             Some(normals) => Some(normals.as_ref()),
@@ -281,6 +278,7 @@ impl TMFMesh {
     /// # let mesh = TMFMesh::empty();
     /// let normals = mesh.get_tangents();
     ///```
+    #[must_use]
     pub fn get_tangents(&self) -> Option<&[Tangent]> {
         match &self.tangents {
             Some(tangents) => Some(tangents.as_ref()),
@@ -293,6 +291,7 @@ impl TMFMesh {
     /// # let mesh = TMFMesh::empty();
     /// let uvs = mesh.get_uvs();
     ///```
+    #[must_use]
     pub fn get_uvs(&self) -> Option<&[Vector2]> {
         match &self.uvs {
             Some(uvs) => Some(uvs.as_ref()),
@@ -305,6 +304,7 @@ impl TMFMesh {
     /// # let mesh = TMFMesh::empty();
     /// let vertex_triangles = mesh.get_vertex_triangles();
     ///```
+    #[must_use]
     pub fn get_vertex_triangles(&self) -> Option<&[IndexType]> {
         match &self.vertex_triangles {
             Some(vertex_triangles) => Some(vertex_triangles.as_ref()),
@@ -317,18 +317,20 @@ impl TMFMesh {
     /// # let mesh = TMFMesh::empty();
     /// let normal_triangles = mesh.get_normal_triangles();
     ///```
+    #[must_use]
     pub fn get_normal_triangles(&self) -> Option<&[IndexType]> {
         match &self.normal_triangles {
             Some(normal_triangles) => Some(normal_triangles.as_ref()),
             None => None,
         }
     }
-    /// Gets the uv triangle index array of this TMFMesh.
+    /// Gets the uv triangle index array of this [`TMFMesh`].
     ///```
     /// # use tmf::TMFMesh;
     /// # let mesh = TMFMesh::empty();
     /// let uv_triangles = mesh.get_uv_triangles();
     ///```
+    #[must_use]
     pub fn get_uv_triangles(&self) -> Option<&[IndexType]> {
         match &self.uv_triangles {
             Some(uv_triangles) => Some(uv_triangles.as_ref()),
@@ -348,6 +350,7 @@ impl TMFMesh {
     /// // The same number of triangles created by points and triangles created by indices
     /// assert!(vert_buff.len() == vertex_triangles.len());
     ///```
+    #[must_use]
     pub fn get_vertex_buffer(&self) -> Option<Box<[Vector3]>> {
         let vertices = self.get_vertices()?;
         let triangles = self.get_vertex_triangles()?;
@@ -355,7 +358,7 @@ impl TMFMesh {
         for index in triangles {
             match vertices.get(*index as usize) {
                 Some(vertex) => vertex_buffer.push(*vertex),
-                None => panic!("Invalid TMFMesh: vertex index outside vertex array!"),
+                None => return None, //panic!("Invalid TMFMesh: vertex index outside vertex array!"),
             }
         }
         Some(vertex_buffer.into())
@@ -374,6 +377,7 @@ impl TMFMesh {
     /// // The same number of triangles created by points and triangles created by indices
     /// assert!(normal_buff.len() == normal_triangles.len());
     ///```
+    #[must_use]
     pub fn get_normal_buffer(&self) -> Option<Box<[Vector3]>> {
         let normals = self.get_normals()?;
         let triangles = self.get_normal_triangles()?;
@@ -381,7 +385,7 @@ impl TMFMesh {
         for index in triangles {
             match normals.get(*index as usize) {
                 Some(normal) => normals_buffer.push(*normal),
-                None => panic!("Invalid TMFMesh: normal index outside vertex array!"),
+                None => return None, //panic!("Invalid TMFMesh: normal index outside vertex array!"),
             }
         }
         Some(normals_buffer.into())
@@ -399,6 +403,7 @@ impl TMFMesh {
     /// // The same number of triangles created by points and triangles created by indices
     /// assert!(uv_buff.len() == uv_triangles.len());
     ///```
+    #[must_use]
     pub fn get_uv_buffer(&self) -> Option<Box<[Vector2]>> {
         let uvs = self.get_uvs()?;
         let triangles = self.get_uv_triangles()?;
@@ -406,7 +411,7 @@ impl TMFMesh {
         for index in triangles {
             match uvs.get(*index as usize) {
                 Some(uv) => uv_buffer.push(*uv),
-                None => panic!("Invalid TMFMesh: uv index outside vertex array!"),
+                None => return None, //panic!("Invalid TMFMesh: uv index outside vertex array!"),
             }
         }
         Some(uv_buffer.into())
@@ -443,7 +448,7 @@ impl TMFMesh {
         use crate::normals::normalize_arr;
         let normals = self.normals.as_mut();
         if let Some(normals) = normals {
-            normalize_arr(normals)
+            normalize_arr(normals);
         };
     }
     /// Checks if mesh is valid and can be saved.
@@ -453,6 +458,8 @@ impl TMFMesh {
     /// // Get the tmf mesh form somewhere
     /// mesh.verify().expect("Mesh had errors!");
     /// ```
+    /// # Errors
+    /// Returns a [`TMFIntegrityStatus`] if mesh is invalid.
     pub fn verify(&self) -> std::result::Result<(), TMFIntegrityStatus> {
         verify::verify_tmf_mesh(self)
     }
@@ -472,6 +479,8 @@ impl TMFMesh {
     ///     do_something(mesh,name);
     /// }
     ///```
+    /// # Errors
+    /// Returns IO error if it occurs.
     #[cfg(feature = "obj_import")]
     pub fn read_from_obj<R: Read>(reader: &mut R) -> std::io::Result<Vec<(Self, String)>> {
         obj::read_from_obj(reader)
@@ -487,21 +496,26 @@ impl TMFMesh {
     /// // And read a mesh from it
     /// let (mesh,name) = TMFMesh::read_from_obj_one(&mut file).expect("Could not parse .obj file!");
     ///```
+    /// # Errors
+    /// Returns IO error if it occurs, or wrong mesh count.
     #[cfg(feature = "obj_import")]
     pub fn read_from_obj_one<R: Read>(reader: &mut R) -> std::io::Result<(Self, String)> {
-        let meshes = obj::read_from_obj(reader)?;
-        if meshes.is_empty() {
-            Err(std::io::Error::new(
+        let mut meshes = obj::read_from_obj(reader)?.into_iter();
+        match meshes.next() {
+            Some(mesh) => {
+                if meshes.next().is_some() {
+                    Err(std::io::Error::new(
+                        std::io::ErrorKind::Other,
+                        "More than one mesh present in .obj file while only one expected.",
+                    ))
+                } else {
+                    Ok(mesh)
+                }
+            }
+            None => Err(std::io::Error::new(
                 std::io::ErrorKind::Other,
                 "No meshes present in .obj file",
-            ))
-        } else if meshes.len() > 1 {
-            Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "More than one mesh present in .obj file while only one expected.",
-            ))
-        } else {
-            Ok(meshes.into_iter().next().unwrap())
+            )),
         }
     }
     /// Writes this TMF  mesh to a .obj file.
@@ -513,6 +527,8 @@ impl TMFMesh {
     /// let mut obj_out = File::create(out_path).expect("Could not create obj out file!");
     /// mesh.write_obj_one(&mut obj_out,"mesh name").expect("Could not write the .obj file!");
     /// ```
+    /// # Errors
+    /// Returns IO error if it occurs.
     #[cfg(feature = "obj_import")]
     pub fn write_obj_one<W: Write>(&self, w: &mut W, name: &str) -> std::io::Result<()> {
         obj::write_obj(&[(self.clone(), name)], w)
@@ -526,6 +542,8 @@ impl TMFMesh {
     /// let mut output = File::create(path).expect("Could not create file!");
     /// TMFMesh::write_obj(&meshes,&mut output).expect("Could not export to .obj");
     ///```
+    /// # Errors
+    /// Returns IO error if it occurs.
     #[cfg(feature = "obj_import")]
     pub fn write_obj<W: Write, S: std::borrow::Borrow<str>>(
         meshes: &[(TMFMesh, S)],
@@ -544,6 +562,8 @@ impl TMFMesh {
     /// let precision_info = TMFPrecisionInfo::default();
     /// mesh.write_tmf_one(&mut output,&precision_info,"mesh_name").expect("Could not save .tmf mesh!");;
     ///```
+    /// # Errors
+    /// Returns IO error if occurs.
     pub fn write_tmf_one<W: Write, S: std::borrow::Borrow<str>>(
         &self,
         w: &mut W,
@@ -563,6 +583,8 @@ impl TMFMesh {
     /// let precision_info = TMFPrecisionInfo::default();
     /// TMFMesh::write_tmf(&meshes,&mut output, &precision_info).expect("Could not save .tmf file!");
     /// ```
+    /// # Errors
+    /// Returns IO error if occurs.
     pub fn write_tmf<W: Write, S: std::borrow::Borrow<str>>(
         meshes_names: &[(Self, S)],
         w: &mut W,
@@ -576,6 +598,7 @@ impl TMFMesh {
     /// // Creates an empty mesh with no data
     /// let mut mesh = TMFMesh::empty();
     /// ```
+    #[must_use]
     pub fn empty() -> Self {
         Self {
             normal_triangles: None,
@@ -604,6 +627,8 @@ impl TMFMesh {
     ///     do_something(mesh,name);
     /// }
     /// ```
+    /// # Errors
+    /// Returns: an IO error if it occurs, `NotTMFFile` if not tmf file, `NewerVersionRequired` if a newer importer is required for importing the file, and other errors for malformed tmf files.
     pub fn read_tmf<R: Read>(reader: &mut R) -> Result<Vec<(Self, String)>, TMFImportError> {
         crate::tmf_importer::import_sync(reader)
     }
@@ -617,17 +642,24 @@ impl TMFMesh {
     /// // Read mesh and mesh name form file
     /// let (mesh,name) = TMFMesh::read_tmf_one(&mut file).expect("Could not load .tmf mesh!");
     /// ```
+    /// # Errors
+    /// Returns: an IO error if it occurs, `NotTMFFile` if not tmf file, `NewerVersionRequired` if a newer importer is required for importing the file, and other errors for malformed tmf files. This function also returns `NoMeshes` or `TooManyMeshes` if wrong mesh count present.
     pub fn read_tmf_one<R: Read>(reader: &mut R) -> Result<(Self, String), TMFImportError> {
-        let meshes = Self::read_tmf(reader)?;
-        if meshes.is_empty() {
-            Err(TMFImportError::NoMeshes)
-        } else if meshes.len() > 1 {
-            Err(TMFImportError::TooManyMeshes)
-        } else {
-            Ok(meshes.into_iter().next().unwrap())
+        let mut meshes = Self::read_tmf(reader)?.into_iter();
+        match meshes.next() {
+            Some(mesh) => {
+                if meshes.next().is_some() {
+                    Err(TMFImportError::TooManyMeshes)
+                } else {
+                    Ok(mesh)
+                }
+            }
+            None => Err(TMFImportError::NoMeshes),
         }
     }
     /// Adds custom data array.
+    /// # Errors
+    /// Returns `Err` if name is too long (over 255 bytes) or empty.
     pub fn add_custom_data(
         &mut self,
         custom_data: CustomData,
@@ -640,12 +672,14 @@ impl TMFMesh {
         self.custom_data.push(custom_data);
     }
     /// Gets a custom data array with name *name*.
+    /// Returns `None`, if data not present, or name too long(over 255 bytes).
+    #[must_use]
     pub fn lookup_custom_data(&self, name: &str) -> Option<&CustomData> {
         let bytes = name.as_bytes();
         if bytes.len() > u8::MAX as usize {
             return None;
         }
-        let bytes_len = bytes.len() as u8;
+        let Ok(bytes_len) = u8::try_from(bytes.len()) else { return None };
         for data in &self.custom_data {
             if data.name_len() == bytes_len
                 && bytes == &data.name_bytes()[..(data.name_len() as usize)]
@@ -655,6 +689,7 @@ impl TMFMesh {
         }
         None
     }
+    /// Appends vertices to this meshes vertex array.
     pub fn append_vertices(&mut self, vertices: &[Vector3]) {
         match &mut self.vertices {
             Some(ref mut self_v) => self_v.extend(vertices),
@@ -663,6 +698,7 @@ impl TMFMesh {
             }
         };
     }
+    /// Appends normals to this meshes normal array.
     pub fn append_normals(&mut self, normals: &[Vector3]) {
         match &mut self.normals {
             Some(ref mut self_n) => self_n.extend(normals),
@@ -671,6 +707,7 @@ impl TMFMesh {
             }
         };
     }
+    /// Appends tangents to this meshes tangent array.
     pub fn append_tangents(&mut self, tangents: &[Tangent]) {
         match &mut self.tangents {
             Some(ref mut self_t) => self_t.extend(tangents),
@@ -679,6 +716,7 @@ impl TMFMesh {
             }
         };
     }
+    /// Appends uvs to this meshes uv array.
     pub fn append_uvs(&mut self, uvs: &[Vector2]) {
         match &mut self.uvs {
             Some(ref mut self_uv) => self_uv.extend(uvs),
@@ -687,6 +725,7 @@ impl TMFMesh {
             }
         };
     }
+    /// Appends indices to this meshes vertex triangle array.
     pub fn append_vertex_triangles(&mut self, triangles: &[IndexType]) {
         match &mut self.vertex_triangles {
             Some(ref mut self_vt) => self_vt.extend(triangles),
@@ -695,6 +734,7 @@ impl TMFMesh {
             }
         };
     }
+    /// Appends indices to this meshes normal triangle array.
     pub fn append_normal_triangles(&mut self, triangles: &[IndexType]) {
         match &mut self.normal_triangles {
             Some(ref mut self_nt) => self_nt.extend(triangles),
@@ -703,6 +743,7 @@ impl TMFMesh {
             }
         };
     }
+    /// Appends indices to this meshes uv triangle array.
     pub fn append_uv_triangles(&mut self, triangles: &[IndexType]) {
         match &mut self.uv_triangles {
             Some(ref mut self_uvt) => self_uvt.extend(triangles),
@@ -739,6 +780,7 @@ impl From<std::io::Error> for TMFImportError {
         Self::IO(err)
     }
 }
+/// An error which occured when a `TMFMesh` is exported.
 #[derive(Debug)]
 pub enum TMFExportError {
     /// An IO error which prevented data from being read.
@@ -800,7 +842,10 @@ mod testing {
             name == "Nefertiti",
             "Name should be Nefertiti but is {name}"
         );
-        println!("uv_tris:{:?}",&tmf_mesh.get_uv_triangles().unwrap().iter().max().unwrap());
+        println!(
+            "uv_tris:{:?}",
+            &tmf_mesh.get_uv_triangles().unwrap().iter().max().unwrap()
+        );
         let prec = TMFPrecisionInfo::default();
         tmf_mesh.write_tmf_one(&mut out, &prec, name).unwrap();
         panic!();
