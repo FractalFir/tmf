@@ -15,6 +15,7 @@ categories = ["game-development","rendering::data-formats","compression"]
 document-features = "0.2.7"
 futures = { version = "0.3.28" }
 lazy_static = { version = "1.4.0", optional = true }
+rans = "0.2.1"
 smallvec = "1.10.0"
 tokio = { version = "1.28.1", features = ["rt", "rt-multi-thread"], optional = true }
 

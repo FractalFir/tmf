@@ -289,3 +289,102 @@ mod testing {
         }
     }
 }
+//<W:Write>
+fn calc_freqs(indices:&[IndexType],max_index:usize)->Box<[u32]>{
+   let mut freqs = vec![0;max_index + 1];
+   for index in indices{
+        freqs[*index as usize] += 1;
+   }
+    freqs.into()
+}
+use rans::b64_decoder::B64RansDecSymbol;
+fn read_symbols<R:Read>(src:&mut R)->std::io::Result<Box<[B64RansDecSymbol]>>{
+    use rans::RansDecSymbol;
+    let mut count = {
+        let mut tmp = [0; std::mem::size_of::<u64>()];
+        src.read_exact(&mut tmp)?;
+        u64::from_le_bytes(tmp)
+    };
+    let prec = {
+        let mut tmp = [0];
+        src.read_exact(&mut tmp)?;
+        tmp[0]
+    };
+    let mut symbols = Vec::with_capacity(count as usize);
+    let mut reader = UnalignedReader::new(src);
+    let prec = UnalignedRWMode::precision_bits(prec);
+    for _ in 0..count{
+        let freq = reader.read_unaligned(prec)?;
+        symbols.push(B64RansDecSymbol::new(0, freq as u32));
+    }
+    Ok(symbols.into())
+}
+fn rans_save_indices<W:Write>(indices:&[IndexType],target:&mut W)->std::io::Result<()>{
+    use rans::{b64_encoder::{B64RansEncSymbol,B64RansEncoder},RansEncSymbol,RansEncoder,RansEncoderMulti};
+    let max_index = *indices.iter().max().unwrap_or(&0) as usize;
+    let freqs = calc_freqs(indices,max_index);
+    target.write_all(&(freqs.len() as u64).to_le_bytes())?;
+    let freqs_max = *freqs.iter().max().unwrap_or(&0);
+    let freqs_bits = (freqs_max as f64 + 1.0).log2().ceil() as u8;
+    target.write_all(&[freqs_bits])?;
+    let mut freqs_out_bytes = Vec::with_capacity(indices.len().min(1<<16));
+    let mut freqs_out = UnalignedWriter::new(&mut freqs_out_bytes);
+    let freqs_out_mode = UnalignedRWMode::precision_bits(freqs_bits);
+    for freq in freqs.iter(){
+        freqs_out.write_unaligned(freqs_out_mode,*freq as u64)?;
+    }
+    // Encode two symbols
+    let mut encoder = B64RansEncoder::new(100_000);
+    freqs_out.flush()?;
+    drop(freqs_out);
+    target.write_all(&freqs_out_bytes)?;
+    let mut symbols:Vec<B64RansEncSymbol> = Vec::new();
+    let mut cum_freq = 0;
+    let scale_bits = calc_prec(*freqs.iter().max().unwrap_or(&0) as usize) as u32;
+    println!("scale_bits:{scale_bits}");
+    //panic!();
+    for freq in freqs.iter(){
+        symbols.push(B64RansEncSymbol::new(cum_freq, *freq, scale_bits));
+        //eprintln!("{}",(1_u32 << scale_bits));
+        //cum_freq += freq;
+    }
+    for index in indices{
+        encoder.put(&symbols[*index as usize]);
+    }
+    encoder.flush();
+    let data = encoder.data().to_owned();
+    target.write_all(&(data.len() as u64).to_le_bytes())?;
+    target.write_all(&data)?;
+    Ok(())
+}
+fn rans_read_indices<R:Read>(){}
+use crate::TMFMesh;
+#[cfg(test)]
+use crate::init_test_env;
+#[cfg(test)]
+#[test]
+    #[cfg(feature = "obj_import")]
+    fn test_calc_freqs() {
+        init_test_env();
+        let mut file = std::fs::File::open("testing/susan.obj").unwrap();
+        let (tmf_mesh, _name) = TMFMesh::read_from_obj_one(&mut file).unwrap();
+        tmf_mesh.verify().unwrap();
+        let triangles = tmf_mesh.get_vertex_triangles().unwrap();
+        let mut out = Vec::new();
+        rans_save_indices(triangles,&mut out).unwrap();
+        //tmf_mesh.optimize();
+        let _out = std::fs::File::create("target/susan.obj").unwrap();
+    }
+    /*
+    #[test]
+    #[cfg(test)]
+    fn test_delta_nefretiti() {
+        init_test_env();
+        let mut file = std::fs::File::open("target/test_res/Nefertiti.tmf").unwrap();
+        let (tmf_mesh, _name) = TMFMesh::read_tmf_one(&mut file).unwrap();
+        tmf_mesh.verify().unwrap();
+        let triangles = tmf_mesh.get_vertex_triangles().unwrap();
+         calc_freqs(triangles).unwrap();
+        //tmf_mesh.optimize();
+        let _out = std::fs::File::create("target/susan.obj").unwrap();
+    }*/

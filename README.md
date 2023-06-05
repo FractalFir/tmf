@@ -24,15 +24,17 @@ The model used in test is the blender monkey(Suzzane). TMF files were saved with
 | Uncompressed .obj | Compressed .tmf file(default settings) |
 | ------------------ | ---------------------------------------|
 | <img src="docs/original.png"> | <img src="docs/tmf.png"> |
+## Tokio integration
+`tmf` works really well `tokio`. With `tokio_runtime` feature enabled, tmf will decode mesh segments in parallel, improving performance by 30-60%.  
 ## TMF vs. Draco.
 Draco is noticably better at compression than TMF. If all you are looking for is reduced file size, then just use Draco. As a single deveolper there is no way I can manage to create something that even rivals it. **But** if what you are looking for is not only model compression ratio, then TMF still has a lot to offer. 
 ### A comparison of some pros and cons
 | Category | Draco | TMF | 
 |----------|-------|-----|
 | Compression Ratio | Draco is generally better at compressing data, depending on the compression settings it can be between ~80-98% | TMF can compress your file by around 77% 
-| 3D model(Suzanne) read time | 7-10 ms | ~1ms |
+| 3D model(Suzanne) read time | 7-10 ms | ~1.4ms single threaded, .9 ms multithreaded |
 | Impact of compression on read time | Read time increases with compression level | For most settings read time **decreases** with compression level |
-| 3D model(Suzanne) write time | 10-18 ms | 1-2 ms |
+| 3D model(Suzanne) write time | 10-18 ms | 7ms |
 | Final binary size of the lib | 4 MB | 204.4 kB |
 | Codebase size in lines | 74513 | 3191 |
 | Dependenices | Eigen, tinygltf | Only rust stdlib and `small_vec`|
