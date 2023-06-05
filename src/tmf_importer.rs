@@ -167,12 +167,18 @@ impl TMFImportContext {
             //println!("encoded_type:{:?}",encoded.seg_type());
             let ctx = ctx.clone();
             let decoded = async move { DecodedSegment::decode(encoded, &ctx).await };
-            //let decoded = tokio::task::spawn(decoded);
+            
+            #[cfg(feature = "tokio_runtime")]
+            let decoded = {tokio::task::spawn(decoded)};
+            
             decoded_segs.push(decoded);
         }
         let mut res = TMFMesh::empty();
-        join_all(decoded_segs)
-            .await
+        let joined = join_all(decoded_segs)
+            .await;
+        #[cfg(feature = "tokio_runtime")]
+        let joined = {joined.into_iter().collect::<Result<Vec<_>, _>>().unwrap()};
+        joined
             .into_iter()
             .collect::<Result<Vec<_>, _>>()?
             .iter()

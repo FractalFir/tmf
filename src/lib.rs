@@ -708,6 +708,10 @@ impl TMFMesh {
     pub fn read_tmf<R: Read>(reader: &mut R) -> Result<Vec<(Self, String)>, TMFImportError> {
         crate::tmf_importer::import_sync(reader)
     }
+    /// Async version of [`read_tmf`].
+    pub async fn read_tmf_async<R: Read>(reader: &mut R) -> Result<Vec<(Self, String)>, TMFImportError> {
+        crate::tmf_importer::TMFImportContext::import(reader).await
+    }
     /// Reads a single mesh from a .tmf file. Returns [`Err`] if no meshes present or more than one mesh present.
     /// ```
     /// # use tmf::TMFMesh;
@@ -722,6 +726,20 @@ impl TMFMesh {
     /// Returns: an IO error if it occurs, `NotTMFFile` if not tmf file, `NewerVersionRequired` if a newer importer is required for importing the file, and other errors for malformed tmf files. This function also returns `NoMeshes` or `TooManyMeshes` if wrong mesh count present.
     pub fn read_tmf_one<R: Read>(reader: &mut R) -> Result<(Self, String), TMFImportError> {
         let mut meshes = Self::read_tmf(reader)?.into_iter();
+        match meshes.next() {
+            Some(mesh) => {
+                if meshes.next().is_some() {
+                    Err(TMFImportError::TooManyMeshes)
+                } else {
+                    Ok(mesh)
+                }
+            }
+            None => Err(TMFImportError::NoMeshes),
+        }
+    }
+     /// Async version of [`read_tmf_one`].
+    pub async fn read_tmf_one_async<R: Read>(reader: &mut R) -> Result<(Self, String), TMFImportError> {
+        let mut meshes = Self::read_tmf_async(reader).await?.into_iter();
         match meshes.next() {
             Some(mesh) => {
                 if meshes.next().is_some() {
