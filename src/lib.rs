@@ -9,6 +9,20 @@
 //! ## Feature flags
 //pub(crate) MAX_SEG_COUNT:usize = 0xFFFF;
 #![doc = document_features::document_features!()]
+
+macro_rules! runtime_agnostic_block_on {
+    ($to_wait:expr) => {{
+        #[cfg(not(feature = "tokio_runtime"))]
+        {
+            futures::executor::block_on($to_wait)
+        }
+        #[cfg(feature = "tokio_runtime")]
+        {
+            crate::TOKIO_RUNTIME.block_on($to_wait)
+        }
+    }};
+}
+
 #[doc(hidden)]
 pub mod custom_data;
 mod material;
@@ -31,6 +45,7 @@ mod verify;
 mod vertices;
 // Unfinished
 mod lz77;
+
 const TMF_MAJOR: u16 = 0;
 const TMF_MINOR: u16 = 2;
 const MIN_TMF_MAJOR: u16 = 0;
@@ -70,6 +85,12 @@ pub use crate::vertices::VertexPrecisionMode;
 use std::io::{Read, Write};
 #[doc(inline)]
 pub use verify::TMFIntegrityStatus;
+
+#[cfg(feature = "tokio_runtime")]
+lazy_static::lazy_static! {
+    pub(crate) static ref TOKIO_RUNTIME: tokio::runtime::Runtime = tokio::runtime::Runtime::new().unwrap();
+}
+
 /// Settings for saving of a TMF mesh.
 pub struct TMFPrecisionInfo {
     /// How much can the position of any vertex deviate, as a portion of the shortest edge in the model.
@@ -624,7 +645,7 @@ impl TMFMesh {
         p_info: &TMFPrecisionInfo,
         name: S,
     ) -> Result<(), TMFExportError> {
-        futures::executor::block_on(tmf_exporter::write_tmf(&[(self.clone(), name)], w, p_info))
+        runtime_agnostic_block_on!(tmf_exporter::write_tmf(&[(self.clone(), name)], w, p_info))
     }
     /// Writes a number of TMF meshes into one file.
     /// ```
@@ -644,7 +665,7 @@ impl TMFMesh {
         w: &mut W,
         p_info: &TMFPrecisionInfo,
     ) -> Result<(), TMFExportError> {
-        futures::executor::block_on(tmf_exporter::write_tmf(meshes_names, w, p_info))
+        runtime_agnostic_block_on!(tmf_exporter::write_tmf(meshes_names, w, p_info))
     }
     /// Creates an empty TMF Mesh(mesh with no data). Equivalent to [`TMFMesh::default`].
     /// ```
@@ -923,11 +944,10 @@ mod testing {
         let mut file = std::fs::File::open("target/test_res/optimized_susan.tmf").unwrap();
         let mut out = Vec::new();
         file.read_to_end(&mut out).unwrap();
-        let r_mesh = crate::tmf::RUNTIME
-            .block_on(tmf_importer::TMFImportContext::analize(
-                &mut (&out as &[u8]),
-            ))
-            .unwrap();
+        let r_mesh = runtime_agnostic_block_on!(tmf_importer::TMFImportContext::analize(
+            &mut (&out as &[u8]),
+        ))
+        .unwrap();
         todo!();
     }
     #[test]

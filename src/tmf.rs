@@ -5,9 +5,6 @@ use crate::{
     CustomDataSegment, FloatType, IndexType, TMFExportError, TMFImportError, TMFMesh,
     TMFPrecisionInfo, Tangent, Vector2, Vector3, MAX_SEG_SIZE,
 };
-lazy_static::lazy_static! {
-    pub(crate) static ref RUNTIME:tokio::runtime::Runtime = tokio::runtime::Runtime::new().unwrap();
-}
 use smallvec::{smallvec, SmallVec};
 #[repr(u16)]
 #[derive(Debug, PartialEq, Clone, Copy)]
