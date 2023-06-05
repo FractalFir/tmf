@@ -3,6 +3,7 @@ use std::io::{BufWriter, Read, Result, Write};
 type UnalignedStorage = usize;
 #[cfg(feature = "byte_rw")]
 type UnalignedStorage = usize;
+
 const UNALIGNED_STORAGE_BITS: u8 = (std::mem::size_of::<UnalignedStorage>() * 8) as u8;
 pub struct UnalignedReader<R: Read> {
     /// Buff Reader used to speedup reads in some cases.

@@ -1,3 +1,4 @@
+use crate::read_extension::ReadExt;
 use crate::unaligned_rw::{UnalignedRWMode, UnalignedReader, UnalignedWriter};
 use crate::TMFImportError;
 use crate::MAX_SEG_SIZE;
@@ -101,46 +102,25 @@ pub fn save_tmf_vertices<W: Write>(
     writer.flush()?;
     Ok(())
 }
-fn read_f64<R: Read>(reader: &mut R) -> std::io::Result<f64> {
-    let mut tmp = [0; std::mem::size_of::<f64>()];
-    reader.read_exact(&mut tmp)?;
-    Ok(f64::from_le_bytes(tmp))
-}
 pub fn read_tmf_vertices<R: Read>(reader: &mut R) -> Result<Box<[Vector3]>, TMFImportError> {
-    let vertex_count = {
-        let mut tmp = [0; std::mem::size_of::<u64>()];
-        reader.read_exact(&mut tmp)?;
-        u64::from_le_bytes(tmp)
-    } as usize;
+    let vertex_count = reader.read_u64()? as usize;
     // Read data bounding box
-    let min_x = read_f64(reader)? as FloatType;
-    let max_x = read_f64(reader)? as FloatType;
-    let min_y = read_f64(reader)? as FloatType;
-    let max_y = read_f64(reader)? as FloatType;
-    let min_z = read_f64(reader)? as FloatType;
-    let max_z = read_f64(reader)? as FloatType;
+    let min_x = reader.read_f64()? as FloatType;
+    let max_x = reader.read_f64()? as FloatType;
+    let min_y = reader.read_f64()? as FloatType;
+    let max_y = reader.read_f64()? as FloatType;
+    let min_z = reader.read_f64()? as FloatType;
+    let max_z = reader.read_f64()? as FloatType;
     // Read precision
-    let prec_x = {
-        let mut tmp = [0];
-        reader.read_exact(&mut tmp)?;
-        tmp[0]
-    };
+    let prec_x = reader.read_u8()?;
     if prec_x >= u64::BITS as u8 {
         return Err(TMFImportError::InvalidPrecision(prec_x));
     }
-    let prec_y = {
-        let mut tmp = [0];
-        reader.read_exact(&mut tmp)?;
-        tmp[0]
-    };
+    let prec_y = reader.read_u8()?;
     if prec_y >= u64::BITS as u8 {
         return Err(TMFImportError::InvalidPrecision(prec_y));
     }
-    let prec_z = {
-        let mut tmp = [0];
-        reader.read_exact(&mut tmp)?;
-        tmp[0]
-    };
+    let prec_z = reader.read_u8()?;
     if prec_z >= u64::BITS as u8 {
         return Err(TMFImportError::InvalidPrecision(prec_z));
     }
@@ -203,16 +183,8 @@ pub(crate) fn read_triangles<R: Read>(
     reader: &mut R,
     ctx: &crate::tmf_importer::TMFImportContext,
 ) -> Result<Box<[IndexType]>, TMFImportError> {
-    let precision = {
-        let mut tmp = [0];
-        reader.read_exact(&mut tmp)?;
-        tmp[0]
-    };
-    let length = {
-        let mut tmp = [0; std::mem::size_of::<u64>()];
-        reader.read_exact(&mut tmp)?;
-        u64::from_le_bytes(tmp)
-    };
+    let precision = reader.read_u8()?;
+    let length = reader.read_u64()?;
     let min = ctx.read_traingle_min(reader)?;
     if length > MAX_SEG_SIZE as u64 {
         return Err(TMFImportError::SegmentTooLong);

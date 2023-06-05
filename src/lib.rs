@@ -17,6 +17,7 @@ mod model_importer;
 mod normals;
 #[cfg(feature = "obj_import")]
 mod obj;
+mod read_extension;
 #[doc(hidden)]
 pub mod tangents;
 mod tmf;
@@ -70,6 +71,7 @@ pub use crate::vertices::VertexPrecisionMode;
 use std::io::{Read, Write};
 #[doc(inline)]
 pub use verify::TMFIntegrityStatus;
+
 /// Settings for saving of a TMF mesh.
 pub struct TMFPrecisionInfo {
     /// How much can the position of any vertex deviate, as a portion of the shortest edge in the model.

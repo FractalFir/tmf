@@ -1,3 +1,4 @@
+use crate::read_extension::ReadExt;
 use crate::tmf::SectionType;
 use crate::{FloatType, IndexType, TMFImportError, MAX_SEG_SIZE};
 #[derive(Clone, Debug)]
@@ -154,9 +155,7 @@ impl CustomDataSegment {
         kind: SectionType,
         ctx: &crate::tmf_importer::TMFImportContext,
     ) -> Result<Self, TMFImportError> {
-        let mut name_len = [0];
-        src.read_exact(&mut name_len)?;
-        let name_len = name_len[0];
+        let name_len = src.read_u8()?;
         let mut name = [0; u8::MAX as usize];
         src.read_exact(&mut name[..(name_len as usize)])?;
         match kind {
@@ -178,27 +177,13 @@ impl CustomDataSegment {
             }
             SectionType::CustomFloatSegment => {
                 use crate::unaligned_rw::{UnalignedRWMode, UnalignedReader};
-                let len = {
-                    let mut tmp = [0; std::mem::size_of::<u64>()];
-                    src.read_exact(&mut tmp)?;
-                    u64::from_le_bytes(tmp)
-                };
+                let len = src.read_u64()?;
                 if len > MAX_SEG_SIZE as u64 {
                     return Err(TMFImportError::SegmentTooLong);
                 }
-                let min = {
-                    let mut tmp = [0; std::mem::size_of::<f64>()];
-                    src.read_exact(&mut tmp)?;
-                    f64::from_le_bytes(tmp)
-                };
-                let max = {
-                    let mut tmp = [0; std::mem::size_of::<f64>()];
-                    src.read_exact(&mut tmp)?;
-                    f64::from_le_bytes(tmp)
-                };
-                let mut prec = [0];
-                src.read_exact(&mut prec)?;
-                let prec = prec[0];
+                let min = src.read_f64()?;
+                let max = src.read_f64()?;
+                let prec = src.read_u8()?;
                 if prec >= u64::BITS as u8 {
                     return Err(TMFImportError::InvalidPrecision(prec));
                 }

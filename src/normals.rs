@@ -1,3 +1,4 @@
+use crate::read_extension::ReadExt;
 use crate::unaligned_rw::{UnalignedRWMode, UnalignedReader, UnalignedWriter};
 use crate::{FloatType, TMFImportError, Vector3, MAX_SEG_SIZE};
 #[cfg(not(feature = "double_precision"))]
@@ -5,6 +6,7 @@ use std::f32::consts::FRAC_PI_2;
 #[cfg(feature = "double_precision")]
 use std::f64::consts::FRAC_PI_2;
 use std::io::{Read, Write};
+
 #[derive(Clone, Copy, PartialEq)]
 /// Setting dictating how much can any normal in a model deviate, expressed as an angle.
 pub struct NormalPrecisionMode(u8);
@@ -161,19 +163,11 @@ pub(crate) fn save_normal_array<W: Write>(
     Ok(())
 }
 pub(crate) fn read_normal_array<R: Read>(reader: &mut R) -> Result<Box<[Vector3]>, TMFImportError> {
-    let count = {
-        let mut tmp = [0; std::mem::size_of::<u64>()];
-        reader.read_exact(&mut tmp)?;
-        u64::from_le_bytes(tmp)
-    } as usize;
+    let count = reader.read_u64()? as usize;
     if count > MAX_SEG_SIZE {
         return Err(TMFImportError::SegmentTooLong);
     }
-    let precision = {
-        let mut tmp: [u8; 1] = [0; 1];
-        reader.read_exact(&mut tmp)?;
-        tmp[0]
-    };
+    let precision = reader.read_u8()?;
     if precision == 0 {}
     if precision >= u64::BITS as u8 {
         return Err(TMFImportError::InvalidPrecision(precision));
