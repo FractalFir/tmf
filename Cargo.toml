@@ -39,10 +39,10 @@ short_indices = []
 byte_rw = []
 model_importer = []
 
-## Adds the ability to import/export .obj files. Enabled by default
+## Adds the ability to import/export .obj files.
 obj_import = ["model_importer"]
 
-## Use the tokio runtime, significantly increasing performance of synchronous loads, at the cost of minor compile time increase. Enabled by default.
+## Use the tokio runtime, significantly increasing performance of synchronous loads, at the cost of minor compile time increase.
 tokio_runtime = ["tokio", "lazy_static"]
 
 [[bench]]
