@@ -2,7 +2,7 @@ use crate::unaligned_rw::{UnalignedRWMode, UnalignedReader, UnalignedWriter};
 use crate::FloatType;
 use crate::NormalPrecisionMode;
 /// A value describing handedness of tangent.
-pub type HandenesType = FloatType;
+pub type HandednessType = FloatType;
 #[derive(Clone, Copy)]
 /// A value specifying how precise saved (x,y,z) values must be.
 pub struct TangentPrecisionMode(crate::NormalPrecisionMode);
@@ -29,10 +29,10 @@ impl Default for TangentPrecisionMode {
         Self::from_deg_dev(1.0)
     }
 }
- fn ht_to_bool(ht:HandenesType) -> bool {
+ fn ht_to_bool(ht:HandednessType) -> bool {
         ht.is_sign_negative()
     }
-    fn ht_from_bool(src: bool) -> HandenesType {
+    fn ht_from_bool(src: bool) -> HandednessType {
         if src {
             -1.0
         } else {
@@ -40,7 +40,7 @@ impl Default for TangentPrecisionMode {
         }
     }
 /// A representation of a Tangent.
-pub type Tangent = (crate::Vector3, HandenesType);
+pub type Tangent = (crate::Vector3, HandednessType);
 fn tangent_to_encoding(
     tangent: Tangent,
     prec: TangentPrecisionMode,
