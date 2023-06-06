@@ -86,22 +86,29 @@ pub(crate) fn optimize_triangle_indices<T: Sized + Copy + std::fmt::Debug>(
     indices: &[IndexType],
     data: &[T],
 ) -> (Box<[IndexType]>, Box<[T]>) {
-    if indices.len() == 0 || data.len() == 0{
-        return (indices.into(),data.into())
-    }
-    let mut first_occurs = vec![usize::MAX;data.len()];
-    let mut curr_occurance = 0;
+    const INDEX_NOT_MAPPED:usize = usize::MAX;
+    let mut index_map = vec![INDEX_NOT_MAPPED;data.len()];
+    let mut data_mapped:Vec<T> = Vec::with_capacity(data.len());
+    let mut curr_map_index:usize = 0;
     for index in indices{
-        if first_occurs[*index as usize] > curr_occurance{
-           first_occurs[*index as usize] = curr_occurance;
-           curr_occurance += 1;
-        }
+        if index_map[*index as usize] == INDEX_NOT_MAPPED{
+            index_map[*index as usize] = curr_map_index;
+            data_mapped.push(data[*index as usize]);
+            println!("mapping:{:?} to {curr_map_index}!",data[*index as usize]);
+            curr_map_index += 1;
+        } 
     }
-    //println!("first_occurs:{first_occurs:?}");
-    let mut new_indices:Box<[_]> = indices.iter().map(|index|{first_occurs[*index as usize] as IndexType}).collect();
-    //println!("new_indices:{new_indices:?}");
-    let mut new_data:Box<[_]> = (0..data.len()).into_iter().map(|index|{data[index]}).collect();
-    (new_indices,new_data)
+    let new_indices:Box<[IndexType]> = indices.iter().map(|index|{index_map[*index as usize] as IndexType}).collect();
+    (new_indices,data_mapped.into())
+}
+#[test]
+fn test_opt_tris(){
+    let test_data = ["A","B","C","D","E"];
+    let test_indices = [4,2,3,4,1,3,2,0];
+    let test_final:Vec<_> = test_indices.iter().map(|index|{ test_data[*index as usize]}).collect();
+    let (new_indices,new_data) = optimize_triangle_indices(&test_indices,&test_data);
+    let new_final:Vec<_> = new_indices.iter().map(|index|{ new_data[*index as usize]}).collect();
+    assert_eq!(test_final,new_final);
 }
 #[test]
 #[cfg(feature = "obj_import")]
@@ -116,5 +123,7 @@ fn save_optimized_susan_tmf() {
     let mut out = std::fs::File::create("target/test_res/optimized_susan.tmf").unwrap();
     assert!(name == "Suzanne", "Name should be Suzanne but is {name}");
     let prec = TMFPrecisionInfo::default();
-    tmf_mesh.write_tmf_one(&mut out, &prec, name).unwrap();
+    tmf_mesh.write_tmf_one(&mut out, &prec, name.clone()).unwrap();
+    let mut out = std::fs::File::create("target/test_res/optimized_susan.obj").unwrap();
+    tmf_mesh.write_obj_one(&mut out,&name).unwrap();
 }

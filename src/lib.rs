@@ -135,8 +135,7 @@ impl Default for TMFMesh {
     }
 }
 impl TMFMesh {
-    pub fn optimize(&mut self) {
-        /*
+    pub fn optimize(&mut self) {       
         if let Some((vertices, vertex_triangles)) =
             self.get_vertices().zip(self.get_vertex_triangles())
         {
@@ -160,7 +159,7 @@ impl TMFMesh {
                 utilis::optimize_triangle_indices(uv_triangles, uvs);
             self.set_uvs(uvs);
             self.set_uv_triangles(uv_triangles);
-        }*/
+        }
     }
     /// Sets mesh vertex array and returns old vertex array if present. New mesh data is **not** checked during this function call, so to ensure mesh is valid call [`Self::verify`] before saving.
     ///```
