@@ -1,3 +1,4 @@
+use crate::read_extension::ReadExt;
 use crate::unaligned_rw::{UnalignedRWMode, UnalignedReader, UnalignedWriter};
 use crate::TMFImportError;
 use crate::MAX_SEG_SIZE;
@@ -50,16 +51,8 @@ pub fn save_uvs<W: Write>(
     Ok(())
 }
 pub fn read_uvs<R: Read>(reader: &mut R) -> Result<Box<[Vector2]>, TMFImportError> {
-    let precision = {
-        let mut tmp = [0];
-        reader.read_exact(&mut tmp)?;
-        tmp[0]
-    };
-    let count = {
-        let mut tmp = [0; std::mem::size_of::<u64>()];
-        reader.read_exact(&mut tmp)?;
-        u64::from_le_bytes(tmp)
-    };
+    let precision = reader.read_u8()?;
+    let count = reader.read_u64()?;
     if count > MAX_SEG_SIZE as u64 {
         return Err(TMFImportError::SegmentTooLong);
     }

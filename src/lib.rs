@@ -31,6 +31,7 @@ mod model_importer;
 mod normals;
 #[cfg(feature = "obj_import")]
 mod obj;
+mod read_extension;
 #[doc(hidden)]
 pub mod tangents;
 mod tmf;

@@ -1,3 +1,4 @@
+use crate::read_extension::ReadExt;
 use crate::unaligned_rw::{UnalignedRWMode, UnalignedReader, UnalignedWriter};
 use crate::FloatType;
 use crate::NormalPrecisionMode;
@@ -87,16 +88,8 @@ pub(crate) fn save_tangents<W: std::io::Write>(
     Ok(())
 }
 pub(crate) fn read_tangents<R: std::io::Read>(src: &mut R) -> std::io::Result<Box<[Tangent]>> {
-    let count = {
-        let mut tmp = [0; std::mem::size_of::<u64>()];
-        src.read_exact(&mut tmp)?;
-        u64::from_le_bytes(tmp)
-    };
-    let bits_prec = {
-        let mut tmp = [0; std::mem::size_of::<u8>()];
-        src.read_exact(&mut tmp)?;
-        u8::from_le_bytes(tmp)
-    };
+    let count = src.read_u64()?;
+    let bits_prec = src.read_u8()?;
     let mut reader = UnalignedReader::new(src);
     let prec = UnalignedRWMode::precision_bits(bits_prec);
     let tan_prec = TangentPrecisionMode::from_bits(bits_prec);

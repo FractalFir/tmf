@@ -1,3 +1,4 @@
+use crate::read_extension::ReadExt;
 use crate::tmf_exporter::EncodeInfo;
 use crate::tmf_importer::TMFImportContext;
 use crate::unaligned_rw::{UnalignedRWMode, UnalignedReader};
@@ -127,11 +128,7 @@ impl EncodedSegment {
     ) -> Result<Self, TMFImportError> {
         let seg_type = ctx.segment_type_width().read(src)?;
         let data_length = ctx.segment_length_width().read(src)?;
-        let compresion_type = {
-            let mut tmp = [0];
-            src.read_exact(&mut tmp)?;
-            CompressionType::from_u8(tmp[0])?
-        };
+        let compresion_type = CompressionType::from_u8(src.read_u8()?)?;
         let mut data = vec![0; data_length];
         src.read_exact(&mut data)?;
         Ok(Self {
@@ -192,16 +189,8 @@ fn read_default_triangles<R: std::io::Read>(
     data: &mut Vec<IndexType>,
     ctx: &crate::tmf_importer::TMFImportContext,
 ) -> Result<(), TMFImportError> {
-    let precision_bits = {
-        let mut tmp = [0];
-        src.read_exact(&mut tmp)?;
-        tmp[0]
-    };
-    let length = {
-        let mut tmp = [0; std::mem::size_of::<u64>()];
-        src.read_exact(&mut tmp)?;
-        u64::from_le_bytes(tmp)
-    };
+    let precision_bits = src.read_u8()?;
+    let length = src.read_u64()?;
     let min = ctx.read_traingle_min(&mut src)?;
     if length > MAX_SEG_SIZE as u64 {
         return Err(TMFImportError::SegmentTooLong);
@@ -275,7 +264,7 @@ fn calc_spilt_score(len: usize, delta_span: (IndexType, IndexType)) -> isize {
         ((TMF_SEG_SIZE + std::mem::size_of::<u8>() + std::mem::size_of::<u32>()) * 8) as isize;
     gain - loss
 }
-fn search_for_sequential_regions(triangles:&[IndexType]){
+fn search_for_sequential_regions(triangles: &[IndexType]) {
     /*
     let mut last = 0;
     let mut span_start = 0;

@@ -1,6 +1,10 @@
+use std::io::Read;
+
+use crate::read_extension::ReadExt;
 use crate::tmf::{DecodedSegment, EncodedSegment, SectionType};
 use crate::{TMFImportError, TMFMesh, TMF_MAJOR, TMF_MINOR};
 use futures::future::join_all;
+
 #[derive(Clone, Copy)]
 pub(crate) enum SegLenWidth {
     U32,
@@ -14,18 +18,10 @@ impl SegLenWidth {
             Self::U64
         }
     }
-    pub(crate) fn read<R: std::io::Read>(&self, src: &mut R) -> std::io::Result<usize> {
+    pub(crate) fn read<R: Read>(&self, src: &mut R) -> std::io::Result<usize> {
         Ok(match self {
-            Self::U32 => {
-                let mut tmp = [0; std::mem::size_of::<u32>()];
-                src.read_exact(&mut tmp)?;
-                u32::from_le_bytes(tmp) as usize
-            }
-            Self::U64 => {
-                let mut tmp = [0; std::mem::size_of::<u64>()];
-                src.read_exact(&mut tmp)?;
-                u64::from_le_bytes(tmp) as usize
-            }
+            Self::U32 => src.read_u32()? as usize,
+            Self::U64 => src.read_u64()? as usize,
         })
     }
 }
@@ -42,18 +38,10 @@ impl SegTypeWidth {
             Self::U16
         }
     }
-    pub(crate) fn read<R: std::io::Read>(&self, src: &mut R) -> std::io::Result<SectionType> {
+    pub(crate) fn read<R: Read>(&self, src: &mut R) -> std::io::Result<SectionType> {
         Ok(match self {
-            Self::U8 => {
-                let mut tmp = [0; std::mem::size_of::<u8>()];
-                src.read_exact(&mut tmp)?;
-                SectionType::from_u8(u8::from_le_bytes(tmp))
-            }
-            Self::U16 => {
-                let mut tmp = [0; std::mem::size_of::<u16>()];
-                src.read_exact(&mut tmp)?;
-                SectionType::from_u16(u16::from_le_bytes(tmp))
-            }
+            Self::U8 => SectionType::from_u8(src.read_u8()?),
+            Self::U16 => SectionType::from_u16(src.read_u16()?),
         })
     }
 }
@@ -71,12 +59,8 @@ struct TMFHeader {
     min_major: u16,
     min_minor: u16,
 }
-pub(crate) fn read_string<R: std::io::Read>(src: &mut R) -> std::io::Result<String> {
-    let byte_len = {
-        let mut tmp = [0; std::mem::size_of::<u16>()];
-        src.read_exact(&mut tmp)?;
-        u16::from_le_bytes(tmp)
-    };
+pub(crate) fn read_string<R: Read>(src: &mut R) -> std::io::Result<String> {
+    let byte_len = src.read_u16()?;
     let mut bytes = vec![0; byte_len as usize];
     src.read_exact(&mut bytes)?;
     match std::str::from_utf8(&bytes) {
@@ -87,33 +71,18 @@ pub(crate) fn read_string<R: std::io::Read>(src: &mut R) -> std::io::Result<Stri
         )),
     }
 }
-async fn read_tmf_header<R: std::io::Read>(src: &mut R) -> Result<TMFHeader, TMFImportError> {
+async fn read_tmf_header<R: Read>(src: &mut R) -> Result<TMFHeader, TMFImportError> {
     let mut magic = [0; 3];
     src.read_exact(&mut magic)?;
     if magic != *b"TMF" {
         return Err(TMFImportError::NotTMFFile);
     }
-    let major = {
-        let mut tmp = [0; std::mem::size_of::<u16>()];
-        src.read_exact(&mut tmp)?;
-        u16::from_le_bytes(tmp)
-    };
-    let minor = {
-        let mut tmp = [0; std::mem::size_of::<u16>()];
-        src.read_exact(&mut tmp)?;
-        u16::from_le_bytes(tmp)
-    };
+    let major = src.read_u16()?;
+    let minor = src.read_u16()?;
     // Minimum version of reader required to read
-    let min_major = {
-        let mut tmp = [0; std::mem::size_of::<u16>()];
-        src.read_exact(&mut tmp)?;
-        u16::from_le_bytes(tmp)
-    };
-    let min_minor = {
-        let mut tmp = [0; std::mem::size_of::<u16>()];
-        src.read_exact(&mut tmp)?;
-        u16::from_le_bytes(tmp)
-    };
+    let min_major = src.read_u16()?;
+    let min_minor = src.read_u16()?;
+
     if min_major > TMF_MAJOR || (min_major == TMF_MAJOR && min_minor > TMF_MINOR) {
         Err(TMFImportError::NewerVersionRequired)
     } else {
@@ -132,35 +101,28 @@ impl TMFImportContext {
     pub(crate) fn segment_length_width(&self) -> &SegLenWidth {
         &self.segment_length_width
     }
-    pub(crate) fn read_traingle_min<R: std::io::Read>(&self, src: &mut R) -> std::io::Result<u64> {
+    pub(crate) fn read_traingle_min<R: Read>(&self, src: &mut R) -> std::io::Result<u64> {
         if self.should_read_min_index {
-            let mut tmp = [0; std::mem::size_of::<u64>()];
-            src.read_exact(&mut tmp)?;
-            Ok(u64::from_le_bytes(tmp))
+            src.read_u64()
         } else {
             Ok(0)
         }
     }
     fn init_header(hdr: TMFHeader) -> Self {
-        let segment_length_width = SegLenWidth::from_header(&hdr);
-        let segment_type_width = SegTypeWidth::from_header(&hdr);
         Self {
-            segment_length_width,
-            segment_type_width,
+            segment_length_width: SegLenWidth::from_header(&hdr),
+            segment_type_width: SegTypeWidth::from_header(&hdr),
             should_read_min_index: (hdr.min_minor > 1),
         }
     }
-    async fn import_mesh<R: std::io::Read>(
+    async fn import_mesh<R: Read>(
         &self,
         mut src: R,
-        ctx: &crate::tmf_importer::TMFImportContext,
+        ctx: &Self,
     ) -> Result<(TMFMesh, String), TMFImportError> {
         let name = read_string(&mut src)?;
-        let segment_count = {
-            let mut tmp = [0; std::mem::size_of::<u16>()];
-            src.read_exact(&mut tmp)?;
-            u16::from_le_bytes(tmp)
-        }; //self.segment_length_width.read(&mut src)?;
+        let segment_count = src.read_u16()?;
+        //self.segment_length_width.read(&mut src)?;
         let mut decoded_segs = Vec::with_capacity(segment_count as usize);
         for _ in 0..segment_count {
             let encoded = EncodedSegment::read(self, &mut src)?;
@@ -187,17 +149,9 @@ impl TMFImportContext {
             });
         Ok((res, name))
     }
-    async fn analize_mesh<R: std::io::Read>(
-        &self,
-        mut src: R,
-        ctx: &crate::tmf_importer::TMFImportContext,
-    ) -> Result<(), TMFImportError> {
+    async fn analize_mesh<R: Read>(&self, mut src: R, ctx: &Self) -> Result<(), TMFImportError> {
         let name = read_string(&mut src)?;
-        let segment_count = {
-            let mut tmp = [0; std::mem::size_of::<u16>()];
-            src.read_exact(&mut tmp)?;
-            u16::from_le_bytes(tmp)
-        };
+        let segment_count = src.read_u16()?;
         let mut results = [0; 256];
         for _ in 0..segment_count {
             let encoded = EncodedSegment::read(self, &mut src)?;
@@ -216,30 +170,22 @@ impl TMFImportContext {
         println!("res:{res:?}, total_len:{total}");
         Ok(())
     }
-    pub(crate) async fn import<R: std::io::Read>(
+    pub(crate) async fn import<R: Read>(
         mut src: R,
     ) -> Result<Vec<(TMFMesh, String)>, TMFImportError> {
         let header = read_tmf_header(&mut src).await?;
         let res = Self::init_header(header);
-        let mesh_count = {
-            let mut tmp = [0; std::mem::size_of::<u32>()];
-            src.read_exact(&mut tmp)?;
-            u32::from_le_bytes(tmp)
-        };
+        let mesh_count = src.read_u32()?;
         let mut meshes = Vec::with_capacity((u16::MAX as usize).min(mesh_count as usize));
         for _ in 0..mesh_count {
             meshes.push(res.import_mesh(&mut src, &res).await?);
         }
         Ok(meshes)
     }
-    pub(crate) async fn analize<R: std::io::Read>(mut src: R) -> Result<(), TMFImportError> {
+    pub(crate) async fn analize<R: Read>(mut src: R) -> Result<(), TMFImportError> {
         let header = read_tmf_header(&mut src).await?;
         let res = Self::init_header(header);
-        let mesh_count = {
-            let mut tmp = [0; std::mem::size_of::<u32>()];
-            src.read_exact(&mut tmp)?;
-            u32::from_le_bytes(tmp)
-        };
+        let mesh_count = src.read_u32()?;
         for _ in 0..mesh_count {
             res.analize_mesh(&mut src, &res).await?;
         }
