@@ -9,6 +9,20 @@
 //! ## Feature flags
 //pub(crate) MAX_SEG_COUNT:usize = 0xFFFF;
 #![doc = document_features::document_features!()]
+
+macro_rules! runtime_agnostic_block_on {
+    ($to_wait:expr) => {{
+        #[cfg(not(feature = "tokio_runtime"))]
+        {
+            futures::executor::block_on($to_wait)
+        }
+        #[cfg(feature = "tokio_runtime")]
+        {
+            crate::TOKIO_RUNTIME.block_on($to_wait)
+        }
+    }};
+}
+
 #[doc(hidden)]
 pub mod custom_data;
 mod material;
@@ -32,6 +46,7 @@ mod verify;
 mod vertices;
 // Unfinished
 mod lz77;
+
 const TMF_MAJOR: u16 = 0;
 const TMF_MINOR: u16 = 2;
 const MIN_TMF_MAJOR: u16 = 0;
@@ -71,6 +86,11 @@ pub use crate::vertices::VertexPrecisionMode;
 use std::io::{Read, Write};
 #[doc(inline)]
 pub use verify::TMFIntegrityStatus;
+
+#[cfg(feature = "tokio_runtime")]
+lazy_static::lazy_static! {
+    pub(crate) static ref TOKIO_RUNTIME: tokio::runtime::Runtime = tokio::runtime::Runtime::new().unwrap();
+}
 
 /// Settings for saving of a TMF mesh.
 pub struct TMFPrecisionInfo {
@@ -626,7 +646,7 @@ impl TMFMesh {
         p_info: &TMFPrecisionInfo,
         name: S,
     ) -> Result<(), TMFExportError> {
-        futures::executor::block_on(tmf_exporter::write_tmf(&[(self.clone(), name)], w, p_info))
+        runtime_agnostic_block_on!(tmf_exporter::write_tmf(&[(self.clone(), name)], w, p_info))
     }
     /// Writes a number of TMF meshes into one file.
     /// ```
@@ -646,7 +666,7 @@ impl TMFMesh {
         w: &mut W,
         p_info: &TMFPrecisionInfo,
     ) -> Result<(), TMFExportError> {
-        futures::executor::block_on(tmf_exporter::write_tmf(meshes_names, w, p_info))
+        runtime_agnostic_block_on!(tmf_exporter::write_tmf(meshes_names, w, p_info))
     }
     /// Creates an empty TMF Mesh(mesh with no data). Equivalent to [`TMFMesh::default`].
     /// ```
@@ -689,6 +709,10 @@ impl TMFMesh {
     pub fn read_tmf<R: Read>(reader: &mut R) -> Result<Vec<(Self, String)>, TMFImportError> {
         crate::tmf_importer::import_sync(reader)
     }
+    /// Async version of [`read_tmf`].
+    pub async fn read_tmf_async<R: Read>(reader: &mut R) -> Result<Vec<(Self, String)>, TMFImportError> {
+        crate::tmf_importer::TMFImportContext::import(reader).await
+    }
     /// Reads a single mesh from a .tmf file. Returns [`Err`] if no meshes present or more than one mesh present.
     /// ```
     /// # use tmf::TMFMesh;
@@ -703,6 +727,20 @@ impl TMFMesh {
     /// Returns: an IO error if it occurs, `NotTMFFile` if not tmf file, `NewerVersionRequired` if a newer importer is required for importing the file, and other errors for malformed tmf files. This function also returns `NoMeshes` or `TooManyMeshes` if wrong mesh count present.
     pub fn read_tmf_one<R: Read>(reader: &mut R) -> Result<(Self, String), TMFImportError> {
         let mut meshes = Self::read_tmf(reader)?.into_iter();
+        match meshes.next() {
+            Some(mesh) => {
+                if meshes.next().is_some() {
+                    Err(TMFImportError::TooManyMeshes)
+                } else {
+                    Ok(mesh)
+                }
+            }
+            None => Err(TMFImportError::NoMeshes),
+        }
+    }
+     /// Async version of [`read_tmf_one`].
+    pub async fn read_tmf_one_async<R: Read>(reader: &mut R) -> Result<(Self, String), TMFImportError> {
+        let mut meshes = Self::read_tmf_async(reader).await?.into_iter();
         match meshes.next() {
             Some(mesh) => {
                 if meshes.next().is_some() {
@@ -925,11 +963,10 @@ mod testing {
         let mut file = std::fs::File::open("target/test_res/optimized_susan.tmf").unwrap();
         let mut out = Vec::new();
         file.read_to_end(&mut out).unwrap();
-        let r_mesh = crate::tmf::RUNTIME
-            .block_on(tmf_importer::TMFImportContext::analize(
-                &mut (&out as &[u8]),
-            ))
-            .unwrap();
+        let r_mesh = runtime_agnostic_block_on!(tmf_importer::TMFImportContext::analize(
+            &mut (&out as &[u8]),
+        ))
+        .unwrap();
         todo!();
     }
     #[test]

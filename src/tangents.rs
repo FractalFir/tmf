@@ -2,10 +2,8 @@ use crate::read_extension::ReadExt;
 use crate::unaligned_rw::{UnalignedRWMode, UnalignedReader, UnalignedWriter};
 use crate::FloatType;
 use crate::NormalPrecisionMode;
-
-#[derive(Clone, Copy, Debug)]
 /// A value describing handedness of tangent.
-pub struct HandenesType(FloatType);
+pub type HandednessType = FloatType;
 #[derive(Clone, Copy)]
 /// A value specifying how precise saved (x,y,z) values must be.
 pub struct TangentPrecisionMode(crate::NormalPrecisionMode);
@@ -32,26 +30,24 @@ impl Default for TangentPrecisionMode {
         Self::from_deg_dev(1.0)
     }
 }
-impl HandenesType {
-    fn to_bool(self) -> bool {
-        self.0.is_sign_negative()
+ fn ht_to_bool(ht:HandednessType) -> bool {
+        ht.is_sign_negative()
     }
-    fn from_bool(src: bool) -> Self {
+    fn ht_from_bool(src: bool) -> HandednessType {
         if src {
-            Self(-1.0)
+            -1.0
         } else {
-            Self(1.0)
+            1.0
         }
     }
-}
 /// A representation of a Tangent.
-pub type Tangent = (crate::Vector3, HandenesType);
+pub type Tangent = (crate::Vector3, HandednessType);
 fn tangent_to_encoding(
     tangent: Tangent,
     prec: TangentPrecisionMode,
 ) -> (u64, u64, bool, bool, bool, bool) {
     let normal = crate::normals::normal_to_encoding(tangent.0, &prec.normal_precision());
-    let handeness = tangent.1.to_bool();
+    let handeness = ht_to_bool(tangent.1);
     (normal.0, normal.1, normal.2, normal.3, normal.4, handeness)
 }
 fn tangent_from_encoding(
@@ -65,7 +61,7 @@ fn tangent_from_encoding(
 ) -> Tangent {
     let normal =
         crate::normals::normal_from_encoding(asine, z, sx, sy, sz, prec.normal_precision());
-    let handeness = HandenesType::from_bool(handenes);
+    let handeness = ht_from_bool(handenes);
     (normal, handeness)
 }
 pub(crate) fn save_tangents<W: std::io::Write>(
@@ -117,7 +113,7 @@ fn test_tangent(tangent: Tangent, prec: TangentPrecisionMode) -> FloatType {
     let decoded = tangent_from_encoding(
         encoded.0, encoded.1, encoded.2, encoded.3, encoded.4, encoded.5, prec,
     );
-    assert_eq!(tangent.1.to_bool(), decoded.1.to_bool());
+    assert_eq!(ht_to_bool(tangent.1), ht_to_bool(decoded.1));
     (1.0 - crate::utilis::dot(decoded.0, tangent.0)) * 180.0
 }
 #[cfg(test)]
@@ -130,7 +126,7 @@ fn rand_tangent() -> Tangent {
         rng.gen::<FloatType>() - 0.5,
     );
     let norm = crate::utilis::normalize(norm);
-    let handeness = HandenesType::from_bool(rng.gen::<bool>());
+    let handeness = ht_from_bool(rng.gen::<bool>());
     (norm, handeness)
 }
 #[cfg(test)]

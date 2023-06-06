@@ -9,19 +9,22 @@ repository = "https://github.com/FractalFir/tmf"
 authors = ["FractalFir <fractalfirdev@gmail.com>"]
 keywords = ["graphics","3D","compression","lossy","gamedev"]
 categories = ["game-development","rendering::data-formats","compression"]
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
 ##! Test
 [dependencies]
 document-features = "0.2.7"
 futures = { version = "0.3.28" }
-lazy_static = "1.4.0"
+lazy_static = { version = "1.4.0", optional = true }
 smallvec = "1.10.0"
-tokio = { version = "1.28.1", features = ["rt", "rt-multi-thread"] }
+tokio = { version = "1.28.1", features = ["rt", "rt-multi-thread"], optional = true }
+
 [dev-dependencies]
 criterion = "0.5.1"
 rand = "0.8.5"
+
 [features]
-default = ["obj_import"]
+default = ["obj_import", "tokio_runtime"]
+
 ## Experimental triangulation in .obj loader. Supports only convex polygons ATM, and has bugs, triangulating your mesh in 3D modelling software before importing highly advised. Please note that if you see any triangles missing this is likely the result of the triangulation algorithm not working properly. 
 triangulation = []
 ## Changes the sin and cos function used in reading the tmf files for a potentially faster, but less accurate functions.
@@ -35,8 +38,12 @@ short_indices = []
 ## Changes the internal setting of the unaligned reader to use different data size. Can be beneficial for small models on some systems.
 byte_rw = []
 model_importer = []
-## Adds the ability to import/export .obj files
+
+## Adds the ability to import/export .obj files.
 obj_import = ["model_importer"]
+
+## Use the tokio runtime, significantly increasing performance of synchronous loads, at the cost of minor compile time increase.
+tokio_runtime = ["tokio", "lazy_static"]
 
 [[bench]]
 name = "unaligned_rw"
