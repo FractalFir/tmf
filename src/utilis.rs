@@ -86,29 +86,65 @@ pub(crate) fn optimize_triangle_indices<T: Sized + Copy + std::fmt::Debug>(
     indices: &[IndexType],
     data: &[T],
 ) -> (Box<[IndexType]>, Box<[T]>) {
-    const INDEX_NOT_MAPPED:usize = usize::MAX;
-    let mut index_map = vec![INDEX_NOT_MAPPED;data.len()];
-    let mut data_mapped:Vec<T> = Vec::with_capacity(data.len());
-    let mut curr_map_index:usize = 0;
-    for index in indices{
-        if index_map[*index as usize] == INDEX_NOT_MAPPED{
+    if indices.is_empty() || data.is_empty() {
+        return (indices.into(), data.into());
+    }
+    const INDEX_NOT_MAPPED: usize = usize::MAX;
+    let mut index_map = vec![INDEX_NOT_MAPPED; data.len()];
+    let mut data_mapped: Vec<T> = Vec::with_capacity(data.len());
+    let mut curr_map_index: usize = 0;
+    for index in indices {
+        if index_map[*index as usize] == INDEX_NOT_MAPPED {
             index_map[*index as usize] = curr_map_index;
             data_mapped.push(data[*index as usize]);
-            println!("mapping:{:?} to {curr_map_index}!",data[*index as usize]);
+            //println!("mapping:{:?} to {curr_map_index}!",data[*index as usize]);
             curr_map_index += 1;
-        } 
+        }
     }
-    let new_indices:Box<[IndexType]> = indices.iter().map(|index|{index_map[*index as usize] as IndexType}).collect();
-    (new_indices,data_mapped.into())
+    let new_indices: Box<[IndexType]> = indices
+        .iter()
+        .map(|index| index_map[*index as usize] as IndexType)
+        .collect();
+    (new_indices, data_mapped.into())
 }
+fn calc_deltas(data: &[IndexType]) {
+    let mut deltas = Vec::with_capacity(data.len());
+    for index in 0..(data.len() - 1) {
+        deltas.push((data[index] as isize - data[index + 1] as isize).abs() as usize);
+    }
+    let avg = ((deltas.iter().sum::<usize>()) / (data.len() as usize));
+    let mut delta_over_avg = 0;
+    deltas.iter().for_each(|delta| {
+        if *delta > avg {
+            delta_over_avg += 1
+        }
+    });
+    todo!("avg delta:{avg:?} delta_over_avg:{delta_over_avg}");
+}
+/*
 #[test]
-fn test_opt_tris(){
-    let test_data = ["A","B","C","D","E"];
-    let test_indices = [4,2,3,4,1,3,2,0];
-    let test_final:Vec<_> = test_indices.iter().map(|index|{ test_data[*index as usize]}).collect();
-    let (new_indices,new_data) = optimize_triangle_indices(&test_indices,&test_data);
-    let new_final:Vec<_> = new_indices.iter().map(|index|{ new_data[*index as usize]}).collect();
-    assert_eq!(test_final,new_final);
+fn test_delta_encode(){
+    use crate::{TMFMesh, TMFPrecisionInfo};
+    crate::init_test_env();
+    let mut file = std::fs::File::open("testing/susan.obj").unwrap();
+    let (mut tmf_mesh, name) = TMFMesh::read_from_obj_one(&mut file).unwrap();
+    tmf_mesh.optimize();
+    delta_encode(tmf_mesh.get_vertex_triangles().unwrap());
+}*/
+#[test]
+fn test_opt_tris() {
+    let test_data = ["A", "B", "C", "D", "E"];
+    let test_indices = [4, 2, 3, 4, 1, 3, 2, 0];
+    let test_final: Vec<_> = test_indices
+        .iter()
+        .map(|index| test_data[*index as usize])
+        .collect();
+    let (new_indices, new_data) = optimize_triangle_indices(&test_indices, &test_data);
+    let new_final: Vec<_> = new_indices
+        .iter()
+        .map(|index| new_data[*index as usize])
+        .collect();
+    assert_eq!(test_final, new_final);
 }
 #[test]
 #[cfg(feature = "obj_import")]
@@ -118,12 +154,32 @@ fn save_optimized_susan_tmf() {
     let mut file = std::fs::File::open("testing/susan.obj").unwrap();
     let (mut tmf_mesh, name) = TMFMesh::read_from_obj_one(&mut file).unwrap();
     tmf_mesh.verify().unwrap();
-    tmf_mesh.optimize();
+    tmf_mesh.reorder_data();
     tmf_mesh.verify().unwrap();
     let mut out = std::fs::File::create("target/test_res/optimized_susan.tmf").unwrap();
-    assert!(name == "Suzanne", "Name should be Suzanne but is {name}");
+    assert_eq!(name, "Suzanne");
+    let prec = TMFPrecisionInfo::default();
+    tmf_mesh
+        .write_tmf_one(&mut out, &prec, name.clone())
+        .unwrap();
+    let mut out = std::fs::File::create("target/test_res/optimized_susan.obj").unwrap();
+    tmf_mesh.write_obj_one(&mut out, &name).unwrap();
+}
+/*
+#[test]
+#[cfg(feature = "obj_import")]
+fn save_optimized_nefretiti_tmf() {
+    use crate::{TMFMesh, TMFPrecisionInfo};
+    crate::init_test_env();
+    let mut file = std::fs::File::open("testing/Nefertiti.obj").unwrap();
+    let (mut tmf_mesh, name) = TMFMesh::read_from_obj_one(&mut file).unwrap();
+    tmf_mesh.verify().unwrap();
+    tmf_mesh.optimize();
+    tmf_mesh.verify().unwrap();
+    let mut out = std::fs::File::create("target/test_res/optimized_nefretiti.tmf").unwrap();
+    assert_eq!(name,"Nefertiti");
     let prec = TMFPrecisionInfo::default();
     tmf_mesh.write_tmf_one(&mut out, &prec, name.clone()).unwrap();
-    let mut out = std::fs::File::create("target/test_res/optimized_susan.obj").unwrap();
+    let mut out = std::fs::File::create("target/test_res/optimized_nefretiti.obj").unwrap();
     tmf_mesh.write_obj_one(&mut out,&name).unwrap();
-}
+}*/

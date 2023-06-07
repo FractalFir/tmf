@@ -40,6 +40,7 @@ mod tmf_importer;
 /// Module used to handle reads of data which is not bit aligned(for example, 3 or 17 bits). This is the module that allows for heavy compression used in this format.
 #[doc(hidden)]
 pub mod unaligned_rw;
+mod unify_data;
 mod utilis;
 mod uv;
 mod verify;
@@ -135,7 +136,8 @@ impl Default for TMFMesh {
     }
 }
 impl TMFMesh {
-    pub fn optimize(&mut self) {       
+    /// Reorders mesh data to be more efficiently laid out.
+    pub fn reorder_data(&mut self) {
         if let Some((vertices, vertex_triangles)) =
             self.get_vertices().zip(self.get_vertex_triangles())
         {
@@ -152,14 +154,24 @@ impl TMFMesh {
             self.set_normals(normals);
             self.set_normal_triangles(normal_triangles);
         }
-        if let Some((uvs, uv_triangles)) =
-            self.get_uvs().zip(self.get_uv_triangles())
-        {
-            let (uv_triangles, uvs) =
-                utilis::optimize_triangle_indices(uv_triangles, uvs);
+        if let Some((uvs, uv_triangles)) = self.get_uvs().zip(self.get_uv_triangles()) {
+            let (uv_triangles, uvs) = utilis::optimize_triangle_indices(uv_triangles, uvs);
             self.set_uvs(uvs);
             self.set_uv_triangles(uv_triangles);
         }
+    }
+    pub fn unify_index_data(&mut self) {
+        let v_vt_n_nt = (self.get_vertices().zip(self.get_vertex_triangles()))
+            .zip(self.get_normals().zip(self.get_normal_triangles()));
+        if let Some(((vertices, vertex_triangles), (normals, normal_triangles))) = v_vt_n_nt {
+            let (indices, vertices, normals) =
+                unify_data::merge_data(&[vertex_triangles, normal_triangles], vertices, normals);
+            self.set_vertices(vertices);
+            self.set_normals(normals);
+            self.set_vertex_triangles(indices.clone());
+            self.set_normal_triangles(indices);
+        }
+        //todo!();
     }
     /// Sets mesh vertex array and returns old vertex array if present. New mesh data is **not** checked during this function call, so to ensure mesh is valid call [`Self::verify`] before saving.
     ///```
@@ -709,7 +721,9 @@ impl TMFMesh {
         crate::tmf_importer::import_sync(reader)
     }
     /// Async version of [`read_tmf`].
-    pub async fn read_tmf_async<R: Read>(reader: &mut R) -> Result<Vec<(Self, String)>, TMFImportError> {
+    pub async fn read_tmf_async<R: Read>(
+        reader: &mut R,
+    ) -> Result<Vec<(Self, String)>, TMFImportError> {
         crate::tmf_importer::TMFImportContext::import(reader).await
     }
     /// Reads a single mesh from a .tmf file. Returns [`Err`] if no meshes present or more than one mesh present.
@@ -737,8 +751,10 @@ impl TMFMesh {
             None => Err(TMFImportError::NoMeshes),
         }
     }
-     /// Async version of [`read_tmf_one`].
-    pub async fn read_tmf_one_async<R: Read>(reader: &mut R) -> Result<(Self, String), TMFImportError> {
+    /// Async version of [`read_tmf_one`].
+    pub async fn read_tmf_one_async<R: Read>(
+        reader: &mut R,
+    ) -> Result<(Self, String), TMFImportError> {
         let mut meshes = Self::read_tmf_async(reader).await?.into_iter();
         match meshes.next() {
             Some(mesh) => {
@@ -917,7 +933,7 @@ mod testing {
         let mut file = std::fs::File::open("testing/susan.obj").unwrap();
         let (tmf_mesh, _name) = TMFMesh::read_from_obj_one(&mut file).unwrap();
         tmf_mesh.verify().unwrap();
-        //tmf_mesh.optimize();
+        //tmf_mesh.reorder_data();
         let _out = std::fs::File::create("target/susan.obj").unwrap();
     }
     #[test]
@@ -943,7 +959,7 @@ mod testing {
         };
         let (mut tmf_mesh, name) = TMFMesh::read_from_obj_one(&mut file).unwrap();
         tmf_mesh.verify().unwrap();
-        tmf_mesh.optimize();
+        tmf_mesh.reorder_data();
         let mut out = std::fs::File::create("target/test_res/Nefertiti.tmf").unwrap();
         assert!(
             name == "Nefertiti",
@@ -975,7 +991,7 @@ mod testing {
         let mut file = std::fs::File::open("testing/susan.obj").unwrap();
         let (mut tmf_mesh, name) = TMFMesh::read_from_obj_one(&mut file).unwrap();
         tmf_mesh.verify().unwrap();
-        tmf_mesh.optimize();
+        tmf_mesh.reorder_data();
         assert!(name == "Suzanne", "Name should be Suzanne but is {name}");
         let prec = TMFPrecisionInfo::default();
         let mut out = Vec::new();

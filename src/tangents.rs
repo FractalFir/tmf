@@ -30,16 +30,16 @@ impl Default for TangentPrecisionMode {
         Self::from_deg_dev(1.0)
     }
 }
- fn ht_to_bool(ht:HandednessType) -> bool {
-        ht.is_sign_negative()
+fn ht_to_bool(ht: HandednessType) -> bool {
+    ht.is_sign_negative()
+}
+fn ht_from_bool(src: bool) -> HandednessType {
+    if src {
+        -1.0
+    } else {
+        1.0
     }
-    fn ht_from_bool(src: bool) -> HandednessType {
-        if src {
-            -1.0
-        } else {
-            1.0
-        }
-    }
+}
 /// A representation of a Tangent.
 pub type Tangent = (crate::Vector3, HandednessType);
 fn tangent_to_encoding(
