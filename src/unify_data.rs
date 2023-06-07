@@ -53,7 +53,7 @@ pub(crate) fn merge_data<A: Copy, B: Copy>(
 #[cfg(feature = "obj_import")]
 fn read_susan_obj() {
     use crate::init_test_env;
-    use crate::TMFMesh;
+    use crate::{TMFMesh,TMFPrecisionInfo};
     init_test_env();
     let mut file = std::fs::File::open("testing/susan.obj").unwrap();
     let mut tmf_mesh = TMFMesh::read_from_obj_one(&mut file).unwrap().0;
@@ -63,4 +63,9 @@ fn read_susan_obj() {
     tmf_mesh.verify().unwrap();
     let mut out = std::fs::File::create("target/test_res/suan_unifed.obj").unwrap();
     tmf_mesh.write_obj_one(&mut out, &"SUSAN").unwrap();
+    assert_eq!(tmf_mesh.get_vertex_triangles().unwrap(),tmf_mesh.get_normal_triangles().unwrap());
+    let mut out = std::fs::File::create("target/test_res/suan_unifed.tmf").unwrap();
+    tmf_mesh.write_tmf_one(&mut out,&TMFPrecisionInfo::default(), "SUSAN").unwrap();
+    let mut out = std::fs::File::open("target/test_res/suan_unifed.tmf").unwrap();
+    let (r_mesh, name) = TMFMesh::read_tmf_one(&mut out).unwrap();
 }
