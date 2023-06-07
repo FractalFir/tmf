@@ -68,4 +68,6 @@ fn read_susan_obj() {
     tmf_mesh.write_tmf_one(&mut out,&TMFPrecisionInfo::default(), "SUSAN").unwrap();
     let mut out = std::fs::File::open("target/test_res/suan_unifed.tmf").unwrap();
     let (r_mesh, name) = TMFMesh::read_tmf_one(&mut out).unwrap();
+    let mut out = std::fs::File::create("target/test_res/suan_unifed_ftmf.obj").unwrap();
+    r_mesh.write_obj_one(&mut out, &"SUSAN").unwrap();
 }

@@ -1,10 +1,14 @@
 use std::io::Read;
-
+ use crate::tmf::CompressionType;
 use crate::read_extension::ReadExt;
 use crate::tmf::{DecodedSegment, EncodedSegment, SectionType};
 use crate::{TMFImportError, TMFMesh, TMF_MAJOR, TMF_MINOR};
 use futures::future::join_all;
-
+use crate::IndexType;
+use crate::unaligned_rw::UnalignedReader;
+use crate::unaligned_rw::UnalignedRWMode;
+use crate::MAX_SEG_SIZE;
+use crate::CustomDataSegment;
 #[derive(Clone, Copy)]
 pub(crate) enum SegLenWidth {
     U32,
@@ -196,7 +200,120 @@ pub(crate) fn import_sync<R: std::io::Read>(
 ) -> Result<Vec<(TMFMesh, String)>, TMFImportError> {
     runtime_agnostic_block_on!(TMFImportContext::import(src))
 }
-
+pub(crate) async fn decode_vertex_seg(seg: EncodedSegment) -> Result<DecodedSegment, TMFImportError> {
+    if SectionType::VertexSegment == seg.seg_type() {
+        let mut data: &[u8] = &seg.data()[..];
+        Ok(DecodedSegment::AppendVertex(
+            crate::vertices::read_tmf_vertices(&mut data)?,
+        ))
+    } else {
+        panic!("Unreachable condition reached!");
+    }
+}
+pub(crate) async fn decode_uv_seg(seg: EncodedSegment) -> Result<DecodedSegment, TMFImportError> {
+    if SectionType::UvSegment == seg.seg_type() {
+        let mut data: &[u8] = &seg.data()[..];
+        Ok(DecodedSegment::AppendUV(crate::uv::read_uvs(&mut data)?))
+    } else {
+        panic!("Unreachable condition reached!");
+    }
+}
+pub(crate) async fn decode_normal_seg(seg: EncodedSegment) -> Result<DecodedSegment, TMFImportError> {
+    if SectionType::NormalSegment == seg.seg_type() {
+        let mut data: &[u8] = &seg.data()[..];
+        Ok(DecodedSegment::AppendNormal(
+            crate::normals::read_normal_array(&mut data)?,
+        ))
+    } else {
+        panic!("Unreachable condition reached!");
+    }
+}
+pub(crate) async fn decode_custom_seg(
+    seg: EncodedSegment,
+    ctx: &crate::tmf_importer::TMFImportContext,
+) -> Result<DecodedSegment, TMFImportError> {
+    if matches!(
+        seg.seg_type(),
+        SectionType::CustomIndexSegment | SectionType::CustomFloatSegment
+    ) {
+        let mut data: &[u8] = &seg.data()[..];
+        Ok(DecodedSegment::AppendCustom(CustomDataSegment::read(
+            &mut data,
+            seg.seg_type(),
+            ctx,
+        )?))
+    } else {
+        panic!("Unreachable condition reached!");
+    }
+}
+pub(crate) fn read_default_triangles<R: std::io::Read>(
+    mut src: R,
+    data: &mut Vec<IndexType>,
+    ctx: &crate::tmf_importer::TMFImportContext,
+) -> Result<(), TMFImportError> {
+    let precision_bits = src.read_u8()?;
+    let length = src.read_u64()?;
+    let min = ctx.read_traingle_min(&mut src)?;
+    if length > MAX_SEG_SIZE as u64 {
+        return Err(TMFImportError::SegmentTooLong);
+    }
+    data.reserve(length as usize);
+    let buf = data.spare_capacity_mut();
+    let precision = UnalignedRWMode::precision_bits(precision_bits);
+    let mut reader = UnalignedReader::new(src);
+    if precision_bits == 0 {
+        use std::mem::MaybeUninit;
+        buf.fill(MaybeUninit::new(0));
+    } else {
+        for index in 0..(length as usize) / 2 {
+            let (i1, i2) = reader.read2_unaligned(precision)?;
+            buf[index * 2].write((i1 + min) as IndexType);
+            buf[index * 2 + 1].write((i2 + min) as IndexType);
+        }
+        if length % 2 != 0 {
+            let i = reader.read_unaligned(precision)?;
+            buf[(length - 1) as usize].write((i + min) as IndexType);
+        }
+    }
+    unsafe { data.set_len(length as usize) }
+    Ok(())
+}
+fn read_triangle_sequence<R: std::io::Read>(
+    _src: R,
+    _data: &mut Vec<IndexType>,
+) -> Result<(), TMFImportError> {
+    todo!();
+}
+pub(crate) async fn decode_triangle_seg(
+    seg: EncodedSegment,
+    ctx: &crate::tmf_importer::TMFImportContext,
+) -> Result<DecodedSegment, TMFImportError> {
+    if seg.seg_type().is_triangle() {
+        let data: &[u8] = &seg.data()[..];
+        let mut indices = Vec::new();
+        match seg.compresion_type() {
+            CompressionType::None => read_default_triangles(data, &mut indices, ctx)?,
+            CompressionType::Sequence => read_triangle_sequence(data, &mut indices)?,
+            CompressionType::Ommited => panic!("New decoder does not support ommited segment!"),
+            CompressionType::UnalignedLZZ => panic!("Unaligned lzz not supported yet!"),
+        };
+        Ok(match seg.seg_type() {
+            SectionType::VertexTriangleSegment => {
+                DecodedSegment::AppendTriangleVertex(indices.into())
+            }
+            SectionType::NormalTriangleSegment => {
+                DecodedSegment::AppendTriangleNormal(indices.into())
+            }
+            SectionType::UvTriangleSegment => DecodedSegment::AppendTriangleUV(indices.into()),
+            SectionType::TangentTriangleSegment => {
+                DecodedSegment::AppendTriangleTangent(indices.into())
+            }
+            _ => panic!("Unsupported section type {:?}", seg.seg_type()),
+        })
+    } else {
+        panic!("Unreachable condition reached!");
+    }
+}
 #[cfg(test)]
 fn init_test_env() {
     std::fs::create_dir_all("target/test_res").unwrap();

@@ -1,6 +1,6 @@
 use crate::read_extension::ReadExt;
-use crate::tmf_exporter::{EncodeInfo,opt_tris,opt_vertices,decode_vertex_seg,decode_normal_seg,decode_uv_seg,decode_triangle_seg,decode_custom_seg};
-use crate::tmf_importer::TMFImportContext;
+use crate::tmf_exporter::{EncodeInfo,opt_tris,opt_vertices};
+use crate::tmf_importer::{TMFImportContext,decode_vertex_seg,decode_normal_seg,decode_uv_seg,decode_triangle_seg,decode_custom_seg};
 use crate::unaligned_rw::{UnalignedRWMode, UnalignedReader};
 use crate::{
     CustomDataSegment, FloatType, IndexType, TMFExportError, TMFImportError, TMFMesh,
@@ -157,19 +157,34 @@ impl SharedSegmentKind{
         self.mask |= 0x1;
     }
     fn get_vertex(&self)->bool{
-        self.mask ^ 0x1 != 0
+        self.mask & 0x1 != 0
     }
     fn set_normal(&mut self){
         self.mask |= 0x2;
     }
     fn get_normal(&self)->bool{
-        self.mask ^ 0x2 != 0
+        self.mask & 0x2 != 0
     }
     fn combine(self,other:Self)->Self{
         Self{mask: self.mask | other.mask}
     }
     fn mask(&self)->u8{
         self.mask
+    }
+    fn from_mask(mask:u8)->Self{
+        Self{mask}
+    }
+}
+impl std::fmt::Display for SharedSegmentKind{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        write!(f,"{{SharedSegMask:0x{:x} ->",self.mask)?;
+        if self.get_vertex(){
+            write!(f,"VertexTriangle")?;
+        }
+        if self.get_normal(){
+            write!(f,"NormalTriangle")?;
+        }
+        write!(f,"}}")
     }
 }
 impl DecodedSegment {
@@ -358,10 +373,15 @@ impl DecodedSegment {
                 decode_custom_seg(seg, ctx).await
             }
             SectionType::SharedTriangleSegment => {
-                let kind = seg.data[0];
-                panic!("kind:{kind}");
-                //decode_triangle_seg(seg, ctx).await,
-            }
+                let kind = SharedSegmentKind::from_mask(seg.data[0]);
+                let data: &[u8] = &seg.data()[1..];
+                let mut indices = Vec::new();
+                match seg.compresion_type() {
+                    CompressionType::None => crate::tmf_importer::read_default_triangles(data, &mut indices, ctx).unwrap(),
+                    _=>panic!("Shared segments may only be uncompressed in TMF 0.2"),
+                }
+                Ok(Self::SharedTriangleSegment(kind,indices.into()))
+            },
             _ => todo!("Unhandled segement type {:?}", seg.seg_type),
         }
     }
@@ -387,8 +407,14 @@ impl DecodedSegment {
                 mesh.append_tangent_triangles(tan_triangles)
             }
             DecodedSegment::Nothing => (),
-            DecodedSegment::SharedTriangleSegment(_, _) => {
-                
+            DecodedSegment::SharedTriangleSegment(kind, indices) => {
+                //println!("kind:{kind}");
+                if kind.get_vertex(){
+                    mesh.append_vertex_triangles(indices);
+                }
+                if kind.get_normal(){
+                    mesh.append_normal_triangles(indices);
+                }
             },
         }
     }
