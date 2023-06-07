@@ -84,6 +84,7 @@ pub use crate::uv::UvPrecisionMode;
 #[doc(inline)]
 pub use crate::vertices::VertexPrecisionMode;
 use std::io::{Read, Write};
+use thiserror::Error;
 #[doc(inline)]
 pub use verify::TMFIntegrityStatus;
 
@@ -857,42 +858,34 @@ impl TMFMesh {
     }
 }
 /// An enum describing an error that occurred during loading a TMF mesh.  
-#[derive(Debug)]
+#[derive(Debug, Error)]
+#[allow(missing_docs)] // allow: documentation is redundant with #[error] attributes.
 pub enum TMFImportError {
-    /// An IO error which prevented data from being read.
-    IO(std::io::Error),
-    /// A segment uses an unknown compression type, invalid for the minimum TMF version specified by file header.
+    #[error("tmf data couldn't be read")]
+    IO(#[from] std::io::Error),
+    #[error("A segment uses an unknown compression type ({0}), invalid for the minimum TMF version specified by file header.")]
     CompressionTypeUnknown(u8),
-    /// A method which should return one mesh was called, but TMF file had no meshes present.
+    #[error("A method returning one mesh was called, but TMF file had no meshes present.")]
     NoMeshes,
-    /// A method which should return one mesh was called, but more than one mesh was present.
+    #[error("A method returning one mesh was called, but more than one mesh was present.")]
     TooManyMeshes,
-    /// Provides source was not a TMF file.
+    #[error("Source file was not a TMF file.")]
     NotTMFFile,
-    /// File was created with a TMF version newer than this, and can't be read properly.
+    #[error("File was created with a TMF version newer than this, and can't be read properly.")]
     NewerVersionRequired,
-    /// A file segment exceeded the maximum length(2GB) was encountered. This segments length is highly unusual, and the segment unlikely to be valid. The segment was not read to prevent memory issues.
+    #[error("A file segment exceeded the maximum length(2GB) was encountered. This segments length is highly unusual, and the segment unlikely to be valid. The segment was not read to prevent memory issues.")]
     SegmentTooLong,
-    /// A segments compression type requires that it must be preceded by another segment, from which some of the data is deduced.   
+    #[error("A segments compression type requires that it must be preceded by another segment, from which some of the data is deduced.   ")]
     NoDataBeforeOmmitedSegment,
-    /// Byte precision is too high(over 64 bits) and is invalid.
+    #[error("Byte precision is too high ({0}: over 64 bits) and is invalid.")]
     InvalidPrecision(u8),
 }
-impl From<std::io::Error> for TMFImportError {
-    fn from(err: std::io::Error) -> Self {
-        Self::IO(err)
-    }
-}
 /// An error which occured when a `TMFMesh` is exported.
-#[derive(Debug)]
+#[derive(Debug, Error)]
+#[allow(missing_docs)] // allow: documentation is redundant with #[error] attributes.
 pub enum TMFExportError {
-    /// An IO error which prevented data from being read.
-    IO(std::io::Error),
-}
-impl From<std::io::Error> for TMFExportError {
-    fn from(err: std::io::Error) -> Self {
-        Self::IO(err)
-    }
+    #[error("tmf data couldn't be written")]
+    IO(#[from] std::io::Error),
 }
 #[cfg(test)]
 pub(crate) fn init_test_env() {
