@@ -22,7 +22,7 @@ macro_rules! runtime_agnostic_block_on {
         }
     }};
 }
-
+mod reorder_triangles;
 #[doc(hidden)]
 pub mod custom_data;
 mod material;
