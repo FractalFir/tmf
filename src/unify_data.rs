@@ -143,5 +143,26 @@ fn read_susan_obj() {
     let (r_mesh, name) = TMFMesh::read_tmf_one(&mut out).unwrap();
     let mut out = std::fs::File::create("target/test_res/suan_unified_ftmf.obj").unwrap();
     r_mesh.write_obj_one(&mut out, &"SUSAN").unwrap();
-    todo!();
+}
+#[test]
+#[cfg(feature = "obj_import")]
+fn hand_optimized() {
+    use crate::init_test_env;
+    use crate::{TMFMesh,TMFPrecisionInfo,NormalPrecisionMode,VertexPrecisionMode,UvPrecisionMode};
+    init_test_env();
+    let mut file = std::fs::File::open("testing/susan.obj").unwrap();
+    let mut tmf_mesh = TMFMesh::read_from_obj_one(&mut file).unwrap().0;
+    tmf_mesh.verify().unwrap();
+    tmf_mesh.reorder_data();
+    tmf_mesh.unify_index_data();
+    tmf_mesh.verify().unwrap();
+    let mut out = std::fs::File::create("target/test_res/susan_ho.tmf").unwrap();
+    let tmf_prec = TMFPrecisionInfo{normal_precision:NormalPrecisionMode::from_deg_dev(5.0),vertex_precision:VertexPrecisionMode(0.5),
+    uv_prec:UvPrecisionMode::form_texture_resolution(1024.0, 1.0)
+    ,..TMFPrecisionInfo::default()};
+    tmf_mesh.write_tmf_one(&mut out,&tmf_prec, "SUSAN").unwrap();
+    let mut out = std::fs::File::open("target/test_res/susan_ho.tmf").unwrap();
+    let (r_mesh, name) = TMFMesh::read_tmf_one(&mut out).unwrap();
+    let mut out = std::fs::File::create("target/test_res/suan_ho_ftmf.obj").unwrap();
+    r_mesh.write_obj_one(&mut out, &"SUSAN").unwrap();
 }

@@ -1,9 +1,19 @@
 # What is Tight Model Format
-The main goal of the tmf project is to provide a way to save 3D game assets compressed in such a way, that there are no noticeable changes to the quality of the model when it is used in a game. This is achieved without sacrificing model read speeds, at the cost of increased model write speed, although in many cases model write speed is still on par or below other formats due to decreased IO usage. 
-Currently, TMF provides data compression ratio failing roughly between 4.2 and 1.95, depending on the model.
-## How are high compression speeds achived?
-Currently on default settings TMF uses bitvise operations(bitshift and or) to read data, which makes it able to read data at speed reaching 40 mln vertices / s. Additionaly TMF is thread safe, allowing for decoding of many models at the same time by many cores, increasing speed even further.
-## How does it work?
+`tmf` is a file format, which main objective is to produce very small files, and be crazy-fast to read. Decoding a model with around 2 milion triangles takes just slightly above 220 ms, on a single thread.
+Integration with `tokio` allows meshes to be decoded on multiple threads at once, allowing the previously mentioned mesh to be decoded in 84 ms using 4 threads, a 60% improvement. While `tmf` is a lossy compression format, it alos focuses on saving 3D game assets compressed in such a way, that there are no noticeable changes to the quality of the model when it is used in a game. It is extremely versatile and easy to configure. By specifying minimal required precision, your models will look as good as they need to look, while occupying as little space as possible. All quality and compression settings impact only *write* times, keeping *read* speeds consistently fast. Because of tmf policy of making any changes to the model explicit, you may tweak settings to suit your needs exactly!
+# Is tmf a right fit for your project?
+When you have a hammer, everything looks like a nail. Even more so, if you are trying to convince people to use your MIT-licensed hammer.
+It would be very easy for me to pretend like `tmf` will be great fit for all cases. But I value honesty, and it is not.
+## When it is not a right fit:
+1. You don't care about read speeds at all. Then just use Draco. It is way slower(In my tests around 10-20x), but it is also better at compressing.
+2. Your meshes are **very** big(millions of triangles). `tmf` was optimised and tested with much more modest meshes(tens of thousands of triangles). It's compression becomes worse, the more triangles and points you have. It is very still fast, the compression is just not well suited for such tasks.
+## When it is a right fit:
+1. You need your models to be smaller, but don't want to sacrifice much of the read speed.
+2. Your meshes are modestly sized or small (>50k triangles),.
+3. You don't need your meshes to be high-quality.
+# How are high compression speeds achieved?
+Currently on default settings TMF uses bitwise operations(bitshift and  or) to read data, which makes it able to read data at very high speeds. Additionaly TMF is thread safe, allowing for decoding of many models at the same time by many cores, increasing speed even further.
+# How does it work?
 While I mark tmf as a "lossy compression format" in a classical meaning of this word, it really does not *compress* anything (at least for now). The bulk of the space savings come from storing the model data in different data structures that better reflect the data they store, and removing some data *precision* from the model in such a way, that it's **topology does not change** and the difference between more precise original data and less precise saved data is not noticeable by any human, even on close inspection. This is achieved by using some properties of the data itself (Surface vector being always normalized) or the model (usually constant level of detail across the whole model).
 # Comparisions
 The model used in test is the blender monkey(Suzzane). TMF files were saved with default settings(`TMFPrecisionInfo::default()`).
@@ -19,17 +29,19 @@ The model used in test is the blender monkey(Suzzane). TMF files were saved with
 | .glb |  356.6 kB|
 | zip(deflate) compressed .glb| 267.5 kB |
 | .tmf |  308.3 kB |
+| .tmf with pre-encode optimisations applied | **165.5 kB**| 
+| .tmf with pre-encode optimisations and hand-picked quality settings | **147.3 kB** | 
 | zip(deflate) compressed .tmf | 307.9 kB |
 ## Model render comparison
 | Uncompressed .obj | Compressed .tmf file(default settings) |
 | ------------------ | ---------------------------------------|
 | <img src="docs/original.png"> | <img src="docs/tmf.png"> |
 ## TMF vs. Draco.
-Draco is noticably better at compression than TMF. If all you are looking for is reduced file size, then just use Draco. As a single deveolper there is no way I can manage to create something that even rivals it. **But** if what you are looking for is not only model compression ratio, then TMF still has a lot to offer. 
+Draco is noticeably better at compression than TMF. If all you are looking for is reduced file size, then just use Draco. As a single deveolper there is no way I can manage to create something that even rivals it. **But** if what you are looking for is not only model compression ratio, then TMF still has a lot to offer. 
 ### A comparison of some pros and cons
 | Category | Draco | TMF | 
 |----------|-------|-----|
-| Compression Ratio | Draco is generally better at compressing data, depending on the compression settings it can be between ~80-98% | TMF can compress your file by around 77% 
+| Compression Ratio | Draco is generally better at compressing data, depending on the compression settings it can be between ~80-98% | TMF can compress your file by around 87.3% | 
 | 3D model(Suzanne) read time | 7-10 ms | ~1ms |
 | Impact of compression on read time | Read time increases with compression level | For most settings read time **decreases** with compression level |
 | 3D model(Suzanne) write time | 10-18 ms | 1-2 ms |
@@ -81,6 +93,8 @@ use tmf::TMFMesh;
 use std::fs::File;
 let output = File::create("suzanne.tmf").expect("Could not create output file!");
 let settings = TMFPrecisionInfo::default();
+// Change TMF mesh to have better laid out data.
+mesh.unify_index_data();
 mesh.write_tmf_one(&mut output,&settings,name).expect("Could not save TMF mesh!");
 ```
 Saving multiple meshes
