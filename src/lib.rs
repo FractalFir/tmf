@@ -161,15 +161,39 @@ impl TMFMesh {
         }
     }
     pub fn unify_index_data(&mut self) {
+        /*
         let v_vt_n_nt = (self.get_vertices().zip(self.get_vertex_triangles()))
             .zip(self.get_normals().zip(self.get_normal_triangles()));
         if let Some(((vertices, vertex_triangles), (normals, normal_triangles))) = v_vt_n_nt {
             let (indices, vertices, normals) =
-                unify_data::merge_data(&[vertex_triangles, normal_triangles], vertices, normals);
+                unify_data::merge_data_2(&[vertex_triangles, normal_triangles], vertices, normals);
             self.set_vertices(vertices);
             self.set_normals(normals);
             self.set_vertex_triangles(indices.clone());
             self.set_normal_triangles(indices);
+        }*/
+        let (vertices,normals,uvs,indices) = unify_data::smart_merge_data_3(
+            self.get_vertices(),
+            self.get_normals(),
+            self.get_uvs(),
+            [self.get_vertex_triangles(),self.get_normal_triangles(),self.get_uv_triangles()]
+        );
+        if let Some(indices) = indices{
+            if let Some(vertices) = vertices{
+                //println!("unfied verticess!");
+                self.set_vertices(vertices);
+                self.set_vertex_triangles(indices.clone());
+            }
+            if let Some(normals) = normals{
+                //println!("unfied normals!");
+                self.set_normals(normals);
+                self.set_normal_triangles(indices.clone());
+            }
+            if let Some(uvs) = uvs{
+                //println!("unfied uvs!");
+                self.set_uvs(uvs);
+                self.set_uv_triangles(indices);
+            }
         }
         //todo!();
     }
@@ -959,7 +983,7 @@ mod testing {
         };
         let (mut tmf_mesh, name) = TMFMesh::read_from_obj_one(&mut file).unwrap();
         tmf_mesh.verify().unwrap();
-        tmf_mesh.reorder_data();
+        tmf_mesh.unify_index_data();
         let mut out = std::fs::File::create("target/test_res/Nefertiti.tmf").unwrap();
         assert!(
             name == "Nefertiti",

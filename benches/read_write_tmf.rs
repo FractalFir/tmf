@@ -2,10 +2,23 @@ use criterion::{black_box, criterion_group, criterion_main, Criterion};
 fn read_tmf(c: &mut Criterion) {
     use std::io::Read;
     use tmf::TMFMesh;
-    let mut file = std::fs::File::open("target/test_res/optimized_susan.tmf").unwrap();
+    let mut file = std::fs::File::open("target/test_res/susan.tmf").unwrap();
     let mut out = Vec::new();
     file.read_to_end(&mut out);
     c.bench_function("read susan.tmf", |b| {
+        b.iter(|| {
+            let r_mesh = TMFMesh::read_tmf_one(&mut (&out as &[u8])).unwrap();
+            black_box(r_mesh);
+        })
+    });
+}
+fn read_unified_tmf(c: &mut Criterion) {
+    use std::io::Read;
+    use tmf::TMFMesh;
+    let mut file = std::fs::File::open("target/test_res/susan_unified.tmf").unwrap();
+    let mut out = Vec::new();
+    file.read_to_end(&mut out);
+    c.bench_function("read unified susan.tmf", |b| {
         b.iter(|| {
             let r_mesh = TMFMesh::read_tmf_one(&mut (&out as &[u8])).unwrap();
             black_box(r_mesh);
@@ -45,5 +58,5 @@ fn write_tmf(c: &mut Criterion) {
         })
     });
 }
-criterion_group!(benches, read_tmf, read_nefreti_tmf, write_tmf);
+criterion_group!(benches, read_tmf,read_unified_tmf, read_nefreti_tmf, write_tmf);
 criterion_main!(benches);

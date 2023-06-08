@@ -39,7 +39,7 @@ fn unfiy_data_common<const DATA_COUNT: usize>(
     let data_map:Box<[Box<[_]>]> = data_map.into_iter().map(|v|{(*v).clone().into()}).collect();
     (new_indices.into(),data_map.into())
 }
-pub(crate) fn merge_data<A: Copy, B: Copy>(
+pub(crate) fn merge_data_2<A: Copy, B: Copy>(
     indices: &[&[IndexType]; 2],
     a: &[A],
     b: &[B],
@@ -49,6 +49,79 @@ pub(crate) fn merge_data<A: Copy, B: Copy>(
     let b:Box<[_]> = index_map[0].iter().map(|index|{b[*index as usize]}).collect();
     (indices,a,b)
 }
+pub(crate) fn merge_data_3<A: Copy, B: Copy,C:Copy>(
+    indices: &[&[IndexType]; 3],
+    a: &[A],
+    b: &[B],
+    c: &[C],
+) -> (Box<[IndexType]>, Box<[A]>, Box<[B]>, Box<[C]>) {
+    let (indices, index_map) = unfiy_data_common::<3>(indices);
+    let a:Box<[_]> = index_map[0].iter().map(|index|{a[*index as usize]}).collect();
+    let b:Box<[_]> = index_map[0].iter().map(|index|{b[*index as usize]}).collect();
+    let c:Box<[_]> = index_map[0].iter().map(|index|{c[*index as usize]}).collect();
+    (indices,a,b,c)
+}
+type OBoxArr<A> = Option<Box<[A]>>;
+fn smart_merge_data_2<A:Copy,B:Copy>(
+    a:Option<&[A]>,
+    b:Option<&[B]>,
+    indices:[Option<&[IndexType]>;2],
+)->(OBoxArr<A>,OBoxArr<B>,OBoxArr<IndexType>){
+    if let Some(((a,indices_a),(b,indices_b))) = a.zip(indices[0]).zip(b.zip(indices[1])){
+        let (indices,a,b) = merge_data_2(&[indices_a,indices_b],a,b);
+        (Some(a),Some(b),Some(indices))
+    }
+    else{
+        (None,None,None)
+    }
+}
+pub(crate) fn smart_merge_data_3<A:Copy,B:Copy,C:Copy>(
+    a:Option<&[A]>,
+    b:Option<&[B]>,
+    c:Option<&[C]>,
+    indices:[Option<&[IndexType]>;3],
+)->(OBoxArr<A>,OBoxArr<B>,OBoxArr<C>,OBoxArr<IndexType>){
+    if !a.is_some_and(|data|{data.len() > 0 }) || indices[0].is_none(){
+        let (b,c,indices) = smart_merge_data_2(b,c,[indices[1],indices[2]]);
+        (None,b,c,indices)
+    }
+    else if !b.is_some_and(|data|{data.len() > 0 }) || indices[1].is_none(){
+        let (a,c,indices) = smart_merge_data_2(a,c,[indices[0],indices[2]]);
+        (a,None,c,indices)
+    }
+    else if !c.is_some_and(|data|{data.len() > 0 }) || indices[2].is_none(){
+        let (a,b,indices) = smart_merge_data_2(a,b,[indices[0],indices[1]]);
+        (a,b,None,indices)
+    }
+    else if let Some((
+    (((a,indices_a),(b,indices_b))),(c,indices_c)
+    )) = a.zip(indices[0]).zip(b.zip(indices[1])).zip(c.zip(indices[2])){
+        let (indices,a,b,c) = merge_data_3(&[indices_a,indices_b,indices_c],a,b,c);
+        (Some(a),Some(b),Some(c),Some(indices))
+    }
+    else{
+        (None,None,None,None)
+    }
+}
+/*
+pub(crate) fn merge_data_4<A: Copy, B: Copy,C:Copy,D:Copy>(
+    indices: &[&[IndexType]; 3],
+    a: &[A],
+    b: &[B],
+    c: &[C],
+    d: &[D],
+) -> (Box<[IndexType]>, Box<[A]>, Box<[B]>, Box<[C]>, Box<[D]>) {
+    let (indices, index_map) = unfiy_data_common::<4>(indices);
+    let a:Box<[_]> = index_map[0].iter().map(|index|{a[*index as usize]}).collect();
+    let b:Box<[_]> = index_map[0].iter().map(|index|{b[*index as usize]}).collect();
+    let c:Box<[_]> = index_map[0].iter().map(|index|{c[*index as usize]}).collect();
+    let d:Box<[_]> = index_map[0].iter().map(|index|{d[*index as usize]}).collect();
+    (indices,a,b,c,d)
+}*/
+/*
+pub(crate) fn merge_o_3<A: Copy, B: Copy,C:Copy>(a:Option<&[A]>,b:Option<&[B]>,c:Option<&[C]>,indices: &[&[IndexType]; 3]){
+    
+}*/
 #[test]
 #[cfg(feature = "obj_import")]
 fn read_susan_obj() {
@@ -61,13 +134,14 @@ fn read_susan_obj() {
     tmf_mesh.reorder_data();
     tmf_mesh.unify_index_data();
     tmf_mesh.verify().unwrap();
-    let mut out = std::fs::File::create("target/test_res/suan_unifed.obj").unwrap();
+    let mut out = std::fs::File::create("target/test_res/susan_unified.obj").unwrap();
     tmf_mesh.write_obj_one(&mut out, &"SUSAN").unwrap();
     assert_eq!(tmf_mesh.get_vertex_triangles().unwrap(),tmf_mesh.get_normal_triangles().unwrap());
-    let mut out = std::fs::File::create("target/test_res/suan_unifed.tmf").unwrap();
+    let mut out = std::fs::File::create("target/test_res/susan_unified.tmf").unwrap();
     tmf_mesh.write_tmf_one(&mut out,&TMFPrecisionInfo::default(), "SUSAN").unwrap();
-    let mut out = std::fs::File::open("target/test_res/suan_unifed.tmf").unwrap();
+    let mut out = std::fs::File::open("target/test_res/susan_unified.tmf").unwrap();
     let (r_mesh, name) = TMFMesh::read_tmf_one(&mut out).unwrap();
-    let mut out = std::fs::File::create("target/test_res/suan_unifed_ftmf.obj").unwrap();
+    let mut out = std::fs::File::create("target/test_res/suan_unified_ftmf.obj").unwrap();
     r_mesh.write_obj_one(&mut out, &"SUSAN").unwrap();
+    todo!();
 }

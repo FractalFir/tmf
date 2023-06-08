@@ -165,6 +165,12 @@ impl SharedSegmentKind{
     fn get_normal(&self)->bool{
         self.mask & 0x2 != 0
     }
+    fn set_uv(&mut self){
+        self.mask |= 0x4;
+    }
+    fn get_uv(&self)->bool{
+        self.mask & 0x4 != 0
+    }
     fn combine(self,other:Self)->Self{
         Self{mask: self.mask | other.mask}
     }
@@ -183,6 +189,9 @@ impl std::fmt::Display for SharedSegmentKind{
         }
         if self.get_normal(){
             write!(f,"NormalTriangle")?;
+        }
+        if self.get_uv(){
+            write!(f,"UVTriangle")?;
         }
         write!(f,"}}")
     }
@@ -215,6 +224,15 @@ impl DecodedSegment {
                     return;
                 }
                 let kind = {let mut kind = SharedSegmentKind::default(); kind.set_vertex(); kind};
+                let combined = kind.combine(other.shared_kind());
+                *self = Self::SharedTriangleSegment(combined,indices.clone());
+                *other = Self::Nothing;
+            }
+             Self::AppendTriangleUV(indices) =>{
+                if &indices[..] != other.as_triangles().unwrap(){
+                    return;
+                }
+                let kind = {let mut kind = SharedSegmentKind::default(); kind.set_uv(); kind};
                 let combined = kind.combine(other.shared_kind());
                 *self = Self::SharedTriangleSegment(combined,indices.clone());
                 *other = Self::Nothing;
@@ -414,6 +432,9 @@ impl DecodedSegment {
                 }
                 if kind.get_normal(){
                     mesh.append_normal_triangles(indices);
+                }
+                if kind.get_uv(){
+                    mesh.append_uv_triangles(indices);
                 }
             },
         }
