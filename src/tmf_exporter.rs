@@ -298,6 +298,9 @@ fn expand_vertex_span(span: std::ops::Range<Vector3>, point: Vector3) -> std::op
     let max = (max.0.max(point.0), max.1.max(point.1), max.2.max(point.2));
     min..max
 }
+fn inside_span(span: &std::ops::Range<Vector3>,item:&Vector3)->bool{
+    span.start.0 < item.0 && item.0 < span.end.0 && span.start.1 < item.1 && item.1 < span.end.1 && span.start.2 < item.2 && item.2 < span.end.2  
+}
 fn find_best_vertex_spilt(vertices: &[Vector3], shortest_edge: FloatType) -> Option<usize> {
     let mut total_span = (0.0, 0.0, 0.0)..(0.0, 0.0, 0.0);
     vertices.iter().for_each(|point| {
@@ -310,7 +313,7 @@ fn find_best_vertex_spilt(vertices: &[Vector3], shortest_edge: FloatType) -> Opt
     let mut min_span = (0.0, 0.0, 0.0)..(0.0, 0.0, 0.0);
     let mut per_vertex_bit_count = 0;
     for (index, vertex) in vertices.iter().enumerate() {
-        if !min_span.contains(vertex) || true {
+        if !inside_span(&min_span,vertex) {
             min_span = expand_vertex_span(min_span, *vertex);
             per_vertex_bit_count = range_to_vertex_bit_count(min_span.clone(), shortest_edge);
             //println!("vertex:{vertex:?}\t\tmin_span:{min_span:?}");
