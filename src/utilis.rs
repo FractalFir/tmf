@@ -110,9 +110,9 @@ pub(crate) fn optimize_triangle_indices<T: Sized + Copy + std::fmt::Debug>(
 fn calc_deltas(data: &[IndexType]) {
     let mut deltas = Vec::with_capacity(data.len());
     for index in 0..(data.len() - 1) {
-        deltas.push((data[index] as isize - data[index + 1] as isize).abs() as usize);
+        deltas.push((data[index] as isize - data[index + 1] as isize).unsigned_abs());
     }
-    let avg = ((deltas.iter().sum::<usize>()) / (data.len() as usize));
+    let avg = (deltas.iter().sum::<usize>()) / data.len();
     let mut delta_over_avg = 0;
     deltas.iter().for_each(|delta| {
         if *delta > avg {

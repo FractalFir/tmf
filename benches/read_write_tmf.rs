@@ -58,5 +58,11 @@ fn write_tmf(c: &mut Criterion) {
         })
     });
 }
-criterion_group!(benches, read_tmf,read_unified_tmf, read_nefreti_tmf, write_tmf);
+criterion_group!(
+    benches,
+    read_tmf,
+    read_unified_tmf,
+    read_nefreti_tmf,
+    write_tmf
+);
 criterion_main!(benches);

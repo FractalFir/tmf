@@ -23,7 +23,7 @@ criterion = "0.5.1"
 rand = "0.8.5"
 
 [features]
-default = ["obj_import", "tokio_runtime"]
+default = ["obj_import"]#, "tokio_runtime"
 
 ## Experimental triangulation in .obj loader. Supports only convex polygons ATM, and has bugs, triangulating your mesh in 3D modelling software before importing highly advised. Please note that if you see any triangles missing this is likely the result of the triangulation algorithm not working properly. 
 triangulation = []

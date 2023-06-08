@@ -1,13 +1,12 @@
 use crate::tmf::DecodedSegment;
-use crate::read_extension::ReadExt;
-use smallvec::{SmallVec,smallvec};
-use crate::tmf::{SectionType,EncodedSegment,CompressionType};
-use crate::TMFImportError;
+
+use smallvec::{smallvec, SmallVec};
+
 use crate::{
     FloatType, IndexType, TMFExportError, TMFMesh, TMFPrecisionInfo, Vector3, MIN_TMF_MAJOR,
-    MIN_TMF_MINOR, TMF_MAJOR, TMF_MINOR, CustomDataSegment,MAX_SEG_SIZE,
+    MIN_TMF_MINOR, TMF_MAJOR, TMF_MINOR,
 };
-use crate::unaligned_rw::{UnalignedRWMode,UnalignedReader};
+
 pub(crate) struct EncodeInfo {
     shortest_edge: FloatType,
 }
@@ -69,13 +68,13 @@ pub(crate) fn write_mesh_name<W: std::io::Write>(w: &mut W, s: &str) -> std::io:
     w.write_all(&(bytes.len() as u16).to_le_bytes())?;
     w.write_all(bytes)
 }
-fn merge_segments(segments:&[DecodedSegment])->Box<[DecodedSegment]>{
-    let mut segments:Vec<_> = segments.into();
+fn merge_segments(segments: &[DecodedSegment]) -> Box<[DecodedSegment]> {
+    let mut segments: Vec<_> = segments.into();
     let mut new_segments = Vec::with_capacity(segments.len());
-    while let Some(mut segment) = segments.pop(){
-        if segment.is_something(){
-            for mut other in &mut segments{
-                segment.merge(&mut other);      
+    while let Some(mut segment) = segments.pop() {
+        if segment.is_something() {
+            for mut other in &mut segments {
+                segment.merge(other);
             }
             new_segments.push(segment);
         }
@@ -94,7 +93,7 @@ async fn write_mesh<W: std::io::Write>(
     };
     let tmf_segs = merge_segments(&MeshSegIter::tmf_segs(mesh).collect::<Box<[_]>>());
     let mut new_segs = Vec::with_capacity(32);
-    for seg in tmf_segs.into_iter(){
+    for seg in tmf_segs.iter() {
         let c_segs = seg.clone().optimize().await;
         for c_seg in c_segs {
             new_segs.push(c_seg);
@@ -298,8 +297,13 @@ fn expand_vertex_span(span: std::ops::Range<Vector3>, point: Vector3) -> std::op
     let max = (max.0.max(point.0), max.1.max(point.1), max.2.max(point.2));
     min..max
 }
-fn inside_span(span: &std::ops::Range<Vector3>,item:&Vector3)->bool{
-    span.start.0 < item.0 && item.0 < span.end.0 && span.start.1 < item.1 && item.1 < span.end.1 && span.start.2 < item.2 && item.2 < span.end.2  
+fn inside_span(span: &std::ops::Range<Vector3>, item: &Vector3) -> bool {
+    span.start.0 < item.0
+        && item.0 < span.end.0
+        && span.start.1 < item.1
+        && item.1 < span.end.1
+        && span.start.2 < item.2
+        && item.2 < span.end.2
 }
 fn find_best_vertex_spilt(vertices: &[Vector3], shortest_edge: FloatType) -> Option<usize> {
     let mut total_span = (0.0, 0.0, 0.0)..(0.0, 0.0, 0.0);
@@ -313,7 +317,7 @@ fn find_best_vertex_spilt(vertices: &[Vector3], shortest_edge: FloatType) -> Opt
     let mut min_span = (0.0, 0.0, 0.0)..(0.0, 0.0, 0.0);
     let mut per_vertex_bit_count = 0;
     for (index, vertex) in vertices.iter().enumerate() {
-        if !inside_span(&min_span,vertex) {
+        if !inside_span(&min_span, vertex) {
             min_span = expand_vertex_span(min_span, *vertex);
             per_vertex_bit_count = range_to_vertex_bit_count(min_span.clone(), shortest_edge);
             //println!("vertex:{vertex:?}\t\tmin_span:{min_span:?}");

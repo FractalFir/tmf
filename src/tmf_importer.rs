@@ -1,14 +1,14 @@
-use std::io::Read;
- use crate::tmf::CompressionType;
 use crate::read_extension::ReadExt;
+use crate::tmf::CompressionType;
 use crate::tmf::{DecodedSegment, EncodedSegment, SectionType};
+use crate::unaligned_rw::UnalignedRWMode;
+use crate::unaligned_rw::UnalignedReader;
+use crate::CustomDataSegment;
+use crate::IndexType;
+use crate::MAX_SEG_SIZE;
 use crate::{TMFImportError, TMFMesh, TMF_MAJOR, TMF_MINOR};
 use futures::future::join_all;
-use crate::IndexType;
-use crate::unaligned_rw::UnalignedReader;
-use crate::unaligned_rw::UnalignedRWMode;
-use crate::MAX_SEG_SIZE;
-use crate::CustomDataSegment;
+use std::io::Read;
 #[derive(Clone, Copy)]
 pub(crate) enum SegLenWidth {
     U32,
@@ -152,8 +152,8 @@ impl TMFImportContext {
             });
         Ok((res, name))
     }
-    async fn analize_mesh<R: Read>(&self, mut src: R, ctx: &Self) -> Result<(), TMFImportError> {
-        let name = read_string(&mut src)?;
+    async fn analize_mesh<R: Read>(&self, mut src: R, _ctx: &Self) -> Result<(), TMFImportError> {
+        let _name = read_string(&mut src)?;
         let segment_count = src.read_u16()?;
         let mut results = [0; 256];
         for _ in 0..segment_count {
@@ -200,9 +200,11 @@ pub(crate) fn import_sync<R: std::io::Read>(
 ) -> Result<Vec<(TMFMesh, String)>, TMFImportError> {
     runtime_agnostic_block_on!(TMFImportContext::import(src))
 }
-pub(crate) async fn decode_vertex_seg(seg: EncodedSegment) -> Result<DecodedSegment, TMFImportError> {
+pub(crate) async fn decode_vertex_seg(
+    seg: EncodedSegment,
+) -> Result<DecodedSegment, TMFImportError> {
     if SectionType::VertexSegment == seg.seg_type() {
-        let mut data: &[u8] = &seg.data()[..];
+        let mut data: &[u8] = seg.data();
         Ok(DecodedSegment::AppendVertex(
             crate::vertices::read_tmf_vertices(&mut data)?,
         ))
@@ -212,15 +214,17 @@ pub(crate) async fn decode_vertex_seg(seg: EncodedSegment) -> Result<DecodedSegm
 }
 pub(crate) async fn decode_uv_seg(seg: EncodedSegment) -> Result<DecodedSegment, TMFImportError> {
     if SectionType::UvSegment == seg.seg_type() {
-        let mut data: &[u8] = &seg.data()[..];
+        let mut data: &[u8] = seg.data();
         Ok(DecodedSegment::AppendUV(crate::uv::read_uvs(&mut data)?))
     } else {
         panic!("Unreachable condition reached!");
     }
 }
-pub(crate) async fn decode_normal_seg(seg: EncodedSegment) -> Result<DecodedSegment, TMFImportError> {
+pub(crate) async fn decode_normal_seg(
+    seg: EncodedSegment,
+) -> Result<DecodedSegment, TMFImportError> {
     if SectionType::NormalSegment == seg.seg_type() {
-        let mut data: &[u8] = &seg.data()[..];
+        let mut data: &[u8] = seg.data();
         Ok(DecodedSegment::AppendNormal(
             crate::normals::read_normal_array(&mut data)?,
         ))
@@ -236,7 +240,7 @@ pub(crate) async fn decode_custom_seg(
         seg.seg_type(),
         SectionType::CustomIndexSegment | SectionType::CustomFloatSegment
     ) {
-        let mut data: &[u8] = &seg.data()[..];
+        let mut data: &[u8] = seg.data();
         Ok(DecodedSegment::AppendCustom(CustomDataSegment::read(
             &mut data,
             seg.seg_type(),
@@ -289,7 +293,7 @@ pub(crate) async fn decode_triangle_seg(
     ctx: &crate::tmf_importer::TMFImportContext,
 ) -> Result<DecodedSegment, TMFImportError> {
     if seg.seg_type().is_triangle() {
-        let data: &[u8] = &seg.data()[..];
+        let data: &[u8] = seg.data();
         let mut indices = Vec::new();
         match seg.compresion_type() {
             CompressionType::None => read_default_triangles(data, &mut indices, ctx)?,

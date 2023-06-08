@@ -1,10 +1,13 @@
 use crate::read_extension::ReadExt;
-use crate::tmf_exporter::{EncodeInfo,opt_tris,opt_vertices};
-use crate::tmf_importer::{TMFImportContext,decode_vertex_seg,decode_normal_seg,decode_uv_seg,decode_triangle_seg,decode_custom_seg};
-use crate::unaligned_rw::{UnalignedRWMode, UnalignedReader};
+use crate::tmf_exporter::{opt_tris, opt_vertices, EncodeInfo};
+use crate::tmf_importer::{
+    decode_custom_seg, decode_normal_seg, decode_triangle_seg, decode_uv_seg, decode_vertex_seg,
+    TMFImportContext,
+};
+
 use crate::{
-    CustomDataSegment, FloatType, IndexType, TMFExportError, TMFImportError, TMFMesh,
-    TMFPrecisionInfo, Tangent, Vector2, Vector3, MAX_SEG_SIZE,
+    CustomDataSegment, IndexType, TMFExportError, TMFImportError, TMFMesh, TMFPrecisionInfo,
+    Tangent, Vector2, Vector3,
 };
 use smallvec::{smallvec, SmallVec};
 #[repr(u16)]
@@ -93,7 +96,7 @@ impl CompressionType {
         }
     }
 }
-#[derive(Debug,Clone)]
+#[derive(Debug, Clone)]
 pub(crate) enum DecodedSegment {
     Nothing,
     AppendVertex(Box<[Vector3]>),
@@ -104,7 +107,7 @@ pub(crate) enum DecodedSegment {
     AppendTriangleNormal(Box<[IndexType]>),
     AppendTriangleUV(Box<[IndexType]>),
     AppendTriangleTangent(Box<[IndexType]>),
-    SharedTriangleSegment(SharedSegmentKind,Box<[IndexType]>),
+    SharedTriangleSegment(SharedSegmentKind, Box<[IndexType]>),
     AppendCustom(CustomDataSegment),
 }
 pub(crate) struct EncodedSegment {
@@ -113,11 +116,11 @@ pub(crate) struct EncodedSegment {
     data: Box<[u8]>,
 }
 impl EncodedSegment {
-    pub(crate) fn data(&self)->&[u8]{
+    pub(crate) fn data(&self) -> &[u8] {
         &self.data
     }
-    pub(crate) fn compresion_type(&self)->CompressionType{
-        self.compresion_type 
+    pub(crate) fn compresion_type(&self) -> CompressionType {
+        self.compresion_type
     }
     pub(crate) fn seg_length(&self) -> usize {
         self.data.len()
@@ -148,114 +151,136 @@ impl EncodedSegment {
         })
     }
 }
-#[derive(Default,Debug,Copy,Clone)]
-pub(crate) struct SharedSegmentKind{
-    mask:u8,
+#[derive(Default, Debug, Copy, Clone)]
+pub(crate) struct SharedSegmentKind {
+    mask: u8,
 }
-impl SharedSegmentKind{
-    fn set_vertex(&mut self){
+impl SharedSegmentKind {
+    fn set_vertex(&mut self) {
         self.mask |= 0x1;
     }
-    fn get_vertex(&self)->bool{
+    fn get_vertex(&self) -> bool {
         self.mask & 0x1 != 0
     }
-    fn set_normal(&mut self){
+    fn set_normal(&mut self) {
         self.mask |= 0x2;
     }
-    fn get_normal(&self)->bool{
+    fn get_normal(&self) -> bool {
         self.mask & 0x2 != 0
     }
-    fn set_uv(&mut self){
+    fn set_uv(&mut self) {
         self.mask |= 0x4;
     }
-    fn get_uv(&self)->bool{
+    fn get_uv(&self) -> bool {
         self.mask & 0x4 != 0
     }
-    fn combine(self,other:Self)->Self{
-        Self{mask: self.mask | other.mask}
+    fn combine(self, other: Self) -> Self {
+        Self {
+            mask: self.mask | other.mask,
+        }
     }
-    fn mask(&self)->u8{
+    fn mask(&self) -> u8 {
         self.mask
     }
-    fn from_mask(mask:u8)->Self{
-        Self{mask}
+    fn from_mask(mask: u8) -> Self {
+        Self { mask }
     }
 }
-impl std::fmt::Display for SharedSegmentKind{
+impl std::fmt::Display for SharedSegmentKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
-        write!(f,"{{SharedSegMask:0x{:x} ->",self.mask)?;
-        if self.get_vertex(){
-            write!(f,"VertexTriangle")?;
+        write!(f, "{{SharedSegMask:0x{:x} ->", self.mask)?;
+        if self.get_vertex() {
+            write!(f, "VertexTriangle")?;
         }
-        if self.get_normal(){
-            write!(f,"NormalTriangle")?;
+        if self.get_normal() {
+            write!(f, "NormalTriangle")?;
         }
-        if self.get_uv(){
-            write!(f,"UVTriangle")?;
+        if self.get_uv() {
+            write!(f, "UVTriangle")?;
         }
-        write!(f,"}}")
+        write!(f, "}}")
     }
 }
 impl DecodedSegment {
-    pub(crate) fn merge(&mut self,other:&mut Self){
-        if other.as_triangles().is_none(){
+    pub(crate) fn merge(&mut self, other: &mut Self) {
+        if other.as_triangles().is_none() {
             return;
         }
-        match self{
+        match self {
             Self::SharedTriangleSegment(kind, indices) => {
-                if &indices[..] != other.as_triangles().unwrap(){
+                if &indices[..] != other.as_triangles().unwrap() {
                     return;
                 }
                 let combined = kind.combine(other.shared_kind());
-                *self = Self::SharedTriangleSegment(combined,indices.clone());
-                *other = Self::Nothing;
-            },
-            Self::AppendTriangleVertex(indices) =>{
-                if &indices[..] != other.as_triangles().unwrap(){
-                    return;
-                }
-                let kind = {let mut kind = SharedSegmentKind::default(); kind.set_vertex(); kind};
-                let combined = kind.combine(other.shared_kind());
-                *self = Self::SharedTriangleSegment(combined,indices.clone());
+                *self = Self::SharedTriangleSegment(combined, indices.clone());
                 *other = Self::Nothing;
             }
-            Self::AppendTriangleNormal(indices) =>{
-                if &indices[..] != other.as_triangles().unwrap(){
+            Self::AppendTriangleVertex(indices) => {
+                if &indices[..] != other.as_triangles().unwrap() {
                     return;
                 }
-                let kind = {let mut kind = SharedSegmentKind::default(); kind.set_vertex(); kind};
+                let kind = {
+                    let mut kind = SharedSegmentKind::default();
+                    kind.set_vertex();
+                    kind
+                };
                 let combined = kind.combine(other.shared_kind());
-                *self = Self::SharedTriangleSegment(combined,indices.clone());
+                *self = Self::SharedTriangleSegment(combined, indices.clone());
                 *other = Self::Nothing;
             }
-             Self::AppendTriangleUV(indices) =>{
-                if &indices[..] != other.as_triangles().unwrap(){
+            Self::AppendTriangleNormal(indices) => {
+                if &indices[..] != other.as_triangles().unwrap() {
                     return;
                 }
-                let kind = {let mut kind = SharedSegmentKind::default(); kind.set_uv(); kind};
+                let kind = {
+                    let mut kind = SharedSegmentKind::default();
+                    kind.set_normal();
+                    kind
+                };
                 let combined = kind.combine(other.shared_kind());
-                *self = Self::SharedTriangleSegment(combined,indices.clone());
+                *self = Self::SharedTriangleSegment(combined, indices.clone());
                 *other = Self::Nothing;
             }
-            _=>(),
+            Self::AppendTriangleUV(indices) => {
+                if &indices[..] != other.as_triangles().unwrap() {
+                    return;
+                }
+                let kind = {
+                    let mut kind = SharedSegmentKind::default();
+                    kind.set_uv();
+                    kind
+                };
+                let combined = kind.combine(other.shared_kind());
+                *self = Self::SharedTriangleSegment(combined, indices.clone());
+                *other = Self::Nothing;
+            }
+            _ => (),
         }
     }
-    fn as_triangles(&self)->Option<&[IndexType]>{
-        match self{
+    fn as_triangles(&self) -> Option<&[IndexType]> {
+        match self {
             Self::AppendTriangleVertex(indices) => Some(indices),
             Self::AppendTriangleNormal(indices) => Some(indices),
-            _=>None,
+            _ => None,
         }
     }
-    fn shared_kind(&self)->SharedSegmentKind{
-        match self{
-            Self::AppendTriangleVertex(_) => {let mut kind = SharedSegmentKind::default(); kind.set_vertex(); kind}
-            Self::AppendTriangleNormal(_) => {let mut kind = SharedSegmentKind::default(); kind.set_normal(); kind}
-            _=>todo!("{:?}",self)
+    fn shared_kind(&self) -> SharedSegmentKind {
+        match self {
+            Self::AppendTriangleVertex(_) => {
+                let mut kind = SharedSegmentKind::default();
+                kind.set_vertex();
+                kind
+            }
+            Self::AppendTriangleNormal(_) => {
+                let mut kind = SharedSegmentKind::default();
+                kind.set_normal();
+                kind
+            }
+            _ => todo!("{:?}", self),
         }
     }
-    pub(crate) fn is_something(&self)->bool{
-       !matches!(self,Self::Nothing)
+    pub(crate) fn is_something(&self) -> bool {
+        !matches!(self, Self::Nothing)
     }
     pub(crate) async fn optimize(self) -> SmallVec<[Self; 1]> {
         match self {
@@ -352,7 +377,7 @@ impl DecodedSegment {
                 SectionType::TangentTriangleSegment
             }
             Self::AppendCustom(custom_data) => custom_data.encode(&mut data)?,
-            Self::SharedTriangleSegment(kind,triangles) => {
+            Self::SharedTriangleSegment(kind, triangles) => {
                 let max_index = triangles.iter().max().unwrap_or(&0);
                 data.push(kind.mask());
                 crate::vertices::save_triangles(&triangles, (*max_index) as usize, &mut data)?;
@@ -370,6 +395,7 @@ impl DecodedSegment {
         seg: EncodedSegment,
         ctx: &crate::tmf_importer::TMFImportContext,
     ) -> Result<Self, TMFImportError> {
+        //println!("Decoding segment of type:{:?}!",seg.seg_type());
         match seg.seg_type {
             SectionType::Invalid => Ok(Self::Nothing),
             SectionType::VertexSegment => decode_vertex_seg(seg).await,
@@ -386,7 +412,8 @@ impl DecodedSegment {
             | SectionType::NormalTriangleSegment
             | SectionType::UvTriangleSegment
             | SectionType::ColorTriangleSegment
-            | SectionType::TangentTriangleSegment => decode_triangle_seg(seg, ctx).await,
+            | SectionType::TangentTriangleSegment => {
+                decode_triangle_seg(seg, ctx).await},
             SectionType::CustomIndexSegment | SectionType::CustomFloatSegment => {
                 decode_custom_seg(seg, ctx).await
             }
@@ -395,11 +422,14 @@ impl DecodedSegment {
                 let data: &[u8] = &seg.data()[1..];
                 let mut indices = Vec::new();
                 match seg.compresion_type() {
-                    CompressionType::None => crate::tmf_importer::read_default_triangles(data, &mut indices, ctx).unwrap(),
-                    _=>panic!("Shared segments may only be uncompressed in TMF 0.2"),
+                    CompressionType::None => {
+                        crate::tmf_importer::read_default_triangles(data, &mut indices, ctx)
+                            .unwrap()
+                    }
+                    _ => panic!("Shared segments may only be uncompressed in TMF 0.2"),
                 }
-                Ok(Self::SharedTriangleSegment(kind,indices.into()))
-            },
+                Ok(Self::SharedTriangleSegment(kind, indices.into()))
+            }
             _ => todo!("Unhandled segement type {:?}", seg.seg_type),
         }
     }
@@ -427,16 +457,16 @@ impl DecodedSegment {
             DecodedSegment::Nothing => (),
             DecodedSegment::SharedTriangleSegment(kind, indices) => {
                 //println!("kind:{kind}");
-                if kind.get_vertex(){
+                if kind.get_vertex() {
                     mesh.append_vertex_triangles(indices);
                 }
-                if kind.get_normal(){
+                if kind.get_normal() {
                     mesh.append_normal_triangles(indices);
                 }
-                if kind.get_uv(){
+                if kind.get_uv() {
                     mesh.append_uv_triangles(indices);
                 }
-            },
+            }
         }
     }
 }

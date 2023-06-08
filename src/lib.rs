@@ -172,24 +172,28 @@ impl TMFMesh {
             self.set_vertex_triangles(indices.clone());
             self.set_normal_triangles(indices);
         }*/
-        let (vertices,normals,uvs,indices) = unify_data::smart_merge_data_3(
+        let (vertices, normals, uvs, indices) = unify_data::smart_merge_data_3(
             self.get_vertices(),
             self.get_normals(),
             self.get_uvs(),
-            [self.get_vertex_triangles(),self.get_normal_triangles(),self.get_uv_triangles()]
+            [
+                self.get_vertex_triangles(),
+                self.get_normal_triangles(),
+                self.get_uv_triangles(),
+            ],
         );
-        if let Some(indices) = indices{
-            if let Some(vertices) = vertices{
+        if let Some(indices) = indices {
+            if let Some(vertices) = vertices {
                 //println!("unfied verticess!");
                 self.set_vertices(vertices);
                 self.set_vertex_triangles(indices.clone());
             }
-            if let Some(normals) = normals{
+            if let Some(normals) = normals {
                 //println!("unfied normals!");
                 self.set_normals(normals);
                 self.set_normal_triangles(indices.clone());
             }
-            if let Some(uvs) = uvs{
+            if let Some(uvs) = uvs {
                 //println!("unfied uvs!");
                 self.set_uvs(uvs);
                 self.set_uv_triangles(indices);
@@ -999,7 +1003,7 @@ mod testing {
     }
     #[test]
     fn analize_suzan() {
-        let mut file = std::fs::File::open("target/test_res/optimized_susan.tmf").unwrap();
+        let mut file = std::fs::File::open("target/test_res/susan.tmf").unwrap();
         let mut out = Vec::new();
         file.read_to_end(&mut out).unwrap();
         let r_mesh = runtime_agnostic_block_on!(tmf_importer::TMFImportContext::analize(
@@ -1016,6 +1020,7 @@ mod testing {
         let (mut tmf_mesh, name) = TMFMesh::read_from_obj_one(&mut file).unwrap();
         tmf_mesh.verify().unwrap();
         tmf_mesh.reorder_data();
+        tmf_mesh.verify().unwrap();
         assert!(name == "Suzanne", "Name should be Suzanne but is {name}");
         let prec = TMFPrecisionInfo::default();
         let mut out = Vec::new();
@@ -1026,21 +1031,9 @@ mod testing {
         assert!(name == "Suzanne", "Name should be Suzanne but is {name}");
         r_mesh.verify().unwrap();
         let mut index = 0;
-        let mut should_fail = false;
-        for (v_src, v_read) in std::iter::zip(
-            tmf_mesh.get_vertex_triangles().unwrap(),
-            r_mesh.get_vertex_triangles().unwrap(),
-        ) {
-            //assert_eq!(v_src,v_read,"Position in vts:{index}");
-            if v_src != v_read {
-                println!("Error at index {index}:{v_src} != {v_read}");
-                should_fail = true;
-            }
-            index += 1;
-        }
-        if should_fail {
-            panic!("Test errors");
-        }
+        assert_eq!(tmf_mesh.get_vertex_triangles(),r_mesh.get_vertex_triangles());
+        assert_eq!(tmf_mesh.get_normal_triangles(),r_mesh.get_normal_triangles());
+        assert_eq!(tmf_mesh.get_uv_triangles(),r_mesh.get_uv_triangles());
         let mut out = std::fs::File::create("target/test_res/susan_ftmf.obj").unwrap();
         r_mesh.write_obj_one(&mut out, &name).unwrap();
     }
