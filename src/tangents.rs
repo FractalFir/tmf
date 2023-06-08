@@ -42,25 +42,13 @@ fn ht_from_bool(src: bool) -> HandednessType {
 }
 /// A representation of a Tangent.
 pub type Tangent = (crate::Vector3, HandednessType);
-fn tangent_to_encoding(
-    tangent: Tangent,
-    prec: TangentPrecisionMode,
-) -> (u64, u64, bool, bool, bool, bool) {
+fn tangent_to_encoding(tangent: Tangent, prec: TangentPrecisionMode) -> (u64, u64, bool) {
     let normal = crate::normals::normal_to_encoding(tangent.0, &prec.normal_precision());
     let handeness = ht_to_bool(tangent.1);
-    (normal.0, normal.1, normal.2, normal.3, normal.4, handeness)
+    (normal.0, normal.1, handeness)
 }
-fn tangent_from_encoding(
-    asine: u64,
-    z: u64,
-    sx: bool,
-    sy: bool,
-    sz: bool,
-    handenes: bool,
-    prec: TangentPrecisionMode,
-) -> Tangent {
-    let normal =
-        crate::normals::normal_from_encoding(asine, z, sx, sy, sz, prec.normal_precision());
+fn tangent_from_encoding(a: u64, b: u64, handenes: bool, prec: TangentPrecisionMode) -> Tangent {
+    let normal = crate::normals::normal_from_encoding(a, b, prec.normal_precision());
     let handeness = ht_from_bool(handenes);
     (normal, handeness)
 }
@@ -76,13 +64,10 @@ pub(crate) fn save_tangents<W: std::io::Write>(
     let mut writer = UnalignedWriter::new(target);
     let bits_prec = UnalignedRWMode::precision_bits(bits_prec);
     for tangent in tangents {
-        let (asine, z, sx, sy, sz, handeness) = tangent_to_encoding(*tangent, prec);
+        let (a, b, handeness) = tangent_to_encoding(*tangent, prec);
         writer.write_bit(handeness)?;
-        writer.write_bit(sx)?;
-        writer.write_bit(sy)?;
-        writer.write_bit(sz)?;
-        writer.write_unaligned(bits_prec, asine)?;
-        writer.write_unaligned(bits_prec, z)?;
+        writer.write_unaligned(bits_prec, a)?;
+        writer.write_unaligned(bits_prec, b)?;
     }
     writer.flush()?;
     Ok(())
@@ -96,23 +81,16 @@ pub(crate) fn read_tangents<R: std::io::Read>(src: &mut R) -> std::io::Result<Bo
     let mut tangents = Vec::with_capacity(count as usize);
     for _ in 0..count {
         let handeness = reader.read_bit()?;
-        let sx = reader.read_bit()?;
-        let sy = reader.read_bit()?;
-        let sz = reader.read_bit()?;
-        let asine = reader.read_unaligned(prec)?;
-        let z = reader.read_unaligned(prec)?;
-        tangents.push(tangent_from_encoding(
-            asine, z, sx, sy, sz, handeness, tan_prec,
-        ));
+        let a = reader.read_unaligned(prec)?;
+        let b = reader.read_unaligned(prec)?;
+        tangents.push(tangent_from_encoding(a, b, handeness, tan_prec));
     }
     Ok(tangents.into())
 }
 #[cfg(test)]
 fn test_tangent(tangent: Tangent, prec: TangentPrecisionMode) -> FloatType {
     let encoded = tangent_to_encoding(tangent, prec);
-    let decoded = tangent_from_encoding(
-        encoded.0, encoded.1, encoded.2, encoded.3, encoded.4, encoded.5, prec,
-    );
+    let decoded = tangent_from_encoding(encoded.0, encoded.1, encoded.2, prec);
     assert_eq!(ht_to_bool(tangent.1), ht_to_bool(decoded.1));
     (1.0 - crate::utilis::dot(decoded.0, tangent.0)) * 180.0
 }

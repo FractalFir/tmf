@@ -22,6 +22,7 @@ impl NormalPrecisionMode {
     /// let dev_5_deg = NormalPrecisionMode::from_deg_dev(5.0);
     /// ```
     pub fn from_deg_dev(deg: FloatType) -> Self {
+        // TODO: use correct calculation here
         let prec = ((90.0 / deg).log2().ceil() as u8).max(1);
         Self(prec)
     }
@@ -34,6 +35,7 @@ impl NormalPrecisionMode {
     /// let dev_0_point_05_rad = NormalPrecisionMode::from_rad_dev(0.05);
     /// ```
     pub fn from_rad_dev(rad: FloatType) -> Self {
+        // TODO: use correct calculation here
         let prec = (FRAC_PI_2 / rad).log2().ceil() as u8;
         Self(prec)
     }
@@ -64,73 +66,40 @@ pub fn normalize_arr(normals: &mut [Vector3]) {
         *normal = normalize(*normal);
     }
 }
-pub(crate) fn normal_to_encoding(
-    normal: Vector3,
-    precision: &NormalPrecisionMode,
-) -> (u64, u64, bool, bool, bool) {
+pub(crate) fn normal_to_encoding(normal: Vector3, precision: &NormalPrecisionMode) -> (u64, u64) {
     let multiplier = ((1 << precision.0) - 1) as FloatType;
-    //Calculate asine
-    let xy = (normal.0.abs(), normal.1.abs());
-    let xy_mag = (xy.0 * xy.0 + xy.1 * xy.1).sqrt();
-    let xy = (xy.0 / xy_mag, xy.1 / xy_mag);
-    let asine = xy.0.asin();
-
-    let asine = asine / (PI / 2.0);
-    //
-    let asine = (asine * multiplier) as u64;
-    let z = (normal.2.abs() * multiplier) as u64;
-    let sx = normal.0 < 0.0;
-    let sy = normal.1 < 0.0;
-    let sz = normal.2 < 0.0;
-    (asine, z, sx, sy, sz)
+    let norm = normal.0.abs() + normal.1.abs() + normal.2.abs();
+    let mut nx = normal.0 / norm;
+    let mut ny = normal.1 / norm;
+    if !normal.2.is_sign_positive() {
+        // fold over negative z
+        (nx, ny) = ((1.0 - ny.abs()) * nx.signum(),
+            (1.0 - nx.abs()) * ny.signum());
+    }
+    nx = (nx * 0.5 + 0.5) * multiplier;
+    ny = (ny * 0.5 + 0.5) * multiplier;
+    (nx as u64, ny as u64)
 }
-pub(crate) fn normal_from_encoding(
-    asine: u64,
-    z: u64,
-    sx: bool,
-    sy: bool,
-    sz: bool,
-    precision: NormalPrecisionMode,
-) -> Vector3 {
+pub(crate) fn normal_from_encoding(a: u64, b: u64, precision: NormalPrecisionMode) -> Vector3 {
     let divisor = ((1_u64 << precision.0) - 1) as FloatType;
-    //Read raw asine
-    let asine = (asine as FloatType) / divisor;
-    //Convert asine form 0-1 to 0-tau
-    let asine = asine * (PI / 2.0);
-    //Read xyz component
-    let z = (z as FloatType) / divisor;
-    #[cfg(feature = "fast_trig")]
-    let x = fsin(asine as fprec) as FloatType;
-    #[cfg(feature = "fast_trig")]
-    let y = (1.0 - x * x).sqrt();
-    #[cfg(not(feature = "fast_trig"))]
-    let (x, y) = asine.sin_cos();
-    // Calculate XY magnitude
-    let xy_mag = (1.0 - z * z).sqrt();
-    // Adjust x an y
-    let y = y * xy_mag;
-    let x = x * xy_mag;
-    // Set signs
-    let x = if sx { -x } else { x };
-    let y = if sy { -y } else { y };
-    let z = if sz { -z } else { z };
-    (x, y, z)
+    let mut x = (a as FloatType) / divisor * 2.0 - 1.0;
+    let mut y = (b as FloatType) / divisor * 2.0 - 1.0;
+    let z = 1.0 - x.abs() - y.abs();
+    x += x.signum() * z.min(0.0);
+    y += y.signum() * z.min(0.0);
+    normalize((x, y, z))
 }
-const PI: FloatType = std::f64::consts::PI as FloatType;
 #[inline(always)]
 fn save_normal<W: Write>(
     normal: Vector3,
     precision: NormalPrecisionMode,
     writer: &mut UnalignedWriter<W>,
 ) -> std::io::Result<()> {
-    let (asine, z, sx, sy, sz) = normal_to_encoding(normal, &precision);
+    let (a, b) = normal_to_encoding(normal, &precision);
     let main_prec = UnalignedRWMode::precision_bits(precision.0);
 
-    writer.write_bit(sx)?;
-    writer.write_bit(sy)?;
-    writer.write_bit(sz)?;
-    writer.write_unaligned(main_prec, asine)?;
-    writer.write_unaligned(main_prec, z)?;
+    writer.write_unaligned(main_prec, a)?;
+    writer.write_unaligned(main_prec, b)?;
 
     Ok(())
 }
@@ -140,12 +109,8 @@ fn read_normal<R: Read>(
     reader: &mut UnalignedReader<R>,
 ) -> std::io::Result<Vector3> {
     let main_prec = UnalignedRWMode::precision_bits(precision.0);
-    // Get signs of x y z component
-    let sx = reader.read_bit()?;
-    let sy = reader.read_bit()?;
-    let sz = reader.read_bit()?;
-    let (asine, z) = reader.read2_unaligned(main_prec)?;
-    Ok(normal_from_encoding(asine, z, sx, sy, sz, precision))
+    let (a, b) = reader.read2_unaligned(main_prec)?;
+    Ok(normal_from_encoding(a, b, precision))
 }
 pub(crate) fn save_normal_array<W: Write>(
     normals: &[Vector3],
@@ -184,7 +149,8 @@ pub(crate) fn read_normal_array<R: Read>(reader: &mut R) -> Result<Box<[Vector3]
 #[cfg(test)]
 mod test_normal {
     use super::*;
-    pub const NORM_PREC_HIGH: NormalPrecisionMode = NormalPrecisionMode(13);
+    const NORM_PREC_HIGH: NormalPrecisionMode = NormalPrecisionMode(13);
+    const PI: FloatType = std::f64::consts::PI as FloatType;
     fn dot(a: Vector3, b: Vector3) -> FloatType {
         a.0 * b.0 + a.1 * b.1 + a.2 * b.2
     }
@@ -194,7 +160,7 @@ mod test_normal {
     }
     fn test_save(normal: Vector3) {
         let mut res = Vec::with_capacity(64);
-        let precision = NormalPrecisionMode(14);
+        let precision = NormalPrecisionMode::from_deg_dev(0.01);
         {
             let mut writer = UnalignedWriter::new(&mut res);
             save_normal(normal, precision, &mut writer).unwrap();
