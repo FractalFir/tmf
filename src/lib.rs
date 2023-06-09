@@ -924,6 +924,7 @@ pub enum TMFImportError {
     NoDataBeforeOmmitedSegment,
     #[error("Byte precision is too high ({0}: over 64 bits) and is invalid.")]
     InvalidPrecision(u8),
+    #[error("This compression type is not supported for a segment.")]
     UnsuportedCompressionType(u8),
 }
 /// An error which occured when a `TMFMesh` is exported.
