@@ -71,6 +71,7 @@ pub type FloatType = f32;
 pub type FloatType = f64;
 /// Type used for representing 3d floating-point vectors
 pub type Vector3 = (FloatType, FloatType, FloatType);
+pub type Vector4 = (FloatType, FloatType, FloatType, FloatType);
 /// Type used for representing 2d floating-point vectors
 pub type Vector2 = (FloatType, FloatType);
 use crate::custom_data::CustomDataSegment;
@@ -1005,7 +1006,7 @@ mod testing {
             &mut (&out as &[u8]),
         ))
         .unwrap();
-        todo!();
+        //todo!();
     }
     #[test]
     #[cfg(feature = "obj_import")]

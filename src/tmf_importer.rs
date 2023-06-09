@@ -241,6 +241,7 @@ pub(crate) async fn decode_custom_seg(
         SectionType::CustomIndexSegment
             | SectionType::CustomFloatSegment
             | SectionType::CustomIntigerSegment
+            | SectionType::CustomColorRGBASegment
     ) {
         let mut data: &[u8] = seg.data();
         Ok(DecodedSegment::AppendCustom(CustomDataSegment::read(

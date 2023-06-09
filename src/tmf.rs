@@ -35,7 +35,7 @@ pub(crate) enum SectionType {
     CustomVector2Segment = 19,
     CustomVector3Segment = 20,
     CustomVector4Segment = 21,
-    CustomColorSegment = 23,
+    CustomColorRGBASegment = 23,
     CustomIntigerSegment = 24,
     SharedTriangleSegment = 25,
 }
@@ -70,6 +70,7 @@ impl SectionType {
             10 => Self::TangentTriangleSegment,
             15 => Self::CustomIndexSegment,
             16 => Self::CustomFloatSegment,
+            23 => Self::CustomColorRGBASegment,
             24 => Self::CustomIntigerSegment,
             25 => Self::SharedTriangleSegment,
             _ => Self::Invalid,
@@ -418,7 +419,8 @@ impl DecodedSegment {
             | SectionType::TangentTriangleSegment => decode_triangle_seg(seg, ctx).await,
             SectionType::CustomIndexSegment
             | SectionType::CustomIntigerSegment
-            | SectionType::CustomFloatSegment => decode_custom_seg(seg, ctx).await,
+            | SectionType::CustomFloatSegment  |
+            SectionType::CustomColorRGBASegment => decode_custom_seg(seg, ctx).await,
             SectionType::SharedTriangleSegment => {
                 if seg.data.len() < 1 {
                     return Err(TMFImportError::IO(std::io::Error::from(
