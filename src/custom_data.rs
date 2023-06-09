@@ -8,8 +8,11 @@ pub(crate) struct CustomDataSegment {
     data: CustomData,
 }
 #[derive(Debug, Copy, Clone)]
+/// An enum representing error, which occurred while adding a segment counting custom mesh data.
 pub enum DataSegmentError {
+    /// A segment must have a name, but it's name was set to an empty string.
     NoName,
+    /// Name over 255 byte limit.
     NameTooLong,
 }
 impl CustomDataSegment {

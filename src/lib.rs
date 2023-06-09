@@ -907,34 +907,40 @@ impl TMFMesh {
 }
 /// An enum describing an error that occurred during loading a TMF mesh.  
 #[derive(Debug, Error)]
-#[allow(missing_docs)] // allow: documentation is redundant with #[error] attributes.
 pub enum TMFImportError {
-    #[error("tmf data couldn't be read")]
+    #[error("tmf data couldn't be read, because an IO error:({0}) occurred.")]
+    /// tmf data couldn't be read, because an IO error occurred.
     IO(#[from] std::io::Error),
     #[error("A segment uses an unknown compression type ({0}), invalid for the minimum TMF version specified by file header.")]
+    /// A segment uses an unknown compression type, which is invalid for the minimum TMF version specified by file header.
     CompressionTypeUnknown(u8),
     #[error("A method returning one mesh was called, but TMF file had no meshes present.")]
+    /// A method returning one mesh was called, but TMF file had no meshes present.
     NoMeshes,
     #[error("A method returning one mesh was called, but more than one mesh was present.")]
+    /// A method returning one mesh was called, but more than one mesh was present.
     TooManyMeshes,
-    #[error("Source file was not a TMF file.")]
+    #[error("Provided file was not a TMF file.")]
+    /// Provided file was not a TMF file.
     NotTMFFile,
-    #[error("File was created with a TMF version newer than this, and can't be read properly.")]
+    #[error("File was created with a TMF version newer than supported by this reader, and can't be read properly.")]
+    /// File was created with a TMF version newer than supported by this reader, and can't be read properly.
     NewerVersionRequired,
-    #[error("A file segment exceeded the maximum length(2GB) was encountered. This segments length is highly unusual, and the segment unlikely to be valid. The segment was not read to prevent memory issues.")]
+    #[error("A file segment exceeded the maximum length(2GB) was encountered. This segments length is highly unusual, and the segment unlikely to be valid. The segment was not read to prevent memory-related issues.")]
+    /// A file segment exceeded the maximum length(2GB) was encountered. This segments length is highly unusual, and the segment unlikely to be valid. The segment was not read to prevent memory-related issues.
     SegmentTooLong,
-    #[error("A segments compression type requires that it must be preceded by another segment, from which some of the data is deduced.")]
-    NoDataBeforeOmmitedSegment,
-    #[error("Byte precision is too high ({0}: over 64 bits) and is invalid.")]
+    #[error("Specified precision of saved data is too high ({0}: over 64 bits) and is invalid.")]
+    /// Specified precision of saved data is too high (over 64 bits) and is invalid.
     InvalidPrecision(u8),
-    #[error("This compression type is not supported for a segment.")]
+    #[error("This compression type {0} is not supported in this particular context.")]
+    /// This compression type is not supported in this particular context
     UnsuportedCompressionType(u8),
 }
 /// An error which occured when a `TMFMesh` is exported.
 #[derive(Debug, Error)]
-#[allow(missing_docs)] // allow: documentation is redundant with #[error] attributes.
 pub enum TMFExportError {
-    #[error("tmf data couldn't be written")]
+    #[error("tmf data couldn't be written, because an IO error:({0}) occurred.")]
+    /// tmf data couldn't be written, because an IO error occurred.
     IO(#[from] std::io::Error),
 }
 #[cfg(test)]

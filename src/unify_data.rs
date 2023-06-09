@@ -104,13 +104,12 @@ pub(crate) fn merge_data_4<A: Copy, B: Copy, C: Copy, D: Copy>(
     (indices, a, b, c, d)
 }
 type OBoxArr<A> = Option<Box<[A]>>;
-fn is_merge_needed(indices:&[Option<&[IndexType]>])->bool{
+fn is_merge_needed(indices: &[Option<&[IndexType]>]) -> bool {
     // filter keeps only `Some` values
-    let mut index_iter = indices.iter().filter_map(|x| {x.as_ref()});
-    if let Some(first) = index_iter.next(){
-       !index_iter.all(|array| {*array == *first})
-    }
-    else{
+    let mut index_iter = indices.iter().filter_map(|x| x.as_ref());
+    if let Some(first) = index_iter.next() {
+        !index_iter.all(|array| *array == *first)
+    } else {
         false
     }
 }
@@ -119,7 +118,7 @@ fn smart_merge_data_2<A: Copy, B: Copy>(
     b: Option<&[B]>,
     indices: [Option<&[IndexType]>; 2],
 ) -> (OBoxArr<A>, OBoxArr<B>, OBoxArr<IndexType>) {
-    if !is_merge_needed(&indices){
+    if !is_merge_needed(&indices) {
         return (None, None, None);
     }
     if let Some(((a, indices_a), (b, indices_b))) = a.zip(indices[0]).zip(b.zip(indices[1])) {
@@ -135,8 +134,8 @@ pub(crate) fn smart_merge_data_3<A: Copy, B: Copy, C: Copy>(
     c: Option<&[C]>,
     indices: [Option<&[IndexType]>; 3],
 ) -> (OBoxArr<A>, OBoxArr<B>, OBoxArr<C>, OBoxArr<IndexType>) {
-    if !is_merge_needed(&indices){
-        return (None, None, None,None);
+    if !is_merge_needed(&indices) {
+        return (None, None, None, None);
     }
     if !a.is_some_and(|data| !data.is_empty()) || indices[0].is_none() {
         let (b, c, indices) = smart_merge_data_2(b, c, [indices[1], indices[2]]);
@@ -171,8 +170,8 @@ pub(crate) fn smart_merge_data_4<A: Copy, B: Copy, C: Copy, D: Copy>(
     OBoxArr<D>,
     OBoxArr<IndexType>,
 ) {
-    if !is_merge_needed(&indices){
-        return (None,None, None, None,None);
+    if !is_merge_needed(&indices) {
+        return (None, None, None, None, None);
     }
     if !a.is_some_and(|data| !data.is_empty()) || indices[0].is_none() {
         let (b, c, d, indices) = smart_merge_data_3(b, c, d, [indices[1], indices[2], indices[3]]);
