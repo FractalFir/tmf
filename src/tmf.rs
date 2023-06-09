@@ -141,6 +141,9 @@ impl EncodedSegment {
     ) -> Result<Self, TMFImportError> {
         let seg_type = ctx.segment_type_width().read(src)?;
         let data_length = ctx.segment_length_width().read(src)?;
+        if data_length > crate::MAX_SEG_SIZE {
+            return Err(TMFImportError::SegmentTooLong);
+        }
         let compresion_type = CompressionType::from_u8(src.read_u8()?)?;
         let mut data = vec![0; data_length];
         src.read_exact(&mut data)?;
@@ -412,21 +415,28 @@ impl DecodedSegment {
             | SectionType::NormalTriangleSegment
             | SectionType::UvTriangleSegment
             | SectionType::ColorTriangleSegment
-            | SectionType::TangentTriangleSegment => {
-                decode_triangle_seg(seg, ctx).await},
-            SectionType::CustomIndexSegment | SectionType::CustomFloatSegment => {
-                decode_custom_seg(seg, ctx).await
-            }
+            | SectionType::TangentTriangleSegment => decode_triangle_seg(seg, ctx).await,
+            SectionType::CustomIndexSegment
+            | SectionType::CustomIntigerSegment
+            | SectionType::CustomFloatSegment => decode_custom_seg(seg, ctx).await,
             SectionType::SharedTriangleSegment => {
+                if seg.data.len() < 1 {
+                    return Err(TMFImportError::IO(std::io::Error::from(
+                        std::io::ErrorKind::UnexpectedEof,
+                    )));
+                }
                 let kind = SharedSegmentKind::from_mask(seg.data[0]);
                 let data: &[u8] = &seg.data()[1..];
                 let mut indices = Vec::new();
                 match seg.compresion_type() {
                     CompressionType::None => {
-                        crate::tmf_importer::read_default_triangles(data, &mut indices, ctx)
-                            .unwrap()
+                        crate::tmf_importer::read_default_triangles(data, &mut indices, ctx)?
                     }
-                    _ => panic!("Shared segments may only be uncompressed in TMF 0.2"),
+                    _ => {
+                        return Err(TMFImportError::UnsuportedCompressionType(
+                            seg.compresion_type() as u8,
+                        ))
+                    }
                 }
                 Ok(Self::SharedTriangleSegment(kind, indices.into()))
             }

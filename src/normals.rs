@@ -92,6 +92,12 @@ pub(crate) fn normal_from_encoding(
     sz: bool,
     precision: NormalPrecisionMode,
 ) -> Vector3 {
+    if precision.0 == 0 {
+        let x = if sx { -1.0 } else { 1.0 };
+        let y = if sy { -1.0 } else { 1.0 };
+        let z = if sz { -1.0 } else { 1.0 };
+        return (x, y, z);
+    }
     let divisor = ((1_u64 << precision.0) - 1) as FloatType;
     //Read raw asine
     let asine = (asine as FloatType) / divisor;
@@ -168,7 +174,6 @@ pub(crate) fn read_normal_array<R: Read>(reader: &mut R) -> Result<Box<[Vector3]
         return Err(TMFImportError::SegmentTooLong);
     }
     let precision = reader.read_u8()?;
-    if precision == 0 {}
     if precision >= u64::BITS as u8 {
         return Err(TMFImportError::InvalidPrecision(precision));
     }

@@ -22,7 +22,6 @@ macro_rules! runtime_agnostic_block_on {
         }
     }};
 }
-mod reorder_triangles;
 #[doc(hidden)]
 pub mod custom_data;
 mod material;
@@ -32,6 +31,7 @@ mod normals;
 #[cfg(feature = "obj_import")]
 mod obj;
 mod read_extension;
+mod reorder_triangles;
 #[doc(hidden)]
 pub mod tangents;
 mod tmf;
@@ -52,7 +52,8 @@ const TMF_MAJOR: u16 = 0;
 const TMF_MINOR: u16 = 2;
 const MIN_TMF_MAJOR: u16 = 0;
 const MIN_TMF_MINOR: u16 = 2;
-pub(crate) const MAX_SEG_SIZE: usize = 0x80_00_00_00; // 2_00_00 for fuzzing!
+pub(crate) const MAX_SEG_SIZE: usize = 0x80_00_00_00; //Standard
+                                                      //pub(crate) const MAX_SEG_SIZE: usize = 2_00_00;// for fuzzing!
 /// Index type used for representing triangle indices.
 #[cfg(not(any(feature = "long_indices", feature = "short_indices")))]
 pub type IndexType = u32;
@@ -921,6 +922,7 @@ pub enum TMFImportError {
     NoDataBeforeOmmitedSegment,
     /// Byte precision is too high(over 64 bits) and is invalid.
     InvalidPrecision(u8),
+    UnsuportedCompressionType(u8),
 }
 impl From<std::io::Error> for TMFImportError {
     fn from(err: std::io::Error) -> Self {
@@ -1031,9 +1033,15 @@ mod testing {
         assert!(name == "Suzanne", "Name should be Suzanne but is {name}");
         r_mesh.verify().unwrap();
         let mut index = 0;
-        assert_eq!(tmf_mesh.get_vertex_triangles(),r_mesh.get_vertex_triangles());
-        assert_eq!(tmf_mesh.get_normal_triangles(),r_mesh.get_normal_triangles());
-        assert_eq!(tmf_mesh.get_uv_triangles(),r_mesh.get_uv_triangles());
+        assert_eq!(
+            tmf_mesh.get_vertex_triangles(),
+            r_mesh.get_vertex_triangles()
+        );
+        assert_eq!(
+            tmf_mesh.get_normal_triangles(),
+            r_mesh.get_normal_triangles()
+        );
+        assert_eq!(tmf_mesh.get_uv_triangles(), r_mesh.get_uv_triangles());
         let mut out = std::fs::File::create("target/test_res/susan_ftmf.obj").unwrap();
         r_mesh.write_obj_one(&mut out, &name).unwrap();
     }

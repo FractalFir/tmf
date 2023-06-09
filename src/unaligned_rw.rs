@@ -51,7 +51,10 @@ impl<R: Read> UnalignedReader<R> {
         Ok(res != 0)
     }
     pub fn read2_unaligned(&mut self, mode: UnalignedRWMode) -> Result<(u64, u64)> {
-        assert_ne!(mode.0, 0);
+        //assert_ne!(mode.0, 0);
+        if mode.0 == 0 {
+            return Ok((0, 0));
+        }
         if mode.0 > (u64::BITS / 2) as u8 {
             Ok((self.read_unaligned(mode)?, self.read_unaligned(mode)?))
         } else {

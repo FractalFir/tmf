@@ -238,7 +238,9 @@ pub(crate) async fn decode_custom_seg(
 ) -> Result<DecodedSegment, TMFImportError> {
     if matches!(
         seg.seg_type(),
-        SectionType::CustomIndexSegment | SectionType::CustomFloatSegment
+        SectionType::CustomIndexSegment
+            | SectionType::CustomFloatSegment
+            | SectionType::CustomIntigerSegment
     ) {
         let mut data: &[u8] = seg.data();
         Ok(DecodedSegment::AppendCustom(CustomDataSegment::read(
@@ -297,9 +299,21 @@ pub(crate) async fn decode_triangle_seg(
         let mut indices = Vec::new();
         match seg.compresion_type() {
             CompressionType::None => read_default_triangles(data, &mut indices, ctx)?,
-            CompressionType::Sequence => read_triangle_sequence(data, &mut indices)?,
-            CompressionType::Ommited => panic!("New decoder does not support ommited segment!"),
-            CompressionType::UnalignedLZZ => panic!("Unaligned lzz not supported yet!"),
+            CompressionType::Sequence => {
+                return Err(TMFImportError::UnsuportedCompressionType(
+                    CompressionType::Ommited as u8,
+                ))
+            } //read_triangle_sequence(data, &mut indices)?,
+            CompressionType::Ommited => {
+                return Err(TMFImportError::UnsuportedCompressionType(
+                    CompressionType::Ommited as u8,
+                ))
+            }
+            CompressionType::UnalignedLZZ => {
+                return Err(TMFImportError::UnsuportedCompressionType(
+                    CompressionType::UnalignedLZZ as u8,
+                ))
+            }
         };
         Ok(match seg.seg_type() {
             SectionType::VertexTriangleSegment => {

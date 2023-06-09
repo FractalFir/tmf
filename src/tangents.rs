@@ -2,6 +2,7 @@ use crate::read_extension::ReadExt;
 use crate::unaligned_rw::{UnalignedRWMode, UnalignedReader, UnalignedWriter};
 use crate::FloatType;
 use crate::NormalPrecisionMode;
+use crate::TMFImportError;
 /// A value describing handedness of tangent.
 pub type HandednessType = FloatType;
 #[derive(Clone, Copy)]
@@ -87,9 +88,17 @@ pub(crate) fn save_tangents<W: std::io::Write>(
     writer.flush()?;
     Ok(())
 }
-pub(crate) fn read_tangents<R: std::io::Read>(src: &mut R) -> std::io::Result<Box<[Tangent]>> {
+pub(crate) fn read_tangents<R: std::io::Read>(
+    src: &mut R,
+) -> Result<Box<[Tangent]>, TMFImportError> {
     let count = src.read_u64()?;
+    if count > crate::MAX_SEG_SIZE as u64 {
+        return Err(TMFImportError::SegmentTooLong);
+    }
     let bits_prec = src.read_u8()?;
+    if bits_prec >= u64::BITS as u8 {
+        return Err(TMFImportError::InvalidPrecision(bits_prec));
+    }
     let mut reader = UnalignedReader::new(src);
     let prec = UnalignedRWMode::precision_bits(bits_prec);
     let tan_prec = TangentPrecisionMode::from_bits(bits_prec);
