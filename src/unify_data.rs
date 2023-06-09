@@ -104,11 +104,24 @@ pub(crate) fn merge_data_4<A: Copy, B: Copy, C: Copy, D: Copy>(
     (indices, a, b, c, d)
 }
 type OBoxArr<A> = Option<Box<[A]>>;
+fn is_merge_needed(indices:&[Option<&[IndexType]>])->bool{
+    // filter keeps only `Some` values
+    let mut index_iter = indices.iter().filter_map(|x| {x.as_ref()});
+    if let Some(first) = index_iter.next(){
+       !index_iter.all(|array| {*array == *first})
+    }
+    else{
+        false
+    }
+}
 fn smart_merge_data_2<A: Copy, B: Copy>(
     a: Option<&[A]>,
     b: Option<&[B]>,
     indices: [Option<&[IndexType]>; 2],
 ) -> (OBoxArr<A>, OBoxArr<B>, OBoxArr<IndexType>) {
+    if !is_merge_needed(&indices){
+        return (None, None, None);
+    }
     if let Some(((a, indices_a), (b, indices_b))) = a.zip(indices[0]).zip(b.zip(indices[1])) {
         let (indices, a, b) = merge_data_2(&[indices_a, indices_b], a, b);
         (Some(a), Some(b), Some(indices))
@@ -122,6 +135,9 @@ pub(crate) fn smart_merge_data_3<A: Copy, B: Copy, C: Copy>(
     c: Option<&[C]>,
     indices: [Option<&[IndexType]>; 3],
 ) -> (OBoxArr<A>, OBoxArr<B>, OBoxArr<C>, OBoxArr<IndexType>) {
+    if !is_merge_needed(&indices){
+        return (None, None, None,None);
+    }
     if !a.is_some_and(|data| !data.is_empty()) || indices[0].is_none() {
         let (b, c, indices) = smart_merge_data_2(b, c, [indices[1], indices[2]]);
         (None, b, c, indices)
@@ -155,6 +171,9 @@ pub(crate) fn smart_merge_data_4<A: Copy, B: Copy, C: Copy, D: Copy>(
     OBoxArr<D>,
     OBoxArr<IndexType>,
 ) {
+    if !is_merge_needed(&indices){
+        return (None,None, None, None,None);
+    }
     if !a.is_some_and(|data| !data.is_empty()) || indices[0].is_none() {
         let (b, c, d, indices) = smart_merge_data_3(b, c, d, [indices[1], indices[2], indices[3]]);
         (None, b, c, d, indices)
@@ -181,25 +200,6 @@ pub(crate) fn smart_merge_data_4<A: Copy, B: Copy, C: Copy, D: Copy>(
         (None, None, None, None, None)
     }
 }
-/*
-pub(crate) fn merge_data_4<A: Copy, B: Copy,C:Copy,D:Copy>(
-    indices: &[&[IndexType]; 3],
-    a: &[A],
-    b: &[B],
-    c: &[C],
-    d: &[D],
-) -> (Box<[IndexType]>, Box<[A]>, Box<[B]>, Box<[C]>, Box<[D]>) {
-    let (indices, index_map) = unfiy_data_common::<4>(indices);
-    let a:Box<[_]> = index_map[0].iter().map(|index|{a[*index as usize]}).collect();
-    let b:Box<[_]> = index_map[0].iter().map(|index|{b[*index as usize]}).collect();
-    let c:Box<[_]> = index_map[0].iter().map(|index|{c[*index as usize]}).collect();
-    let d:Box<[_]> = index_map[0].iter().map(|index|{d[*index as usize]}).collect();
-    (indices,a,b,c,d)
-}*/
-/*
-pub(crate) fn merge_o_3<A: Copy, B: Copy,C:Copy>(a:Option<&[A]>,b:Option<&[B]>,c:Option<&[C]>,indices: &[&[IndexType]; 3]){
-
-}*/
 #[test]
 #[cfg(feature = "obj_import")]
 fn read_susan_obj() {
