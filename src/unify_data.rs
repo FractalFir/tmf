@@ -1,3 +1,4 @@
+#![allow(clippy::type_complexity)]
 use crate::IndexType;
 use std::collections::HashMap;
 /// This function unifies data at index level, returning info necessary for merging to `merge_data`.
@@ -76,7 +77,7 @@ pub(crate) fn merge_data_3<A: Copy, B: Copy, C: Copy>(
         .collect();
     (indices, a, b, c)
 }
-pub(crate) fn merge_data_4<A: Copy, B: Copy, C: Copy,D:Copy>(
+pub(crate) fn merge_data_4<A: Copy, B: Copy, C: Copy, D: Copy>(
     indices: &[&[IndexType]; 4],
     a: &[A],
     b: &[B],
@@ -141,38 +142,43 @@ pub(crate) fn smart_merge_data_3<A: Copy, B: Copy, C: Copy>(
         (None, None, None, None)
     }
 }
-pub(crate) fn smart_merge_data_4<A: Copy, B: Copy, C: Copy,D:Copy>(
+pub(crate) fn smart_merge_data_4<A: Copy, B: Copy, C: Copy, D: Copy>(
     a: Option<&[A]>,
     b: Option<&[B]>,
     c: Option<&[C]>,
     d: Option<&[D]>,
     indices: [Option<&[IndexType]>; 4],
-) -> (OBoxArr<A>, OBoxArr<B>, OBoxArr<C>, OBoxArr<D>, OBoxArr<IndexType>) {
+) -> (
+    OBoxArr<A>,
+    OBoxArr<B>,
+    OBoxArr<C>,
+    OBoxArr<D>,
+    OBoxArr<IndexType>,
+) {
     if !a.is_some_and(|data| !data.is_empty()) || indices[0].is_none() {
-        let (b, c, d, indices) = smart_merge_data_3(b, c,d, [indices[1], indices[2],indices[3]]);
+        let (b, c, d, indices) = smart_merge_data_3(b, c, d, [indices[1], indices[2], indices[3]]);
         (None, b, c, d, indices)
     } else if !b.is_some_and(|data| !data.is_empty()) || indices[1].is_none() {
-        let (a, c,d, indices) = smart_merge_data_3(a, c,d, [indices[0], indices[2],indices[3]]);
+        let (a, c, d, indices) = smart_merge_data_3(a, c, d, [indices[0], indices[2], indices[3]]);
         (a, None, c, d, indices)
     } else if !c.is_some_and(|data| !data.is_empty()) || indices[2].is_none() {
-        let (a, b,d, indices) = smart_merge_data_3(a, b,d, [indices[0], indices[1],indices[3]]);
+        let (a, b, d, indices) = smart_merge_data_3(a, b, d, [indices[0], indices[1], indices[3]]);
         (a, b, None, d, indices)
-    } 
-    else if !d.is_some_and(|data| !data.is_empty()) || indices[3].is_none() {
-        let (a, b,c, indices) = smart_merge_data_3(a, b,c, [indices[0], indices[1],indices[2]]);
-        (a, b,c, None, indices)
-    } 
-    else if let Some((((a, indices_a), (b, indices_b)), ((c, indices_c),(d, indices_d)))) = a
+    } else if !d.is_some_and(|data| !data.is_empty()) || indices[3].is_none() {
+        let (a, b, c, indices) = smart_merge_data_3(a, b, c, [indices[0], indices[1], indices[2]]);
+        (a, b, c, None, indices)
+    } else if let Some((((a, indices_a), (b, indices_b)), ((c, indices_c), (d, indices_d)))) = a
         .zip(indices[0])
         .zip(b.zip(indices[1]))
         .zip(c.zip(indices[2]).zip(d.zip(indices[3])))
     {
-        let d:&[D] = d;
-        let (indices, a, b, c,d) = merge_data_4(&[indices_a, indices_b, indices_c,indices_d], a, b, c,d);
-        let d:Box<[D]> = d;
+        let d: &[D] = d;
+        let (indices, a, b, c, d) =
+            merge_data_4(&[indices_a, indices_b, indices_c, indices_d], a, b, c, d);
+        let d: Box<[D]> = d;
         (Some(a), Some(b), Some(c), Some(d), Some(indices))
     } else {
-        (None, None, None, None,None)
+        (None, None, None, None, None)
     }
 }
 /*

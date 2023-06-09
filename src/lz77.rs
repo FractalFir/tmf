@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use crate::unaligned_rw::{UnalignedRWMode, UnalignedReader, UnalignedWriter};
 use crate::IndexType;
 fn calc_sw_size(prec: u8) -> usize {
@@ -93,7 +94,7 @@ fn read_compressed_array<T, Mapper: Fn(u64) -> T, R: std::io::Read>(
     let output: Box<_> = output.into_iter().map(mapper).collect();
     Ok(output)
 }
-pub fn save_triangles_lzz<W: std::io::Write>(
+pub(crate) fn save_triangles_lzz<W: std::io::Write>(
     triangles: &[IndexType],
     max_index: usize,
     writer: &mut W,

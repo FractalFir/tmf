@@ -153,20 +153,21 @@ impl TMFImportContext {
         Ok((res, name))
     }
     async fn analize_mesh<R: Read>(&self, mut src: R, _ctx: &Self) -> Result<(), TMFImportError> {
-        let _name = read_string(&mut src)?;
+        let name = read_string(&mut src)?;
+        println!("############################\nMesh {name}:");
         let segment_count = src.read_u16()?;
         let mut results = [0; 256];
         for _ in 0..segment_count {
             let encoded = EncodedSegment::read(self, &mut src)?;
-            results[encoded.seg_type() as u8 as usize] += encoded.seg_length();
+            results[encoded.seg_type() as u8 as usize] += encoded.data().len();
         }
         let mut res = Vec::new();
         let mut total = 0;
-        for i in 0..results.len() {
-            let byte_len = results[i];
+        for (index, result) in results.iter().enumerate() {
+            let byte_len = *result;
             total += byte_len;
             if byte_len != 0 {
-                res.push((format!("{:?}", SectionType::from_u8(i as u8)), byte_len));
+                res.push((format!("{:?}", SectionType::from_u8(index as u8)), byte_len));
             }
         }
         res.sort_by(|a, b| a.1.cmp(&b.1));
@@ -185,6 +186,7 @@ impl TMFImportContext {
         }
         Ok(meshes)
     }
+    #[allow(dead_code)]
     pub(crate) async fn analize<R: Read>(mut src: R) -> Result<(), TMFImportError> {
         let header = read_tmf_header(&mut src).await?;
         let res = Self::init_header(header);
@@ -285,6 +287,7 @@ pub(crate) fn read_default_triangles<R: std::io::Read>(
     unsafe { data.set_len(length as usize) }
     Ok(())
 }
+#[allow(dead_code)]
 fn read_triangle_sequence<R: std::io::Read>(
     _src: R,
     _data: &mut Vec<IndexType>,

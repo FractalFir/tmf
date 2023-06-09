@@ -1,7 +1,7 @@
 use crate::model_importer::ModelImporter;
 use crate::{FloatType, IndexType, TMFMesh, Vector2, Vector3};
 use std::io::{BufReader, BufWriter, Error, ErrorKind, Read, Result, Write};
-const SMALL_VEC_CAP: usize = 8;
+pub(crate) const SMALL_VEC_CAP: usize = 8;
 fn parse_line(line: Result<String>, oi: &mut ModelImporter) -> Result<Option<(TMFMesh, String)>> {
     let line = line?;
     // Split the line by white spaces and '/' sign used in triangles

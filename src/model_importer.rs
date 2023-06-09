@@ -1,5 +1,7 @@
 #[cfg(not(any(feature = "obj_import")))]
 compile_error!("Feature \"model_importer\" is only useful when another feature using it is enabled(e.g. obj importer) and is otherwise useless dead code.");
+#[cfg(feature = "triangulation")]
+use crate::obj::SMALL_VEC_CAP;
 use crate::{IndexType, TMFMesh, Vector2, Vector3};
 //const SMALL_VEC_CAP: usize = 8;
 #[cfg(feature = "triangulation")]
@@ -131,7 +133,7 @@ impl ModelImporter {
             _ => {
                 #[cfg(not(feature = "triangulation"))]
                 {
-                    return Err("Encountered a face that needed triangulation but experimental triangulation feature is disabled".to_owned());
+                    Err("Encountered a face that needed triangulation but experimental triangulation feature is disabled".to_owned())
                 }
                 #[cfg(feature = "triangulation")]
                 {
@@ -141,8 +143,6 @@ impl ModelImporter {
                     triangulate(self, vertex_indices, normal_indices, uv_indices);
                     Ok(())
                 }
-                #[cfg(not(feature = "triangulation"))]
-                Err("Encountered a face that needed triangulation but experimental triangulation feature is disabled".to_owned())
             }
         }
     }

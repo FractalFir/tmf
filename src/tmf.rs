@@ -20,21 +20,21 @@ pub(crate) enum SectionType {
     NormalTriangleSegment = 4,
     UvSegment = 5,
     UvTriangleSegment = 6,
-    ColorSegment = 7,
-    ColorTriangleSegment = 8,
+    //ColorSegment = 7,
+    //ColorTriangleSegment = 8,
     TangentSegment = 9,
     TangentTriangleSegment = 10,
-    MaterialInfo = 11,
-    MaterialTriangleRanges = 12,
-    GroupInfo = 13,
-    GroupTriangleRanges = 14,
+    //MaterialInfo = 11,
+    //MaterialTriangleRanges = 12,
+    //GroupInfo = 13,
+    //GroupTriangleRanges = 14,
     CustomIndexSegment = 15,
     CustomFloatSegment = 16,
-    CustomUnit2Segment = 17,
-    CustomUnit3Segment = 18,
-    CustomVector2Segment = 19,
-    CustomVector3Segment = 20,
-    CustomVector4Segment = 21,
+    //CustomUnit2Segment = 17,
+    //CustomUnit3Segment = 18,
+    //CustomVector2Segment = 19,
+    //CustomVector3Segment = 20,
+    //CustomVector4Segment = 21,
     CustomColorRGBASegment = 23,
     CustomIntigerSegment = 24,
     SharedTriangleSegment = 25,
@@ -46,7 +46,6 @@ impl SectionType {
             Self::VertexTriangleSegment
                 | Self::NormalTriangleSegment
                 | Self::UvTriangleSegment
-                | Self::ColorTriangleSegment
                 | Self::TangentTriangleSegment
                 | Self::SharedTriangleSegment
         )
@@ -123,9 +122,10 @@ impl EncodedSegment {
     pub(crate) fn compresion_type(&self) -> CompressionType {
         self.compresion_type
     }
+    /*
     pub(crate) fn seg_length(&self) -> usize {
         self.data.len()
-    }
+    }*/
     pub(crate) fn seg_type(&self) -> SectionType {
         self.seg_type
     }
@@ -415,12 +415,11 @@ impl DecodedSegment {
             SectionType::VertexTriangleSegment
             | SectionType::NormalTriangleSegment
             | SectionType::UvTriangleSegment
-            | SectionType::ColorTriangleSegment
             | SectionType::TangentTriangleSegment => decode_triangle_seg(seg, ctx).await,
             SectionType::CustomIndexSegment
             | SectionType::CustomIntigerSegment
-            | SectionType::CustomFloatSegment  |
-            SectionType::CustomColorRGBASegment => decode_custom_seg(seg, ctx).await,
+            | SectionType::CustomFloatSegment
+            | SectionType::CustomColorRGBASegment => decode_custom_seg(seg, ctx).await,
             SectionType::SharedTriangleSegment => {
                 if seg.data.len() < 1 {
                     return Err(TMFImportError::IO(std::io::Error::from(
@@ -442,7 +441,6 @@ impl DecodedSegment {
                 }
                 Ok(Self::SharedTriangleSegment(kind, indices.into()))
             }
-            _ => todo!("Unhandled segement type {:?}", seg.seg_type),
         }
     }
     pub(crate) fn apply(&self, mesh: &mut TMFMesh) {

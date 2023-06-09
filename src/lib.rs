@@ -1,5 +1,5 @@
 #![warn(missing_docs)]
-#![deny(unused_must_use)]
+#![deny(unused_must_use, missing_docs, rustdoc::broken_intra_doc_links)]
 //#![deny(dead_code)]
 #![warn(rustdoc::missing_doc_code_examples)]
 //! **tmf** is a crate used to save and read 3D models saved in *.tmf* format. This format is focused on 2 things:
@@ -32,6 +32,7 @@ mod normals;
 #[cfg(feature = "obj_import")]
 mod obj;
 mod read_extension;
+#[allow(dead_code)]
 mod reorder_triangles;
 #[doc(hidden)]
 pub mod tangents;
@@ -47,6 +48,7 @@ mod uv;
 mod verify;
 mod vertices;
 // Unfinished
+#[allow(dead_code)]
 mod lz77;
 
 const TMF_MAJOR: u16 = 0;
@@ -69,9 +71,10 @@ pub type IndexType = u16;
 pub type FloatType = f32;
 #[cfg(feature = "double_precision")]
 pub type FloatType = f64;
+/// Type used for representing 4d floating-point vectors
+pub type Vector4 = (FloatType, FloatType, FloatType, FloatType);
 /// Type used for representing 3d floating-point vectors
 pub type Vector3 = (FloatType, FloatType, FloatType);
-pub type Vector4 = (FloatType, FloatType, FloatType, FloatType);
 /// Type used for representing 2d floating-point vectors
 pub type Vector2 = (FloatType, FloatType);
 use crate::custom_data::CustomDataSegment;
@@ -167,7 +170,7 @@ impl TMFMesh {
     /// Changes mesh data to make all index arrays(e.g. `vertex_triangle_array`,`normal_triangle_array`, etc.) exacyl the same. Does not support custom index segments,  and will leave them unaffected.
     /// Very often drastically reduces mesh size.
     pub fn unify_index_data(&mut self) {
-        let (vertices, normals, uvs, tangents, indices,) = unify_data::smart_merge_data_4(
+        let (vertices, normals, uvs, tangents, indices) = unify_data::smart_merge_data_4(
             self.get_vertices(),
             self.get_normals(),
             self.get_uvs(),
@@ -750,7 +753,7 @@ impl TMFMesh {
     pub fn read_tmf<R: Read>(reader: &mut R) -> Result<Vec<(Self, String)>, TMFImportError> {
         crate::tmf_importer::import_sync(reader)
     }
-    /// Async version of [`read_tmf`].
+    /// Async version of [`Self::read_tmf`].
     pub async fn read_tmf_async<R: Read>(
         reader: &mut R,
     ) -> Result<Vec<(Self, String)>, TMFImportError> {
@@ -781,7 +784,7 @@ impl TMFMesh {
             None => Err(TMFImportError::NoMeshes),
         }
     }
-    /// Async version of [`read_tmf_one`].
+    /// Async version of [`Self::read_tmf_one`].
     pub async fn read_tmf_one_async<R: Read>(
         reader: &mut R,
     ) -> Result<(Self, String), TMFImportError> {

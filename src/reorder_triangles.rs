@@ -11,8 +11,8 @@ fn reorder_triangles<const ARRAY_COUNT: usize>(
     let mut last: [IndexType; ARRAY_COUNT] = [0; ARRAY_COUNT];
     for index in 0..len {
         let mut delta = 0;
-        for array_index in 0..ARRAY_COUNT {
-            let curr = triangles[array_index][index];
+        for (array_index, triangles) in triangles.iter().enumerate() {
+            let curr = triangles[index];
             delta = delta.max((curr as isize - last[array_index] as isize).unsigned_abs());
             last[array_index] = curr;
         }
@@ -27,10 +27,10 @@ fn reorder_triangles<const ARRAY_COUNT: usize>(
             .max(max_deltas[index * 3 + 2]);
         //tri_deltas.push(max);
         let mut value: [[IndexType; ARRAY_COUNT]; 3] = [[0; ARRAY_COUNT]; 3]; //
-        for array_index in 0..ARRAY_COUNT {
-            value[0][array_index] = triangles[array_index][index * 3];
-            value[1][array_index] = triangles[array_index][index * 3 + 1];
-            value[2][array_index] = triangles[array_index][index * 3 + 2];
+        for (array_index, triangles) in triangles.iter().enumerate() {
+            value[0][array_index] = triangles[index * 3];
+            value[1][array_index] = triangles[index * 3 + 1];
+            value[2][array_index] = triangles[index * 3 + 2];
         }
         if max < 16 {
             res_sorted.extend(value);

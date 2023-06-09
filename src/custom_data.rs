@@ -1,6 +1,6 @@
 use crate::read_extension::ReadExt;
 use crate::tmf::SectionType;
-use crate::{FloatType, IndexType, TMFImportError, MAX_SEG_SIZE,Vector4};
+use crate::{FloatType, IndexType, TMFImportError, Vector4, MAX_SEG_SIZE};
 #[derive(Clone, Debug)]
 pub(crate) struct CustomDataSegment {
     name: Vec<u8>,
@@ -111,9 +111,9 @@ impl CustomData {
                 }
                 Ok(())
             }
-            Self::CustomColorRGBA(data,prec)=>{
+            Self::CustomColorRGBA(data, prec) => {
                 use crate::unaligned_rw::{UnalignedRWMode, UnalignedWriter};
-                let prec_bits = (1.0/prec.min(1.0)).log2().ceil() as u8;
+                let prec_bits = (1.0 / prec.min(1.0)).log2().ceil() as u8;
                 let mul = ((1 << prec_bits) - 1) as FloatType;
                 target.write_all(&(data.len() as u64).to_le_bytes())?;
                 target.write_all(&[prec_bits])?;
@@ -139,7 +139,7 @@ impl CustomData {
             Self::CustomIndex(_, _) => SectionType::CustomIndexSegment,
             Self::CustomIntiger(_, _) => SectionType::CustomIntigerSegment,
             Self::CustomFloat(_, _) => SectionType::CustomFloatSegment,
-            Self::CustomColorRGBA(_,_) => SectionType::CustomColorRGBASegment,
+            Self::CustomColorRGBA(_, _) => SectionType::CustomColorRGBASegment,
         }
     }
     fn new_float(floats: &[FloatType], prec: FloatType) -> Self {
@@ -196,7 +196,7 @@ impl CustomDataSegment {
         src.read_exact(&mut name[..(name_len as usize)])?;
         match kind {
             /*SectionType::CustomColorSegment =>{
-                
+
             }*/
             SectionType::CustomIndexSegment => {
                 let result = crate::vertices::read_triangles(&mut src, ctx)?;
@@ -243,18 +243,23 @@ impl CustomDataSegment {
                     name_len,
                 ))
             }
-            SectionType::CustomColorRGBASegment=>{
+            SectionType::CustomColorRGBASegment => {
                 use crate::unaligned_rw::{UnalignedRWMode, UnalignedReader};
                 let len = src.read_u64()?;
                 let prec_bits = src.read_u8()?;
                 let prec = UnalignedRWMode::precision_bits(prec_bits);
                 let mut reader = UnalignedReader::new(src);
-                let mut res = vec![(0.0,0.0,0.0,0.0); len as usize];
+                let mut res = vec![(0.0, 0.0, 0.0, 0.0); len as usize];
                 let div = ((1_u64 << prec_bits) - 1) as f64;
                 for vec4 in &mut res {
-                    let (r,g) = reader.read2_unaligned(prec)?;
-                    let (b,a) = reader.read2_unaligned(prec)?;
-                    *vec4 = (((r as f64) / div) as FloatType,((g as f64) / div) as FloatType,((b as f64) / div) as FloatType,((a as f64) / div) as FloatType);
+                    let (r, g) = reader.read2_unaligned(prec)?;
+                    let (b, a) = reader.read2_unaligned(prec)?;
+                    *vec4 = (
+                        ((r as f64) / div) as FloatType,
+                        ((g as f64) / div) as FloatType,
+                        ((b as f64) / div) as FloatType,
+                        ((a as f64) / div) as FloatType,
+                    );
                 }
                 let prec = ((1.0 / ((1_u64 << prec_bits) as f64)) as FloatType) * 0.99999;
                 Ok(Self::new_raw(
@@ -345,7 +350,9 @@ fn color_rgba_data() {
     let mut file = std::fs::File::open("testing/susan.obj").unwrap();
     let (mut tmf_mesh, name) = TMFMesh::read_from_obj_one(&mut file).unwrap();
     let color_rgba_data: [Vector4; 3] = [
-        (0.9, 0.19, 0.2, 0.7867), (0.431224, 0.534345, 0.64336, 0.78634), (0.776565, 0.87575, 0.954,0.3543)
+        (0.9, 0.19, 0.2, 0.7867),
+        (0.431224, 0.534345, 0.64336, 0.78634),
+        (0.776565, 0.87575, 0.954, 0.3543),
     ];
     tmf_mesh
         .add_custom_data(color_rgba_data[..].into(), "custom_color_rgba")
