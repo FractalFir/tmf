@@ -73,7 +73,7 @@ fn merge_segments(segments: &[DecodedSegment]) -> Box<[DecodedSegment]> {
     let mut new_segments = Vec::with_capacity(segments.len());
     while let Some(mut segment) = segments.pop() {
         if segment.is_something() {
-            for mut other in &mut segments {
+            for other in &mut segments {
                 segment.merge(other);
             }
             new_segments.push(segment);

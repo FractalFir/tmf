@@ -13,7 +13,7 @@ fn reorder_triangles<const ARRAY_COUNT: usize>(
         let mut delta = 0;
         for array_index in 0..ARRAY_COUNT {
             let curr = triangles[array_index][index];
-            delta = delta.max((curr as isize - last[array_index] as isize).abs() as usize);
+            delta = delta.max((curr as isize - last[array_index] as isize).unsigned_abs());
             last[array_index] = curr;
         }
         max_deltas.push(delta);

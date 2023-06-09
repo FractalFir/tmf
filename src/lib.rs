@@ -24,6 +24,7 @@ macro_rules! runtime_agnostic_block_on {
 }
 #[doc(hidden)]
 pub mod custom_data;
+#[allow(dead_code)]
 mod material;
 #[cfg(feature = "model_importer")]
 mod model_importer;
@@ -76,7 +77,7 @@ use crate::custom_data::CustomDataSegment;
 #[doc(inline)]
 pub use crate::custom_data::{CustomData, DataSegmentError};
 #[doc(inline)]
-use crate::material::MaterialInfo;
+//use crate::material::MaterialInfo;
 #[doc(inline)]
 pub use crate::normals::NormalPrecisionMode;
 #[doc(inline)]
@@ -128,7 +129,7 @@ pub struct TMFMesh {
     uv_triangles: Option<Vec<IndexType>>,
     tangents: Option<Vec<Tangent>>,
     tangent_triangles: Option<Vec<IndexType>>,
-    materials: Option<MaterialInfo>,
+    //materials: Option<MaterialInfo>,
     custom_data: Vec<CustomDataSegment>,
 }
 impl Default for TMFMesh {
@@ -162,26 +163,19 @@ impl TMFMesh {
             self.set_uv_triangles(uv_triangles);
         }
     }
+    /// Changes mesh data to make all index arrays(e.g. `vertex_triangle_array`,`normal_triangle_array`, etc.) exacyl the same. Does not support custom index segments,  and will leave them unaffected.
+    /// Very often drastically reduces mesh size.
     pub fn unify_index_data(&mut self) {
-        /*
-        let v_vt_n_nt = (self.get_vertices().zip(self.get_vertex_triangles()))
-            .zip(self.get_normals().zip(self.get_normal_triangles()));
-        if let Some(((vertices, vertex_triangles), (normals, normal_triangles))) = v_vt_n_nt {
-            let (indices, vertices, normals) =
-                unify_data::merge_data_2(&[vertex_triangles, normal_triangles], vertices, normals);
-            self.set_vertices(vertices);
-            self.set_normals(normals);
-            self.set_vertex_triangles(indices.clone());
-            self.set_normal_triangles(indices);
-        }*/
-        let (vertices, normals, uvs, indices) = unify_data::smart_merge_data_3(
+        let (vertices, normals, uvs, tangents, indices,) = unify_data::smart_merge_data_4(
             self.get_vertices(),
             self.get_normals(),
             self.get_uvs(),
+            self.get_tangents(),
             [
                 self.get_vertex_triangles(),
                 self.get_normal_triangles(),
                 self.get_uv_triangles(),
+                self.get_tangent_triangles(),
             ],
         );
         if let Some(indices) = indices {
@@ -198,7 +192,12 @@ impl TMFMesh {
             if let Some(uvs) = uvs {
                 //println!("unfied uvs!");
                 self.set_uvs(uvs);
-                self.set_uv_triangles(indices);
+                self.set_uv_triangles(indices.clone());
+            }
+            if let Some(tangents) = tangents {
+                //println!("unfied uvs!");
+                self.set_tangents(tangents);
+                self.set_tangent_triangles(indices);
             }
         }
         //todo!();
@@ -725,7 +724,7 @@ impl TMFMesh {
             vertex_triangles: None,
             vertices: None,
             tangents: None,
-            materials: None,
+            //materials: None,
             custom_data: Vec::new(),
             tangent_triangles: None,
         }
@@ -920,7 +919,7 @@ pub enum TMFImportError {
     NewerVersionRequired,
     #[error("A file segment exceeded the maximum length(2GB) was encountered. This segments length is highly unusual, and the segment unlikely to be valid. The segment was not read to prevent memory issues.")]
     SegmentTooLong,
-    #[error("A segments compression type requires that it must be preceded by another segment, from which some of the data is deduced.   ")]
+    #[error("A segments compression type requires that it must be preceded by another segment, from which some of the data is deduced.")]
     NoDataBeforeOmmitedSegment,
     #[error("Byte precision is too high ({0}: over 64 bits) and is invalid.")]
     InvalidPrecision(u8),

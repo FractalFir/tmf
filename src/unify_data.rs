@@ -49,7 +49,7 @@ pub(crate) fn merge_data_2<A: Copy, B: Copy>(
         .iter()
         .map(|index| a[*index as usize])
         .collect();
-    let b: Box<[_]> = index_map[0]
+    let b: Box<[_]> = index_map[1]
         .iter()
         .map(|index| b[*index as usize])
         .collect();
@@ -66,15 +66,41 @@ pub(crate) fn merge_data_3<A: Copy, B: Copy, C: Copy>(
         .iter()
         .map(|index| a[*index as usize])
         .collect();
-    let b: Box<[_]> = index_map[0]
+    let b: Box<[_]> = index_map[1]
         .iter()
         .map(|index| b[*index as usize])
         .collect();
-    let c: Box<[_]> = index_map[0]
+    let c: Box<[_]> = index_map[2]
         .iter()
         .map(|index| c[*index as usize])
         .collect();
     (indices, a, b, c)
+}
+pub(crate) fn merge_data_4<A: Copy, B: Copy, C: Copy,D:Copy>(
+    indices: &[&[IndexType]; 4],
+    a: &[A],
+    b: &[B],
+    c: &[C],
+    d: &[D],
+) -> (Box<[IndexType]>, Box<[A]>, Box<[B]>, Box<[C]>, Box<[D]>) {
+    let (indices, index_map) = unfiy_data_common::<4>(indices);
+    let a: Box<[_]> = index_map[0]
+        .iter()
+        .map(|index| a[*index as usize])
+        .collect();
+    let b: Box<[_]> = index_map[1]
+        .iter()
+        .map(|index| b[*index as usize])
+        .collect();
+    let c: Box<[_]> = index_map[2]
+        .iter()
+        .map(|index| c[*index as usize])
+        .collect();
+    let d: Box<[_]> = index_map[3]
+        .iter()
+        .map(|index| d[*index as usize])
+        .collect();
+    (indices, a, b, c, d)
 }
 type OBoxArr<A> = Option<Box<[A]>>;
 fn smart_merge_data_2<A: Copy, B: Copy>(
@@ -113,6 +139,40 @@ pub(crate) fn smart_merge_data_3<A: Copy, B: Copy, C: Copy>(
         (Some(a), Some(b), Some(c), Some(indices))
     } else {
         (None, None, None, None)
+    }
+}
+pub(crate) fn smart_merge_data_4<A: Copy, B: Copy, C: Copy,D:Copy>(
+    a: Option<&[A]>,
+    b: Option<&[B]>,
+    c: Option<&[C]>,
+    d: Option<&[D]>,
+    indices: [Option<&[IndexType]>; 4],
+) -> (OBoxArr<A>, OBoxArr<B>, OBoxArr<C>, OBoxArr<D>, OBoxArr<IndexType>) {
+    if !a.is_some_and(|data| !data.is_empty()) || indices[0].is_none() {
+        let (b, c, d, indices) = smart_merge_data_3(b, c,d, [indices[1], indices[2],indices[3]]);
+        (None, b, c, d, indices)
+    } else if !b.is_some_and(|data| !data.is_empty()) || indices[1].is_none() {
+        let (a, c,d, indices) = smart_merge_data_3(a, c,d, [indices[0], indices[2],indices[3]]);
+        (a, None, c, d, indices)
+    } else if !c.is_some_and(|data| !data.is_empty()) || indices[2].is_none() {
+        let (a, b,d, indices) = smart_merge_data_3(a, b,d, [indices[0], indices[1],indices[3]]);
+        (a, b, None, d, indices)
+    } 
+    else if !d.is_some_and(|data| !data.is_empty()) || indices[3].is_none() {
+        let (a, b,c, indices) = smart_merge_data_3(a, b,c, [indices[0], indices[1],indices[2]]);
+        (a, b,c, None, indices)
+    } 
+    else if let Some((((a, indices_a), (b, indices_b)), ((c, indices_c),(d, indices_d)))) = a
+        .zip(indices[0])
+        .zip(b.zip(indices[1]))
+        .zip(c.zip(indices[2]).zip(d.zip(indices[3])))
+    {
+        let d:&[D] = d;
+        let (indices, a, b, c,d) = merge_data_4(&[indices_a, indices_b, indices_c,indices_d], a, b, c,d);
+        let d:Box<[D]> = d;
+        (Some(a), Some(b), Some(c), Some(d), Some(indices))
+    } else {
+        (None, None, None, None,None)
     }
 }
 /*
