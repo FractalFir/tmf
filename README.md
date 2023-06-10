@@ -24,7 +24,7 @@ For example, decoding the blender test moneky(Suzanne, file in `tests` directory
 ## When it is a right fit:
 1. You need your models to be smaller, but don't want to sacrifice much of the read speed.
 2. Your meshes are modestly sized or small (>150k triangles).
-3. You don't need your meshes to be high-quality.
+3. You only need your meshes to look exacly the same, and are fine with some unnoticable changes.
 # How are high compression speeds achieved?
 Currently on default settings TMF uses bit-wise operations(bit-shift and  or) to read data, which makes it able to read data at very high speeds. Additionally TMF is thread safe, and has built-in, optional multi-threading, allowing for decoding of many parts of one model at the same time by many cores, increasing speed even further.
 # How does it work?
