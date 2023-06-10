@@ -1,35 +1,34 @@
-TMF: 3D model format, compressing meshes by up to 89%!
-# What is the goal of tmf
-TMF is a lossy file format focused on:
-1. High compression without sacrificing model looks
-2. Very high decode speeds
-3. Simplicity, both of the API, and underlying compression methods.
-4. Being explicit: no change to a model may occur without it being explicitly allowed by the user. This does increase complexity of the API slightly, but also makes changes in models more clear.
-# How good is TMF at achieving those goals?
-*NOTE: all formats(eg. tmf,draco,fbx) are compared to .obj as uncompressed base*.
-1. Compression ratio usually falls between 86-89%, depending on quality settings. On more strict settings(preserving exact order of all vertex data) `tmf` has a compression ratio of around ~70%. As for the visual quality, one can easily judge by themselves.
+# **TMF - high compression ratio(up to 89%), blazing fast 3D model format**
+# What is TMF?
+`tmf` is a model format focused on:
+1. Preserving graphical fidelity
+2. Achieving high compression ratio
+3. Being very fast
+4. Giving a very friendly and explicit API, with high quality documentation.
+## What is `tmf` best at?
+tmf works best when operating on moderately sized 3D models(<100 k triangles), with fairly consistent LOD.
+# How good is TMF at achieving its goals?
+1. As for the visual quality, one can easily [judge by themselves](#Model-render-comparison).
+2. Compression ratio usually falls between 86-89%, depending on quality settings. On more strict settings(preserving exact order of all vertex data) `tmf` has a compression ratio of around ~70%
+3. Decode speeds are very high, in some cases outperforming readers of uncompressed formats by a factor of magnitude.
+For example, decoding the blender test moneky(Suzanne, file in `tests` directory) subdivided 2 times(15.7k triangles, 8.2k points) takes just **678.18 µs**(*0.67818 ms*)! Thanks to built-in `tokio` integration, decoding may be autmaticaly split between threads, taking decode speeds even further up. Decoding the mesh containing the bust of Nefertiti, a 3D model with around 2 milion triangles, takes **220-240 ms** on a single thread, and only **84 ms** on 8 threads, on a 8 logical core system(4 physical cores). This means that `tmf` is very fast. Please, however, note that `tmf`-s compression algorithm struggles with very large models, so models with millions of triangles receive far less benefits in terms of file size.  
+4. TMF API centres mostly around 2 types: `TMFMesh` representing a mesh and all operations that may be done with it, and `TMFPrecisionInfo` specifying quality settings. All of TMFs functions and types are well documented, very often with multiple examples, showing exactly how to use them, greatly improving the ease of use. All operations on a mesh are explicit. 
 ## Model render comparison
 | Uncompressed .obj | Compressed .tmf file(default settings, data reordering allowed) |
 | ------------------ | ---------------------------------------|
 | <img src="docs/original.png"> | <img src="docs/tmf.png"> |
-2. Decode speeds are very high, in some cases outperforming readers of uncompressed formats by a factor of magnitude.
-For example, decoding the blender test moneky(Suzanne, file in `tests` directory) subdivided 2 times(15.7k triangles, 8.2k points) takes just **678.18 µs**(*0.67818 ms*)! Thanks to built-in `tokio` integration, decoding may be autmaticaly split between threads, taking decode speeds even further up. Decoding the mesh containing the bust of Nefertiti, a 3D model with around 2 milion triangles, takes **220-240 ms** on a single thread, and only **84 ms** on 8 threads, on a 8 logical core system(4 physical cores). This means that `tmf` is very fast. Please, however, note that `tmf`-s compression algorithm struggles with very large models, so models with millions of triangles receive far less benefits in terms of file size.  
-3. TMF API centres mostly around 2 types: `TMFMesh` representing a mesh and all operations that may be done with it, and `TMFPrecisionInfo` specifying quality settings. All of TMFs functions and types are well documented, very often with multiple examples, showing exacly how to use them, greatly improving the ease of use.
-4. All operations on a mesh are explicit. 
 # Is tmf a right fit for your project?
-When you have a hammer, everything looks like a nail. Even more so, if you are trying to convince people to use your MIT-licensed hammer.
-It would be very easy for me to pretend like `tmf` will be great fit for all cases. But I value honesty, and it is not.
 ## When it is not a right fit:
 1. You don't care about read speeds at all. Then just use Draco. It is way slower(In my tests around 10-20x), but it is also better at compressing.
-2. Your meshes are **very** big(millions of triangles). `tmf` was optimised and tested with much more modest meshes(tens of thousands of triangles). It's compression becomes worse, the more triangles and points you have. It is very still fast, the compression is just not well suited for such tasks.
+2. Your meshes are **very** big(millions of triangles). `tmf` was optimised and tested with much more modest meshes(>150k  triangles). It's compression becomes worse, the more triangles and points you have. It is very still fast, the compression is just not well suited for such tasks.
 ## When it is a right fit:
 1. You need your models to be smaller, but don't want to sacrifice much of the read speed.
-2. Your meshes are modestly sized or small (>50k triangles),.
+2. Your meshes are modestly sized or small (>150k triangles).
 3. You don't need your meshes to be high-quality.
 # How are high compression speeds achieved?
-Currently on default settings TMF uses bitwise operations(bitshift and  or) to read data, which makes it able to read data at very high speeds. Additionaly TMF is thread safe, allowing for decoding of many models at the same time by many cores, increasing speed even further.
+Currently on default settings TMF uses bit-wise operations(bit-shift and  or) to read data, which makes it able to read data at very high speeds. Additionally TMF is thread safe, and has built-in, optional multi-threading, allowing for decoding of many parts of one model at the same time by many cores, increasing speed even further.
 # How does it work?
-While I mark tmf as a "lossy compression format" in a classical meaning of this word, it really does not *compress* anything (at least for now). The bulk of the space savings come from storing the model data in different data structures that better reflect the data they store, and removing some data *precision* from the model in such a way, that it's **topology does not change** and the difference between more precise original data and less precise saved data is not noticeable by any human, even on close inspection. This is achieved by using some properties of the data itself (Surface vector being always normalized) or the model (usually constant level of detail across the whole model).
+While I mark tmf as a "lossy compression format" in a classical meaning of this word, it really does not *compress* anything (at least for now). The bulk of the space savings come from storing the model data in different data structures that better reflect the data they store, and saving data with exactly precision it needs(e.g. 9 or 23 bit data types). 
 # Comparisions
 The model used in test is the blender monkey(Suzzane). TMF files were saved with default settings(`TMFPrecisionInfo::default()`).
 ## File size comparison
@@ -48,8 +47,9 @@ The model used in test is the blender monkey(Suzzane). TMF files were saved with
 | .tmf with pre-encode optimisations and hand-picked quality settings | **147.3 kB** | 
 | zip(deflate) compressed .tmf | 307.9 kB |
 ## TMF vs. Draco.
-Draco is noticeably better at compression than TMF. If all you are looking for is reduced file size, then just use Draco. As a single deveolper there is no way I can manage to create something that even rivals it. **But** if what you are looking for is not only model compression ratio, then TMF still has a lot to offer. 
+Draco is noticeably better at compression than TMF. If all you are looking for is reduced file size, then just use Draco. But if you are looking for both high compression and fast reads, tmf can be a vaible alternative.
 ### A comparison of some pros and cons
+*NOTE: when compression ratios/percentages are given, all formats(eg. tmf,draco,fbx) are compared to .obj as uncompressed base*.
 | Category | Draco | TMF | 
 |----------|-------|-----|
 | Compression Ratio | Draco is generally better at compressing data, depending on the compression settings it can be between ~80-98% | TMF can compress your file by around 87.3% | 
@@ -60,7 +60,7 @@ Draco is noticeably better at compression than TMF. If all you are looking for i
 | Official Rust support | None | Native |
 | Build Dependencies | C++ compiler, cmake, make | only standard rust tollchain |
 | Using in rust project | Requires manual linking | installs and links automatically using cargo |
-## What can lead to compression of a particular being less efficient?
+## What can lead to compression of a particular mesh being less efficient?
 Greatly varying LOD: The save system dynamically adjusts to the LOD of the mesh. For example, a low-poly castle mesh may be saved with precision of 10 cm and a strawberry model may be saved with 1 mm precision. Saving those two object in one *mesh*(not file!) will force the castle mesh to be saved with higher precision, wasting space. Because most meshes will naturally have a consistent LOD, and meshes that don't would almost always lead to issues elsewhere, this problem is rarely encountered.
 # Examples
 ## Mesh loading
@@ -99,8 +99,10 @@ use tmf::TMFMesh;
 use std::fs::File;
 let output = File::create("suzanne.tmf").expect("Could not create output file!");
 let settings = TMFPrecisionInfo::default();
-// Change TMF mesh to have better laid out data.
+
+// Change TMF mesh to have better laid out data. This can save significant ammounts of space.
 mesh.unify_index_data();
+
 mesh.write_tmf_one(&mut output,&settings,name).expect("Could not save TMF mesh!");
 ```
 Saving multiple meshes
@@ -131,7 +133,6 @@ TMFMesh::write_tmf(meshes,&mut input,&settings).expect("Could not write TMF mesh
 # Planed Features
 - [ ] Vertex groups 
 - [ ] Materials *some initial work already done*
-- [ ] LZZ compression for UBA
 # More in-depth explanation of compression
 ## Math-based savings
 Many formats used for saving of 3D models are shockingly wasteful. There are *a lot* of opportunities to reduce file size, even when using lossless compression. For example, many model formats treat surface normal vectors like any other vectors. But they *aren't* like other vectors! They have some special properties, which can be exploited to save them more efficiently. Namely:
@@ -142,7 +143,7 @@ So, by taking into consideration those properties of normals, they can be saved 
 An analogical approach is taken for each and every element of model data, reducing the size even further.
 ## Bits vs Bytes based savings.
 A disadvantage of using byte-aligned data types is lack of granularity of precision when saving data. A good example of this may be a UV coordinate that should represent a point on a 1024 pixel texture, with precision of .25 pixels. Doing some quick back of the napkin maths, it can be determined that a precision of log2(1024/.25) = log2(4096) = 12 bits is required. But only available data types are either too small (u8) or way too big(u16, 25% of disk space would go to waste!). The solution is forgoing byte alignment. It comes with a slight performance penalty of having to do bit shifts, and inability to use pre-built compression algorithms (they assume byte-alignment), but come with huge advantage of using data types just wide enough to save what is needed and not any wider. 
-Data is laid out like that in what I call an UBA (Unaligned Binary Array). Data in an UBA consists of a series of data with any binary size, where consecutive data may cross byte boundaries, start or end at any point in a byte, and there is no padding. The size of elements is usually specified before the UBA itself. For some widths, like 9 bits, savings coming from musing UBA's can reach as much as 44%!
+Data is laid out like that in what I call an UBA (Unaligned Binary Array). Data in an UBA consists of a series of data with any binary size, where consecutive data may cross byte boundaries, start or end at any point in a byte, and there is no padding. The size of elements is usually specified before the UBA itself. For some widths, like 9 bits, savings coming from using UBA's can reach as much as 44%!
 # Specification
 Along with this project comes a slightly more in-depth technical specification
-in `TMF_SPEC.md` *NOTE: thos specification is outdated, as it describes version `0.1` an updated version is planed. While not fully finished, it can still prove to useful for anyone who is interested in understanding the project better(If you have any questions feel free to ask me). 
+in `TMF_SPEC.md` *NOTE: this specification is outdated, as it describes version `0.1`(an updated version is planed)*. While not fully finished, it can still prove to useful for anyone who is interested in understanding the project better(If you have any questions feel free to ask me). 
