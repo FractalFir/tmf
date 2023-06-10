@@ -2,12 +2,14 @@
 #![deny(unused_must_use, missing_docs, rustdoc::broken_intra_doc_links)]
 //#![deny(dead_code)]
 #![warn(rustdoc::missing_doc_code_examples)]
-//! **tmf** is a crate used to save and read 3D models saved in *.tmf* format. This format is focused on 2 things:
-//! 1. Reducing size of the saved file as much as possible, without reducing visual quality
-//! 2. Loading models as fast as possible(without sacrificing model size reduction)
-//! This means that while saving a model may take a slightly longer time (2-4x loading), models can be loaded at considerable speed(loading a model with around 40 000 points takes 1.6 ms)
+//! TMF: 3D model format, compressing meshes by up to 89%!
+//! # What is the goal of tmf
+//! TMF is a lossy file format focused on:
+//! 1. High compression without sacrificing model looks
+//! 2. Very high decode speeds
+//! 3. Simplicity, both of the API, and underlying compression methods.
+//! 4. Being explicit: no change to a model may occur without it being explicitly allowed by the user. This does increase complexity of the API slightly, but also makes changes in models more clear.
 //! ## Feature flags
-//pub(crate) MAX_SEG_COUNT:usize = 0xFFFF;
 #![doc = document_features::document_features!()]
 
 macro_rules! runtime_agnostic_block_on {
@@ -80,7 +82,7 @@ pub type Vector2 = (FloatType, FloatType);
 use crate::custom_data::CustomDataSegment;
 #[doc(inline)]
 pub use crate::custom_data::{CustomData, DataSegmentError};
-#[doc(inline)]
+//#[doc(inline)]
 //use crate::material::MaterialInfo;
 #[doc(inline)]
 pub use crate::normals::NormalPrecisionMode;
@@ -99,7 +101,6 @@ pub use verify::TMFIntegrityStatus;
 lazy_static::lazy_static! {
     pub(crate) static ref TOKIO_RUNTIME: tokio::runtime::Runtime = tokio::runtime::Runtime::new().unwrap();
 }
-
 /// Settings for saving of a TMF mesh.
 pub struct TMFPrecisionInfo {
     /// How much can the position of any vertex deviate, as a portion of the shortest edge in the model.
@@ -143,7 +144,26 @@ impl Default for TMFMesh {
     }
 }
 impl TMFMesh {
-    /// Reorders mesh data to be more efficiently laid out.
+    /// Reorders mesh data to be more efficiently laid out. Reduces mesh size slightly. Not needed if [`Self::unify_index_data`] was called before.
+    /// # Example
+    /// ```
+    /// # use tmf::{TMFMesh,Vector3,IndexType};
+    /// # let mut file = std::fs::File::open("testing/susan.obj").unwrap();
+    /// # let (mut tmf_mesh, name) = TMFMesh::read_from_obj_one(&mut file).unwrap();
+    /// let old_vertices = tmf_mesh.get_vertices().unwrap();
+    /// let old_vertex_triangles = tmf_mesh.get_vertex_triangles().unwrap();
+    /// # let old_vertices:Box<[Vector3]> = old_vertices.into();
+    /// # let old_vertex_triangles:Box<[IndexType]> = old_vertex_triangles.into();
+    /// # let old_vertices = &old_vertices[..];
+    /// # let old_vertex_triangles = &old_vertex_triangles[..];
+    /// // Reordering data changes how it is laid out.
+    /// tmf_mesh.reorder_data();
+    /// let new_vertices = tmf_mesh.get_vertices().unwrap();
+    /// let new_vertex_triangles = tmf_mesh.get_vertex_triangles().unwrap();
+    /// // New data is not the same as the old data
+    /// assert_ne!(old_vertices,new_vertices);
+    /// assert_ne!(old_vertex_triangles,new_vertex_triangles);
+    /// ```
     pub fn reorder_data(&mut self) {
         if let Some((vertices, vertex_triangles)) =
             self.get_vertices().zip(self.get_vertex_triangles())
@@ -167,8 +187,27 @@ impl TMFMesh {
             self.set_uv_triangles(uv_triangles);
         }
     }
-    /// Changes mesh data to make all index arrays(e.g. `vertex_triangle_array`,`normal_triangle_array`, etc.) exacyl the same. Does not support custom index segments,  and will leave them unaffected.
+    /// Changes mesh data to make all index arrays(e.g. `vertex_triangle_array`,`normal_triangle_array`, etc.) exactly the same. Does not support custom index segments,  and will leave them unaffected.
     /// Very often drastically reduces mesh size.
+    /// # Example
+    /// ```
+    /// # use tmf::TMFMesh;
+    /// # let mut file = std::fs::File::open("testing/susan.obj").unwrap();
+    /// # let (mut tmf_mesh, name) = TMFMesh::read_from_obj_one(&mut file).unwrap();
+    /// // If all index arrays are different at first
+    /// assert_ne!(tmf_mesh.get_vertex_triangles(),tmf_mesh.get_normal_triangles());
+    /// assert_ne!(tmf_mesh.get_vertex_triangles(),tmf_mesh.get_uv_triangles());
+    /// assert_ne!(tmf_mesh.get_normal_triangles(),tmf_mesh.get_uv_triangles());
+    /// // Ensure mesh all index arrays in mess are exactly the same.
+    /// tmf_mesh.unify_index_data();
+    /// // All index arrays are now exactly the same.
+    /// assert_eq!(tmf_mesh.get_vertex_triangles(),tmf_mesh.get_normal_triangles());
+    /// assert_eq!(tmf_mesh.get_vertex_triangles(),tmf_mesh.get_uv_triangles());
+    /// assert_eq!(tmf_mesh.get_normal_triangles(),tmf_mesh.get_uv_triangles());
+    /// // If index arrays are exactly the same, only cost of `unify_index_data` call is the
+    /// // cost of checking that the index arrays are exactly the same.
+    /// tmf_mesh.unify_index_data();
+    /// ```
     pub fn unify_index_data(&mut self) {
         let (vertices, normals, uvs, tangents, indices) = unify_data::smart_merge_data_4(
             self.get_vertices(),
@@ -207,6 +246,7 @@ impl TMFMesh {
         //todo!();
     }
     /// Sets mesh vertex array and returns old vertex array if present. New mesh data is **not** checked during this function call, so to ensure mesh is valid call [`Self::verify`] before saving.
+    /// # Examples
     ///```
     /// # use tmf::FloatType;
     /// # use tmf::TMFMesh;
@@ -231,6 +271,7 @@ impl TMFMesh {
         self.vertices.replace(vertices.into())
     }
     /// Sets mesh normal array and returns old normal array if present. New mesh data is **not** checked during this function call, so to ensure mesh is valid call `verify` before saving.
+    /// # Examples
     ///```
     /// # use tmf::TMFMesh;
     /// // Set the normals of the mesh
@@ -254,6 +295,7 @@ impl TMFMesh {
         self.normals.replace(normals.into())
     }
     /// Sets mesh tangent array and returns old tangent array if present. New mesh data is **not** checked during this function call, so to ensure mesh is valid call `verify` before saving.
+    /// # Examples
     ///```
     /// # use tmf::TMFMesh;
     /// // Set the tangents of the mesh
@@ -277,6 +319,7 @@ impl TMFMesh {
         self.tangents.replace(tangents.into())
     }
     /// Sets mesh uv array and returns old uv array if present. New mesh daata is **not** checked during this function call, so to ensure mesh is valid call [`Self::verify`] before saving.
+    /// # Examples
     ///```
     /// # use tmf::FloatType;
     /// # fn do_something(_:&[(FloatType,FloatType)]){}
@@ -302,6 +345,7 @@ impl TMFMesh {
         self.uvs.replace(uvs.into())
     }
     /// Sets vertex index array to *triangles* and returns old triangles if present.
+    /// # Example
     ///```
     /// # use tmf::TMFMesh;
     /// # let mut mesh = TMFMesh::empty();
@@ -315,6 +359,7 @@ impl TMFMesh {
         self.vertex_triangles.replace(triangles.into())
     }
     /// Sets normal index array to *triangles* and returns old triangles if present.
+    /// # Example
     ///```
     /// # use tmf::TMFMesh;
     /// # let mut mesh = TMFMesh::empty();
@@ -328,6 +373,7 @@ impl TMFMesh {
         self.normal_triangles.replace(triangles.into())
     }
     /// Sets uv index array to *triangles* and returns old triangles if present.
+    /// # Example
     ///```
     /// # use tmf::TMFMesh;
     /// # let mut mesh = TMFMesh::empty();
@@ -341,6 +387,7 @@ impl TMFMesh {
         self.uv_triangles.replace(triangles.into())
     }
     /// Sets tangent index array to *triangles* and returns old triangles if present.
+    /// # Example
     ///```
     /// # use tmf::TMFMesh;
     /// # let mut mesh = TMFMesh::empty();
@@ -354,6 +401,7 @@ impl TMFMesh {
         self.tangent_triangles.replace(triangles.into())
     }
     /// Gets the vertex array of this [`TMFMesh`].
+    /// # Example
     ///```
     /// # use tmf::TMFMesh;  
     /// # let mesh = TMFMesh::empty();
@@ -367,6 +415,7 @@ impl TMFMesh {
         }
     }
     /// Gets the normal array of this [`TMFMesh`].
+    /// # Example
     ///```
     /// # use tmf::TMFMesh;
     /// # let mesh = TMFMesh::empty();
@@ -380,6 +429,7 @@ impl TMFMesh {
         }
     }
     /// Gets the tangent array of this [`TMFMesh`].
+    /// # Example
     ///```
     /// # use tmf::TMFMesh;
     /// # let mesh = TMFMesh::empty();
@@ -393,6 +443,7 @@ impl TMFMesh {
         }
     }
     /// Gets the uv array of this [`TMFMesh`].
+    /// # Example
     ///```
     /// # use tmf::TMFMesh;
     /// # let mesh = TMFMesh::empty();
@@ -406,6 +457,7 @@ impl TMFMesh {
         }
     }
     /// Gets the vertex triangle index array of this [`TMFMesh`].
+    /// # Example
     ///```
     /// # use tmf::TMFMesh;
     /// # let mesh = TMFMesh::empty();
@@ -419,6 +471,7 @@ impl TMFMesh {
         }
     }
     /// Gets the normal triangle index array of this [`TMFMesh`].
+    /// # Example
     ///```
     /// # use tmf::TMFMesh;
     /// # let mesh = TMFMesh::empty();
@@ -432,6 +485,7 @@ impl TMFMesh {
         }
     }
     /// Gets the uv triangle index array of this [`TMFMesh`].
+    /// # Example
     ///```
     /// # use tmf::TMFMesh;
     /// # let mesh = TMFMesh::empty();
@@ -445,6 +499,7 @@ impl TMFMesh {
         }
     }
     /// Gets the tangent triangle index array of this [`TMFMesh`].
+    /// # Example
     ///```
     /// # use tmf::TMFMesh;
     /// # let mesh = TMFMesh::empty();
@@ -459,6 +514,7 @@ impl TMFMesh {
     }
     /// Returns array containing points laid out in such a way that each 3 points create the next triangle.
     /// If mesh has no vertex array or no vertex triangle array [`None`] is returned.
+    /// # Example
     ///```
     /// # use tmf::TMFMesh;
     /// # let mut mesh = TMFMesh::empty();
@@ -485,6 +541,7 @@ impl TMFMesh {
     }
     /// Returns array containing normals laid out in such a way that each 3 normals create the next triangle.
     /// If mesh has no normal array or no normal triangle array [`None`] is returned.
+    /// # Example
     ///```
     /// # use tmf::TMFMesh;
     /// # let mut mesh = TMFMesh::empty();
@@ -512,6 +569,7 @@ impl TMFMesh {
     }
     /// Returns array containing UV coridnates laid out in such a way that each 3 cordiantes create the next triangle.
     /// If mesh has no UV array or no uv triangle array [`None`] is returned.
+    /// # Example
     ///```
     /// # use tmf::TMFMesh;
     /// # let mut mesh = TMFMesh::empty();
@@ -537,6 +595,7 @@ impl TMFMesh {
         Some(uv_buffer.into())
     }
     /// Normalizes normal array of the mesh, if it is present.
+    /// # Examples
     ///```
     /// # use tmf::{TMFMesh,FloatType,Vector3};
     /// # let normals = vec![(0.2,3.4,4.3),(-5.4,1.412,3.32),(5.5,-2.1,-2.3)];
@@ -584,7 +643,8 @@ impl TMFMesh {
         verify::verify_tmf_mesh(self)
     }
     /// Reads tmf meshes from a .obj file in *reader*
-    /// In order to enable triangulation while importing .obj files feature triangulation must be used. It is still highly experimental so read documentation before enabling.
+    /// In order to enable triangulation while importing .obj files feature triangulation must be used. It is still highly experimental so read documentation before enabling. It is highly encouraged to just triangulate `.obj` files before importing them.  
+    /// # Example
     ///```
     /// # use tmf::TMFMesh;
     /// # fn do_something(_:TMFMesh,_:String){}
@@ -606,7 +666,8 @@ impl TMFMesh {
         obj::read_from_obj(reader)
     }
     /// Reads a *single* named tmf mesh from a .obj file in *reader*, if more than one mesh present an error will be returned.
-    /// In order to enable triangulation while importing .obj files feature triangulation must be used. It is still highly experimental so read documentation before enabling.
+    /// In order to enable triangulation while importing .obj files feature triangulation must be used. It is still highly experimental so read documentation before enabling. It is highly encouraged to just triangulate `.obj` files before importing them.  
+    /// # Example
     ///```
     /// # use tmf::TMFMesh;
     /// # use std::fs::File;
@@ -639,6 +700,7 @@ impl TMFMesh {
         }
     }
     /// Writes this TMF  mesh to a .obj file.
+    /// # Example
     /// ```
     /// # use std::fs::File;
     /// # use tmf::TMFMesh;
@@ -654,6 +716,7 @@ impl TMFMesh {
         obj::write_obj(&[(self.clone(), name)], w)
     }
     /// Writes multiple TMF meshes to a .obj file.
+    /// # Example
     ///```
     /// # use std::fs::File;
     /// # use tmf::{TMFMesh,TMFPrecisionInfo};
@@ -672,6 +735,7 @@ impl TMFMesh {
         obj::write_obj(meshes, w)
     }
     /// Writes this TMF Mesh to *w*.
+    /// # Example
     ///```
     /// # use std::fs::File;
     /// # use tmf::{TMFMesh,TMFPrecisionInfo};
@@ -693,6 +757,7 @@ impl TMFMesh {
         runtime_agnostic_block_on!(tmf_exporter::write_tmf(&[(self.clone(), name)], w, p_info))
     }
     /// Writes a number of TMF meshes into one file.
+    /// # Example
     /// ```
     /// # use std::fs::File;
     /// # use tmf::{TMFMesh,TMFPrecisionInfo};
@@ -713,10 +778,11 @@ impl TMFMesh {
         runtime_agnostic_block_on!(tmf_exporter::write_tmf(meshes_names, w, p_info))
     }
     /// Creates an empty TMF Mesh(mesh with no data). Equivalent to [`TMFMesh::default`].
+    /// # Example
     /// ```
     /// # use tmf::TMFMesh;
     /// // Creates an empty mesh with no data
-    /// let mut mesh = TMFMesh::empty();
+    /// let mesh = TMFMesh::empty();
     /// ```
     #[must_use]
     pub fn empty() -> Self {
@@ -734,6 +800,7 @@ impl TMFMesh {
         }
     }
     /// Reads all meshes from a .tmf file.
+    /// # Example
     /// ```
     /// # use std::fs::File;
     /// # use tmf::{TMFMesh,TMFPrecisionInfo};
@@ -754,6 +821,17 @@ impl TMFMesh {
         crate::tmf_importer::import_sync(reader)
     }
     /// Async version of [`Self::read_tmf`].
+    /// # Example
+    /// ```
+    /// # use tmf::{TMFImportError,TMFMesh};
+    /// async fn load_meshes_files<R:std::io::Read>(src:&mut [R])->Result<Vec<(TMFMesh,String)>,TMFImportError>{
+    ///     let mut meshes = Vec::new();
+    ///     for source in src{
+    ///         meshes.extend(TMFMesh::read_tmf_async(source).await?);
+    ///     }
+    ///     Ok(meshes)
+    /// }
+    /// ```
     pub async fn read_tmf_async<R: Read>(
         reader: &mut R,
     ) -> Result<Vec<(Self, String)>, TMFImportError> {
@@ -785,6 +863,17 @@ impl TMFMesh {
         }
     }
     /// Async version of [`Self::read_tmf_one`].
+    /// # Example
+    /// ```
+    /// # use tmf::{TMFImportError,TMFMesh};
+    /// async fn load_meshes_files<R:std::io::Read>(src:&mut [R])->Result<Vec<(TMFMesh,String)>,TMFImportError>{
+    ///     let mut meshes = Vec::new();
+    ///     for source in src{
+    ///         meshes.push(TMFMesh::read_tmf_one_async(source).await?);
+    ///     }
+    ///     Ok(meshes)
+    /// }
+    /// ```
     pub async fn read_tmf_one_async<R: Read>(
         reader: &mut R,
     ) -> Result<(Self, String), TMFImportError> {
@@ -803,6 +892,24 @@ impl TMFMesh {
     /// Adds custom data array.
     /// # Errors
     /// Returns `Err` if name is too long (over 255 bytes) or empty.
+    /// # Examples
+    /// ```
+    /// # use tmf::{TMFMesh,CustomData};
+    /// # let mut mesh = TMFMesh::empty();
+    /// // Add custom index data.
+    /// let custom_index_data = [0,1,2,3];
+    /// let custom_float_data = [0.0,1.2,2.4,3.5];
+    /// let custom_rgba = [(0.2,0.6,0.7,0.1),(0.5,0.6,0.1,0.9),(0.3,0.9,0.3,0.2),(0.4,0.5,0.2,0.6),(0.2,0.8,0.9,0.4)];
+    /// # let custom_index_data = &custom_index_data[..];
+    /// # let custom_float_data = &custom_float_data[..];
+    /// # let custom_rgba = &custom_rgba[..];
+    /// // Add custom index data
+    /// mesh.add_custom_data(custom_index_data.into(),"custom_indices").expect("Could not add custom data to mesh!");
+    /// // Add custom float data.
+    /// mesh.add_custom_data(custom_float_data.into(),"custom_floats").expect("Could not add custom data to mesh!");
+    /// // Add custom RGBA color data
+    /// mesh.add_custom_data(custom_rgba.into(),"custom_rgba").expect("Could not add custom data to mesh!");
+    /// ```
     pub fn add_custom_data(
         &mut self,
         custom_data: CustomData,
@@ -816,6 +923,28 @@ impl TMFMesh {
     }
     /// Gets a custom data array with name *name*.
     /// Returns `None`, if data not present, or name too long(over 255 bytes).
+    /// # Examples
+    /// ```
+    /// # use tmf::{TMFMesh,CustomData};
+    /// # let mut mesh = TMFMesh::empty();
+    /// // Add custom index data.
+    /// let custom_index_data = [0,1,2,3];
+    /// let custom_float_data = [0.0,1.2,2.4,3.5];
+    /// let custom_rgba = [(0.2,0.6,0.7,0.1),(0.5,0.6,0.1,0.9),(0.3,0.9,0.3,0.2),(0.4,0.5,0.2,0.6),(0.2,0.8,0.9,0.4)];
+    /// # let custom_index_data = &custom_index_data[..];
+    /// # let custom_float_data = &custom_float_data[..];
+    /// # let custom_rgba = &custom_rgba[..];
+    /// // Add custom index data
+    /// mesh.add_custom_data(custom_index_data.into(),"custom_indices").expect("Could not add custom data to mesh!");
+    /// // Add custom float data.
+    /// mesh.add_custom_data(custom_float_data.into(),"custom_floats").expect("Could not add custom data to mesh!");
+    /// // Add custom RGBA color data
+    /// mesh.add_custom_data(custom_rgba.into(),"custom_rgba").expect("Could not add custom data to mesh!");
+    /// // lookup data
+    /// let indices = mesh.lookup_custom_data("custom_indices").expect("Could not find custom indices");
+    /// let floats = mesh.lookup_custom_data("custom_floats").expect("Could not find custom floats");
+    /// let rgba = mesh.lookup_custom_data("custom_rgba").expect("Could not find custom rgba colors");
+    /// ```
     #[must_use]
     pub fn lookup_custom_data(&self, name: &str) -> Option<&CustomData> {
         let bytes = name.as_bytes();
@@ -833,6 +962,15 @@ impl TMFMesh {
         None
     }
     /// Appends vertices to this meshes vertex array.
+    /// # Example
+    /// ```
+    /// # use tmf::TMFMesh;
+    /// # let mut tmf_mesh = TMFMesh::empty();
+    /// # tmf_mesh.set_vertices(&[(0.2,4.5,4.4)][..]);
+    /// let vertices_len = tmf_mesh.get_vertices().unwrap().len();
+    /// tmf_mesh.append_vertices(&[(0.2,4.5,4.4)]);
+    /// assert!(vertices_len < tmf_mesh.get_vertices().unwrap().len());
+    /// ```
     pub fn append_vertices(&mut self, vertices: &[Vector3]) {
         match &mut self.vertices {
             Some(ref mut self_v) => self_v.extend(vertices),
@@ -842,6 +980,15 @@ impl TMFMesh {
         };
     }
     /// Appends normals to this meshes normal array.
+    /// # Example
+    /// ```
+    /// # use tmf::TMFMesh;
+    /// # let mut tmf_mesh = TMFMesh::empty();
+    /// # tmf_mesh.set_normals(&[(0.2,4.5,4.4)][..]);
+    /// let normals_len = tmf_mesh.get_normals().unwrap().len();
+    /// tmf_mesh.append_normals(&[(0.2,4.5,4.4)]);
+    /// assert!(normals_len < tmf_mesh.get_normals().unwrap().len());
+    /// ```
     pub fn append_normals(&mut self, normals: &[Vector3]) {
         match &mut self.normals {
             Some(ref mut self_n) => self_n.extend(normals),
@@ -851,6 +998,15 @@ impl TMFMesh {
         };
     }
     /// Appends tangents to this meshes tangent array.
+    /// # Example
+    /// ```
+    /// # use tmf::TMFMesh;
+    /// # let mut tmf_mesh = TMFMesh::empty();
+    /// # tmf_mesh.set_tangents(&[((0.311649, -0.733673, 0.60382),1.0)][..]);
+    /// let tangents_len = tmf_mesh.get_tangents().unwrap().len();
+    /// tmf_mesh.append_tangents(&[((0.311649, 0.733673, -0.60382),-1.0)]);
+    /// assert!(tangents_len < tmf_mesh.get_tangents().unwrap().len());
+    /// ```
     pub fn append_tangents(&mut self, tangents: &[Tangent]) {
         match &mut self.tangents {
             Some(ref mut self_t) => self_t.extend(tangents),
@@ -860,6 +1016,15 @@ impl TMFMesh {
         };
     }
     /// Appends uvs to this meshes uv array.
+    /// # Example
+    /// ```
+    /// # use tmf::TMFMesh;
+    /// # let mut tmf_mesh = TMFMesh::empty();
+    /// # tmf_mesh.set_uvs(&[(0.2,0.5),(0.12,0.78)][..]);
+    /// let uvs_len = tmf_mesh.get_uvs().unwrap().len();
+    /// tmf_mesh.append_uvs(&[(0.2,0.5),(0.12,0.78)]);
+    /// assert!(uvs_len < tmf_mesh.get_uvs().unwrap().len());
+    /// ```
     pub fn append_uvs(&mut self, uvs: &[Vector2]) {
         match &mut self.uvs {
             Some(ref mut self_uv) => self_uv.extend(uvs),
@@ -869,6 +1034,15 @@ impl TMFMesh {
         };
     }
     /// Appends indices to this meshes vertex triangle array.
+    /// # Example
+    /// ```
+    /// # use tmf::TMFMesh;
+    /// # let mut tmf_mesh = TMFMesh::empty();
+    /// # tmf_mesh.set_vertex_triangles(&[0,4,3,8,7,9][..]);
+    /// let triangle_len = tmf_mesh.get_vertex_triangles().unwrap().len();
+    /// tmf_mesh.append_vertex_triangles(&[0,4,3,8,7,9]);
+    /// assert!(triangle_len < tmf_mesh.get_vertex_triangles().unwrap().len());
+    /// ```
     pub fn append_vertex_triangles(&mut self, triangles: &[IndexType]) {
         match &mut self.vertex_triangles {
             Some(ref mut self_vt) => self_vt.extend(triangles),
@@ -878,6 +1052,15 @@ impl TMFMesh {
         };
     }
     /// Appends indices to this meshes normal triangle array.
+    /// # Example
+    /// ```
+    /// # use tmf::TMFMesh;
+    /// # let mut tmf_mesh = TMFMesh::empty();
+    /// # tmf_mesh.set_normal_triangles(&[0,4,3,8,7,9][..]);
+    /// let triangle_len = tmf_mesh.get_normal_triangles().unwrap().len();
+    /// tmf_mesh.append_normal_triangles(&[0,4,3,8,7,9]);
+    /// assert!(triangle_len < tmf_mesh.get_normal_triangles().unwrap().len());
+    /// ```
     pub fn append_normal_triangles(&mut self, triangles: &[IndexType]) {
         match &mut self.normal_triangles {
             Some(ref mut self_nt) => self_nt.extend(triangles),
@@ -887,6 +1070,15 @@ impl TMFMesh {
         };
     }
     /// Appends indices to this meshes uv triangle array.
+    /// # Example
+    /// ```
+    /// # use tmf::TMFMesh;
+    /// # let mut tmf_mesh = TMFMesh::empty();
+    /// # tmf_mesh.set_uv_triangles(&[0,4,3,8,7,9][..]);
+    /// let triangle_len = tmf_mesh.get_uv_triangles().unwrap().len();
+    /// tmf_mesh.append_uv_triangles(&[0,4,3,8,7,9]);
+    /// assert!(triangle_len < tmf_mesh.get_uv_triangles().unwrap().len());
+    /// ```
     pub fn append_uv_triangles(&mut self, triangles: &[IndexType]) {
         match &mut self.uv_triangles {
             Some(ref mut self_uvt) => self_uvt.extend(triangles),
@@ -895,7 +1087,16 @@ impl TMFMesh {
             }
         };
     }
-    /// Appends indices to this meshes uv triangle array.
+    /// Appends indices to this meshes tangent triangle array.
+    /// # Example
+    /// ```
+    /// # use tmf::TMFMesh;
+    /// # let mut tmf_mesh = TMFMesh::empty();
+    /// # tmf_mesh.set_tangent_triangles(&[0,4,3,8,7,9][..]);
+    /// let triangle_len = tmf_mesh.get_tangent_triangles().unwrap().len();
+    /// tmf_mesh.append_tangent_triangles(&[0,4,3,8,7,9]);
+    /// assert!(triangle_len < tmf_mesh.get_tangent_triangles().unwrap().len());
+    /// ```
     pub fn append_tangent_triangles(&mut self, triangles: &[IndexType]) {
         match &mut self.tangent_triangles {
             Some(ref mut self_tant) => self_tant.extend(triangles),

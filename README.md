@@ -123,9 +123,11 @@ TMFMesh::write_tmf(meshes,&mut input,&settings).expect("Could not write TMF mesh
 - [X] Point clouds
 - [X] Multiple meshes in one file
 - [X] Fully customizable save precision settings
-- [X] Support Different compression types for each UBA *currently only used for normal triangles, but implementation future-proof*
 - [X] Full documentation
 - [X] Examples for each function in the crate
+- [X] Tangent data
+- [X] Custom mesh data
+- [X] Support for RGBA vertex colors(grayscale support using a float attribute), and float/integer vertex attributes.
 # Planed Features
 - [ ] Vertex groups 
 - [ ] Materials *some initial work already done*
