@@ -329,6 +329,14 @@ impl DecodedSegment {
                 }
                 res
             }
+            Self::SharedTriangleSegment(kind,triangles) => {
+                let optimised = opt_tris(&triangles);
+                let mut res = SmallVec::new();
+                for seg in optimised {
+                    res.push(Self::SharedTriangleSegment(kind,seg.into()));
+                }
+                res
+            }
             _ => smallvec![self],
         }
     }
