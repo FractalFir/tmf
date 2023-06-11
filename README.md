@@ -48,8 +48,6 @@ The model used in test is the blender monkey(Suzzane). TMF files were saved with
 | zip(deflate) compressed .tmf | 307.9 kB |
 | zip(deflate) compressed .tmf, with pre-encode optimizations | 160.2 kB |
 | zip(deflate) compressed .tmf, with pre-encode optimizations, hand-picked quality settings | 141.0 kB |
-| zip(deflate) compressed .tmf, with pre-encode optimizations | 162.8 kB |
-| zip(deflate) compressed .tmf, with pre-encode optimizations, hand-picked quality settings | 145.0 kB |
 | draco on max compression settings| ~22 kB | 
 ## TMF vs. Draco.
 Draco is noticeably better at compression than TMF. If all you are looking for is reduced file size, then just use Draco. But if you are looking for both high compression and fast reads, tmf can be a vaible alternative.
