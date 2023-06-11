@@ -158,9 +158,23 @@ pub fn read_tmf_vertices<R: Read>(reader: &mut R) -> Result<Box<[Vector3]>, TMFI
     Ok(vertices.into())
 }
 //Those issues wont happen.
-#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+#[allow(clippy::cast_possible_truncation)]
 pub(crate) fn calc_prec(max: usize) -> u8 {
-    (max as FloatType + 1.0).log2().abs().ceil() as u8
+    // avoid overflow
+    if max == usize::MAX {
+        return 64;
+    }
+
+    let max1 = max + 1;
+
+    // equivalent to floor(log2(max1)) due to max1 having at least one bit set
+    let offset_of_first_1 = (usize::BITS - 1 - max1.leading_zeros()) as u8;
+
+    // if there are more than one bit set, then there would be some fractional part of log2(max1)
+    // and we should round up
+    let round_up = max1.count_ones() > 1;
+
+    offset_of_first_1 + if round_up { 1 } else { 0 }
 }
 pub fn save_triangles<W: Write>(
     triangles: &[IndexType],
