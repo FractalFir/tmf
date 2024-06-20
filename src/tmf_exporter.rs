@@ -320,7 +320,7 @@ fn find_best_vertex_spilt(vertices: &[Vector3], shortest_edge: FloatType) -> Opt
         if !inside_span(&min_span, vertex) {
             min_span = expand_vertex_span(min_span, *vertex);
             per_vertex_bit_count = range_to_vertex_bit_count(min_span.clone(), shortest_edge);
-            //println!("vertex:{vertex:?}\t\tmin_span:{min_span:?}");
+
         } else {
             let gain_per_vert = total_per_vertex_bit_count - per_vertex_bit_count;
             let gain = index * (gain_per_vert as usize);
@@ -329,15 +329,15 @@ fn find_best_vertex_spilt(vertices: &[Vector3], shortest_edge: FloatType) -> Opt
                 + 6 * std::mem::size_of::<f64>()
                 + 3 * std::mem::size_of::<u8>();
             let score = gain as isize - (loss as isize);
-            //println!("{score}");
+      
             if score > best_split_score {
                 best_split_index = index;
                 best_split_score = score;
             }
         }
-    }
-    assert!(best_split_index < vertices.len() - 1);
+    }    
     if best_split_score > 0 {
+        assert!(best_split_index < vertices.len() - 1, "The best split index was the last one, but the gain from the split {best_split_score} was greater than 0, suggesting a logic bug");
         Some(best_split_index)
     } else {
         None
